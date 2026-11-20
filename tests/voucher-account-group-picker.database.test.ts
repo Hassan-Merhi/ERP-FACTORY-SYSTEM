@@ -23,6 +23,8 @@ import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { registerLedgerAccountReadRoutes } from "../server/routes/ledger/reads";
 import { registerAccountVoucherSidebarRoutes } from "../server/routes/accounts/voucher-sidebar";
+import { assertPostingLedgerLeavesTx } from "../server/services/accounting/postableLedgerAccountPolicy";
+import { PostingValidationError } from "../server/services/accounting/centralPostingEngine";
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const databaseDescribe = hasDatabase ? describe : describe.skip;
@@ -98,8 +100,10 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
     expect(codes(await call("/api/ledger-accounts", companyId))).toEqual(
       ["CASH", "GROUP-TAG", "LEGACY-CHILD", "LEGACY-PARENT", "STALE-PARENT"].sort()
     );
+    // The chart of accounts still exposes groups; every posting-oriented
+    // picker (including the generic picker) only exposes leaf accounts.
     expect(codes(await call("/api/ledger-accounts", companyId, { profile: "picker" }))).toEqual(
-      ["CASH", "GROUP-TAG", "LEGACY-CHILD", "LEGACY-PARENT", "STALE-PARENT"].sort()
+      ["CASH", "LEGACY-CHILD", "STALE-PARENT"].sort()
     );
   });
 
@@ -119,4 +123,30 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
       [ids.cash, ids.legacyChild, ids.staleParent].sort((a, b) => a - b)
     );
   });
+  it("includes hidden leaf ledgers when requested, never hidden group headers", async () => {
+    expect(codes(await call("/api/ledger-accounts", companyId, { profile: "picker", includeHidden: "true" }))).toEqual(
+      ["CASH", "LEGACY-CHILD", "SP-OPNBAL", "SP-STOCK", "STALE-PARENT"].sort()
+    );
+  });
+
+  it("blocks explicit groups and legacy live parents from new posting transactions", async () => {
+    await db.transaction(async (tx) => {
+      await assertPostingLedgerLeavesTx(tx, companyId, [ids.cash, ids.legacyChild, ids.staleParent]);
+      await expect(assertPostingLedgerLeavesTx(tx, companyId, [ids.groupTag])).rejects.toMatchObject({
+        code: "POSTING_LEDGER_GROUP_NOT_ALLOWED",
+      } satisfies Partial<PostingValidationError>);
+      await expect(assertPostingLedgerLeavesTx(tx, companyId, [ids.cash, ids.legacyParent])).rejects.toMatchObject({
+        code: "POSTING_LEDGER_GROUP_NOT_ALLOWED",
+      } satisfies Partial<PostingValidationError>);
+    });
+  });
+
+  it("does not accept a foreign or unknown ledger target as a posting leaf", async () => {
+    await db.transaction(async (tx) => {
+      await expect(assertPostingLedgerLeavesTx(tx, companyId, [2147483600])).rejects.toMatchObject({
+        code: "POSTING_LEDGER_GROUP_NOT_ALLOWED",
+      } satisfies Partial<PostingValidationError>);
+    });
+  });
+
 });
