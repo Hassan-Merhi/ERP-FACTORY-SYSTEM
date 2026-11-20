@@ -114,6 +114,9 @@ async function login(page) {
     localStorage.setItem(`application-language-onboarding:v1:${id}`, "completed");
   }, me.body.id);
   await page.reload({ waitUntil: "domcontentloaded", timeout: timeoutMs });
+  // An authenticated user can land on a generic root redirect. Use the known
+  // ERP route exercised by the existing realtime browser fixture.
+  await page.goto(`${baseUrl}/inventory?tab=by-location`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
   await page.waitForSelector('[data-testid="button-company-selector"]', { visible: true, timeout: timeoutMs });
 }
 
@@ -153,7 +156,7 @@ try {
     const current = await session(a);
     if (current.companyId !== erp) await chooseCompany(a, erp);
     await waitForCompany(a, erp);
-    await b.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+    await b.goto(`${baseUrl}/inventory?tab=by-location`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
     await waitForCompany(b, erp);
     check((await session(b)).companyId === erp, "Second tab loaded a different session");
     await b.evaluate(() => { window.__phase6NoReload = "tab-preserved"; });
@@ -251,7 +254,18 @@ try {
 } catch (error) {
   process.exitCode = 1;
   console.error(String(error?.stack || error));
-  if (b) await b.screenshot({ path: `${reportDir}/failed-tab-b.png` }).catch(() => {});
+  for (const [name, page] of [["a", a], ["b", b]]) {
+    if (!page) continue;
+    const diagnostic = await page.evaluate(() => ({
+      url: location.href,
+      title: document.title,
+      text: document.body?.innerText?.slice(0, 1800) ?? "",
+      selectorButtons: document.querySelectorAll('[data-testid="button-company-selector"]').length,
+      appShell: document.documentElement.dataset.appShell || null,
+    })).catch((failure) => ({ error: String(failure) }));
+    console.error("TAB " + name + " DIAGNOSTIC " + JSON.stringify(diagnostic));
+    await page.screenshot({ path: `${reportDir}/failed-tab-${name}.png` }).catch(() => {});
+  }
 } finally {
   report.finishedAt = new Date().toISOString();
   await writeFile(`${reportDir}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
