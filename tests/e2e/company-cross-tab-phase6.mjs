@@ -185,6 +185,9 @@ try {
     if (current.companyId !== erp) await chooseCompany(a, erp);
     await waitForCompany(a, erp);
     await b.goto(`${baseUrl}/inventory?tab=by-location`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+    // Chromium may suspend lazy route initialization for a never-focused tab.
+    // Warm the second tab as a real user would before testing background sync.
+    await b.bringToFront();
     await waitForCompany(b, erp);
     check((await session(b)).companyId === erp, "Second tab loaded a different session");
     await b.evaluate(() => { window.__phase6NoReload = "tab-preserved"; });
