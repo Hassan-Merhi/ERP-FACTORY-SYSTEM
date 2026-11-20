@@ -10,16 +10,14 @@
  */
 import Decimal from "decimal.js";
 
-export function postedFxRevaluationAdjustmentUsd(
-  currentTranslatedUsd: string,
-  postedBookClosingUsd: string
-): string {
+export function postedFxRevaluationAdjustmentUsd(currentTranslatedUsd: string, postedBookClosingUsd: string): string {
   const current = new Decimal(currentTranslatedUsd);
   const booked = new Decimal(postedBookClosingUsd);
   if (!current.isFinite() || !booked.isFinite()) {
     throw new Error("FX revaluation requires finite current and posted USD amounts.");
   }
-  return current.toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+  return current
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
     .minus(booked.toDecimalPlaces(2, Decimal.ROUND_HALF_UP))
     .toFixed(2);
 }
