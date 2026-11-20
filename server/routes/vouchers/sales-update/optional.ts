@@ -17,8 +17,9 @@ import {
 import { syncEmployeeBalancesFromEntries } from "../../_helpers";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import type Decimal from "decimal.js";
-import { vouchers } from "@shared/schema";
+import { vouchers, voucherEntries } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { assertPostingLedgerLeavesTx } from "../../../services/accounting/postableLedgerAccountPolicy";
 import { nextCanonicalSourceRevision } from "../../../services/inventory/canonicalSourceRevision";
 import { assertPosOptionalSettlementSafeTx } from "../../../services/pos/posOptionalSafety";
 import { recalculateClosedPosShiftForOptionalToggleTx } from "../../../services/pos/posOptionalShift";
@@ -101,6 +102,17 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
         // pre-transaction snapshot. A failed activation changes no inventory.
         if (wasOptional && !willBeOptional) {
           await assertStoredVoucherLinesValidTx(tx, { ...lockedVoucher, optional: false });
+          // A historic off-ledger draft may still point at a group account.
+          // Re-check its saved target IDs before activating its ledger impact.
+          const activationTargets = await tx
+            .select({ ledgerAccountId: voucherEntries.ledgerAccountId })
+            .from(voucherEntries)
+            .where(eq(voucherEntries.voucherId, id));
+          await assertPostingLedgerLeavesTx(
+            tx,
+            lockedVoucher.companyId,
+            activationTargets.flatMap((entry) => entry.ledgerAccountId == null ? [] : [entry.ledgerAccountId])
+          );
         }
 
         const toggleVoucher = {
