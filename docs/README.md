@@ -148,6 +148,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [fx-monetary-valuation/phase-6-reconciliation-release-gate.md](fx-monetary-valuation/phase-6-reconciliation-release-gate.md) | FX monetary valuation: reconciliation gates and release checklist |
 | [fx-monetary-valuation/automatic-revaluation-journal.md](fx-monetary-valuation/automatic-revaluation-journal.md) | FX monetary valuation: automatic revaluation journal posted on every company rate save (cash/bank, customers, loans), what it never touches, first-run caution |
 | [fx-monetary-valuation/phase-7-verification-and-fixes.md](fx-monetary-valuation/phase-7-verification-and-fixes.md) | FX monetary valuation: defects found in Phases 1–6, their fixes, executed verification and remaining release blockers |
+| [fx-monetary-valuation/zambia-fx-phase1-audit-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase1-audit-2026-11-20.md) | Zambia FX: read-only accounting and voucher audit, source-of-truth balances and duplicate display diagnosis |
+| [fx-monetary-valuation/zambia-fx-phase2-implementation-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase2-implementation-2026-11-20.md) | Zambia FX: posting guards, posted-cent calculation, regression tests and approved correction runbook |
 
 ## Operating it
 
