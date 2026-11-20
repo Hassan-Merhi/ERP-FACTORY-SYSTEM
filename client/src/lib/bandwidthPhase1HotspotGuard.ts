@@ -1,5 +1,5 @@
 import { isAbortError } from "./abortError";
-import { companyReadCacheIdentity } from "./companyCacheScope";
+import { assertCompanyReadSnapshot, captureCompanyReadSnapshot, companyReadCacheIdentity, isCompanyOwnedApiRead } from "./companyCacheScope";
 import { factoryCatalogLanguageCacheVariant } from "./factoryCatalogCacheVariant";
 import {
   BANDWIDTH_INVALIDATION_CHANNEL,
@@ -207,6 +207,7 @@ function getCachedResponse(key: string): Response | null {
 }
 
 function cacheResponse(key: string, response: Response, rule: HotspotCacheRule, generationAtStart: number): void {
+  if (!key.startsWith(`${companyReadCacheIdentity()}|`)) return;
   if (!response.ok || generationAtStart !== generationForScope(rule.scope)) return;
   const rawLength = response.headers.get("content-length");
   const responseBytes = rawLength ? Number(rawLength) : 0;
@@ -337,6 +338,8 @@ export function installBandwidthPhase1HotspotGuard(): void {
     const rule = findRule(url.pathname);
     if (!rule) return originalFetch(input, init);
 
+    const readSnapshot = isCompanyOwnedApiRead(url.pathname) ? captureCompanyReadSnapshot() : null;
+    if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
     const headers = requestHeaders(input, init);
     if (shouldBypass(input, init, headers)) return originalFetch(input, init);
 
@@ -347,13 +350,18 @@ export function installBandwidthPhase1HotspotGuard(): void {
     const signal = requestSignal(input, init);
     await waitUntilVisible(signal);
 
-    const runUnshared = () => originalFetch(input, init);
+    const runUnshared = () => {
+      if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
+      return originalFetch(input, init);
+    };
     const shareOrRetry = async (
       promise: Promise<Response>,
       lifetime: SharedRequestLifetime | undefined
     ): Promise<Response> => {
       try {
-        return await cloneSharedResponse(promise, signal, lifetime);
+        const response = await cloneSharedResponse(promise, signal, lifetime);
+        if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
+        return response;
       } catch (error) {
         if (signal?.aborted || !isAbortError(error)) throw error;
         return runUnshared();
@@ -373,7 +381,9 @@ export function installBandwidthPhase1HotspotGuard(): void {
     lifetime.acquire();
     const request = (async () => {
       await waitUntilVisible(lifetime.controller.signal);
+      if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
       const response = await originalFetch(input, forwardRequestInit(init, lifetime.controller.signal));
+      if (readSnapshot) assertCompanyReadSnapshot(readSnapshot);
       lifetime.disarm();
       cacheResponse(key, response, rule, generationAtStart);
       return response;
