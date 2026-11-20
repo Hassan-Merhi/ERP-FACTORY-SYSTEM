@@ -336,4 +336,19 @@ describe("hotspot guard — hidden tabs", () => {
     });
     expect(underlying).not.toHaveBeenCalled();
   });
+
+  it("snapshots a read made with a Request object and honours its own headers", async () => {
+    const underlying: Underlying = vi.fn(async () => json([{ id: 7 }]));
+    const guarded = await installGuard(underlying);
+    const url = new URL("/api/inventory", window.location.origin).toString();
+
+    await guarded(new Request(url));
+    await expect((await guarded(new Request(url))).json()).resolves.toEqual([{ id: 7 }]);
+    expect(underlying).toHaveBeenCalledTimes(1);
+
+    // A Request that asks to bypass the guard always reaches the network.
+    await guarded(new Request(url, { headers: { "x-bypass-request-storm-guard": "1" } }));
+    await guarded(new Request(url, { cache: "no-store" }));
+    expect(underlying).toHaveBeenCalledTimes(3);
+  });
 });

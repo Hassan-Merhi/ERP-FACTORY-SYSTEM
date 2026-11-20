@@ -394,6 +394,31 @@ describe("company selection across browser tabs", () => {
     expect(result.current.isCheckingCompanySession).toBe(false);
   });
 
+  it("starts on the company another tab switched to while this tab was still loading", async () => {
+    // Saved preference says 1, but the shared session moved to 2 during startup.
+    let resolveSession!: (value: { companyId: number }) => void;
+    harness.fetchSessionCompany.mockImplementationOnce(
+      () =>
+        new Promise<{ companyId: number }>((resolve) => {
+          resolveSession = resolve;
+        })
+    );
+    const { result } = renderHook(() => useCompany(), { wrapper });
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+    expect(result.current.selectedCompany).toBeNull();
+
+    await act(async () => {
+      otherTabSwitchedTo(2);
+    });
+    await act(async () => {
+      resolveSession({ companyId: 2 });
+    });
+
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    // The old tab must not write its saved company back over the session.
+    expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
   it("does not reveal an unassigned session company", async () => {
     const { result } = await renderOnCompanyOne();
 
