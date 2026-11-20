@@ -183,7 +183,7 @@ function updateDailyCacheFromWrite(pathname: string, method: string, response: R
         if (writeScope !== companyReadCacheIdentity()) return;
         if (!row?.scan_date || !row?.id) return;
         for (const [key, entry] of dailyCache) {
-          if (!key.startsWith("/api/factory/daily-bale-scans?")) continue;
+          if (!key.startsWith(`${writeScope}|/api/factory/daily-bale-scans?`)) continue;
           if (!key.includes(`date=${encodeURIComponent(String(row.scan_date))}`)) continue;
           dailyCache.set(key, { ...entry, rows: mergeRows(entry.rows, [row]) });
         }
