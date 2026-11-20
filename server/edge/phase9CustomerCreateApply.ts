@@ -20,7 +20,7 @@ import type { DbTransaction } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { createCustomerTx } from "../routes/customers/customerService";
 import { CustomerRouteError } from "../routes/customers/customerErrors";
-import { Phase9EventConflict } from "./phase9CloudEventStore.mjs";
+import { Phase9ApplyRefusal, Phase9EventConflict } from "./phase9CloudEventStore.mjs";
 import {
   PHASE9_CUSTOMER_DUPLICATE_CONFLICT,
   type Phase9CustomerCreateFields,
@@ -116,7 +116,7 @@ async function apply(
   context: Context = { overrideConflicts: [] }
 ): Promise<Phase9CustomerCreateResult> {
   const p = event.payload;
-  if (!context.siteId) throw new Error("PHASE9_PC_RECORD_SITE_MISSING");
+  if (!context.siteId) throw new Phase9ApplyRefusal("PHASE9_PC_RECORD_SITE_MISSING");
   const mapped = await readPhase9PcRecordMapping(
     client,
     context.siteId,
@@ -165,7 +165,9 @@ async function apply(
   });
   if (p.localLedgerAccountId !== null) {
     if (created.ledgerAccountId == null) {
-      throw new Phase9EventConflict("PHASE9_CUSTOMER_CREATE_REFUSED", { message: "No ledger account was opened" });
+      throw new Phase9EventConflict("PHASE9_CUSTOMER_LEDGER_NOT_OPENED", {
+        localLedgerAccountId: p.localLedgerAccountId,
+      });
     }
     await recordPhase9PcRecordMapping(client, {
       ...mapping,
