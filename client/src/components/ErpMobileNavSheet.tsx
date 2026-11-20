@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { AlertTriangle, ArrowRight, KeyRound, MessageCircle, Search, Settings } from "lucide-react";
+import { AlertTriangle, ArrowRight, KeyRound, MessageCircle, Settings } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { translateApprovedInterfaceText } from "@/components/ApplicationInterfaceTranslator";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { searchAny } from "@shared/searchNormalization";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -156,11 +157,9 @@ export function ErpMobileNavSheet({ user, open, onOpenChange }: ErpMobileNavShee
     selectedCompany?.companyType,
   ]);
 
-  const needle = query.trim().toLowerCase();
-  // Users search in the language they read, so match the localised name as well as the English one.
-  const matches = (text: string) =>
-    text.toLowerCase().includes(needle) ||
-    (translateApprovedInterfaceText(text, language) ?? "").toLowerCase().includes(needle);
+  const needle = query.trim();
+  // Search English and translated labels with the shared case/accent/punctuation normalization.
+  const matches = (text: string) => searchAny(needle, text, translateApprovedInterfaceText(text, language));
   const filtered = needle
     ? groups
         .map((group) => ({
@@ -193,21 +192,14 @@ export function ErpMobileNavSheet({ user, open, onOpenChange }: ErpMobileNavShee
         <div className="flex shrink-0 flex-col flex-nowrap! gap-3 border-b px-4 pb-3 pt-4 text-start">
           <SheetTitle className="pe-10">{t("mobileNav.allPages")}</SheetTitle>
           <SheetDescription className="sr-only">{t("mobileNav.allPagesDescription")}</SheetDescription>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute inset-s-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("mobileNav.findPage")}
-              aria-label={t("mobileNav.findPage")}
-              data-testid="erp-mobile-nav-search"
-              className="min-h-11 ps-9 text-base"
-            />
-          </div>
+          <SearchField
+            value={query}
+            onValueChange={setQuery}
+            placeholder={t("mobileNav.findPage")}
+            aria-label={t("mobileNav.findPage")}
+            data-testid="erp-mobile-nav-search"
+            className="min-h-11 text-base"
+          />
         </div>
         <nav
           aria-label={t("mobileNav.allPages")}
