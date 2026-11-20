@@ -15,7 +15,13 @@ import { toMoney } from "../../lib/money";
 import { paymentReceiptEvidence } from "../../edge/phase9PaymentOutbox";
 import { PHASE9_PAYMENT_KIND, phase9PaymentEnvelope } from "../../edge/phase9PaymentEnvelope.mjs";
 import { PHASE9_JOURNAL_KIND, phase9JournalEnvelope } from "../../edge/phase9JournalEnvelope.mjs";
-import { PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope } from "../../edge/phase9SalesVoucherEnvelope.mjs";
+import {
+  PHASE9_PURCHASE_VOUCHER_KIND,
+  PHASE9_SALES_VOUCHER_KIND,
+  phase9PurchaseVoucherEnvelope,
+  phase9SalesVoucherEnvelope,
+  type Phase9AccountingVoucherType,
+} from "../../edge/phase9AccountingVoucherEnvelope.mjs";
 import { supportsCentralGenericVoucher } from "../../services/accounting/genericVoucherPosting";
 import {
   PHASE9_STOCK_ADJUST_KIND,
@@ -114,35 +120,44 @@ export function browserInvoiceNumber(deviceId: string, localRef: number): string
   return `LAN-${device}-${String(localRef - BROWSER_LOCAL_REF_BASE).padStart(6, "0")}`;
 }
 
-type SalesVoucherContext = {
+type AccountingVoucherContext = {
   actor: { companyId: number; userId: string; username: string };
   operationId: string;
   localRef: number;
 };
 
 /** A sample context: whether a body could be sent, before the route runs. */
-const PC_ACCEPTS_PROBE: SalesVoucherContext = Object.freeze({
+const PC_ACCEPTS_PROBE: AccountingVoucherContext = Object.freeze({
   actor: { companyId: 1, userId: "pc", username: "pc" },
   operationId: "00000000-0000-4000-8000-000000000000",
   localRef: 1,
 });
 
-function salesVoucherEnvelope(raw: unknown, { actor, operationId, localRef }: SalesVoucherContext) {
+const ACCOUNTING_VOUCHER_ENVELOPES = Object.freeze({
+  Sales: phase9SalesVoucherEnvelope,
+  Purchase: phase9PurchaseVoucherEnvelope,
+});
+
+function accountingVoucherEnvelope(
+  voucherType: Phase9AccountingVoucherType,
+  raw: unknown,
+  { actor, operationId, localRef }: AccountingVoucherContext
+) {
   const input = body(raw);
   const voucher = body(input.voucher);
-  if (voucher.voucherType !== "Sales" || !supportsCentralGenericVoucher(input) || !Array.isArray(input.entries)) {
+  if (voucher.voucherType !== voucherType || !supportsCentralGenericVoucher(input) || !Array.isArray(input.entries)) {
     throw new BrowserOperationRefusal("OFFLINE_PC_VOUCHER_NOT_SUPPORTED");
   }
   const link = (value: unknown) => (value == null || value === "" ? null : Number(value));
   const amount = (value: unknown) => toMoney(String(value == null || value === "" ? "0" : value)).toFixed(2);
-  return phase9SalesVoucherEnvelope({
+  return ACCOUNTING_VOUCHER_ENVELOPES[voucherType]({
     companyId: actor.companyId,
     localVoucherId: localRef,
     actorUserId: actor.userId,
     actorUsername: actor.username,
     requestId: operationId,
     voucher: {
-      voucherType: "Sales",
+      voucherType,
       voucherDate: day(voucher.voucherDate, ""),
       description: textOrNull(voucher.description),
       locationId: link(voucher.locationId),
@@ -161,6 +176,25 @@ function salesVoucherEnvelope(raw: unknown, { actor, operationId, localRef }: Sa
       narration: textOrNull(entry.narration),
     })),
   });
+}
+
+function accountingVoucherKind(voucherType: Phase9AccountingVoucherType): BrowserOperationKind {
+  return {
+    stream: "payments",
+    route: { method: "POST", path: "/api/vouchers/with-entries" },
+    pcOnly: true,
+    // Only what the cloud can replay: the envelope's own limits (description,
+    // narration, amounts, number of lines) are checked before the route runs.
+    pcAccepts: (raw) => {
+      try {
+        accountingVoucherEnvelope(voucherType, raw, PC_ACCEPTS_PROBE);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    build: (raw, context) => accountingVoucherEnvelope(voucherType, raw, context),
+  };
 }
 
 export const BROWSER_OPERATION_KINDS: Readonly<Record<string, BrowserOperationKind>> = Object.freeze({
@@ -228,24 +262,10 @@ export const BROWSER_OPERATION_KINDS: Readonly<Record<string, BrowserOperationKi
       });
     },
   },
-  // POST /api/vouchers/with-entries (PC only): an accounting Sales voucher on
-  // the protected central path (USD, active, client request id).
-  [PHASE9_SALES_VOUCHER_KIND]: {
-    stream: "payments",
-    route: { method: "POST", path: "/api/vouchers/with-entries" },
-    pcOnly: true,
-    // Only what the cloud can replay: the envelope's own limits (description,
-    // narration, amounts, number of lines) are checked before the route runs.
-    pcAccepts: (raw) => {
-      try {
-        salesVoucherEnvelope(raw, PC_ACCEPTS_PROBE);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    build: (raw, context) => salesVoucherEnvelope(raw, context),
-  },
+  // POST /api/vouchers/with-entries (PC only): an accounting Sales or Purchase
+  // voucher on the protected central path (USD, active, client request id).
+  [PHASE9_SALES_VOUCHER_KIND]: accountingVoucherKind("Sales"),
+  [PHASE9_PURCHASE_VOUCHER_KIND]: accountingVoucherKind("Purchase"),
   // POST /api/inventory/quick-adjust
   [PHASE9_STOCK_ADJUST_KIND]: {
     stream: "stock",

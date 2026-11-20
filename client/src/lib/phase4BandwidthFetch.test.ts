@@ -80,6 +80,34 @@ describe("phase4 bandwidth fetch interceptor", () => {
     expect(detailCalls).toHaveLength(0);
   });
 
+  it("never reuses the same daily-scan or proforma URL across company sessions", async () => {
+    let activeCompany = 1;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname === "/api/factory/customer-proformas") {
+        return jsonResponse([{ id: activeCompany, companyId: activeCompany }]);
+      }
+      return jsonResponse([{ id: activeCompany, scan_date: "2026-11-20" }]);
+    });
+    await installWith(fetchMock);
+    const scope = await import("./companyCacheScope");
+
+    scope.activateCompanyCacheScope(1);
+    const proformaA = await (await window.fetch("/api/factory/customer-proformas?profile=summary")).json();
+    const scansA = await (await window.fetch("/api/factory/daily-bale-scans?date=2026-11-20")).json();
+    expect(proformaA[0].companyId).toBe(1);
+    expect(scansA[0].id).toBe(1);
+
+    scope.beginCompanyCacheTransition();
+    scope.activateCompanyCacheScope(2);
+    activeCompany = 2;
+
+    const proformaB = await (await window.fetch("/api/factory/customer-proformas?profile=summary")).json();
+    const scansB = await (await window.fetch("/api/factory/daily-bale-scans?date=2026-11-20")).json();
+    expect(proformaB[0].companyId).toBe(2);
+    expect(scansB[0].id).toBe(2);
+  });
+
   it("passes unrelated requests through and invalidates proforma caches after a write", async () => {
     window.history.replaceState({}, "", "/factory/sales/loading/new");
     let summaryVersion = 0;

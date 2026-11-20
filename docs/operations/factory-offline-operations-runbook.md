@@ -421,8 +421,8 @@ route refuses them (`OFFLINE_BROWSER_KIND_NOT_SUPPORTED`). Editing or deleting a
 journal on a PC is still refused. Covered by
 `tests/pc-sync-offline-journals.test.ts`.
 
-**Accounting Sales vouchers on a PC.** In entry mode the PC also accepts
-accounting Sales vouchers entered through the voucher screen
+**Accounting Sales and Purchase vouchers on a PC.** In entry mode the PC also
+accepts accounting Sales and Purchase vouchers entered through the voucher screen
 (`POST /api/vouchers/with-entries`), but only those the protected central path
 takes and the factory LAN server records: an active (not optional) USD voucher
 with a client request id, at least two lines, each a debit or a credit with at
@@ -434,11 +434,15 @@ take the customer's linked ledger, then the central posting engine, employee
 balances and audit. A voucher that is unbalanced, falls in a closed period,
 names an account or customer the cloud does not have, or a ledger that does not
 match the customer's linked ledger is held as `PHASE9_SALES_VOUCHER_REFUSED`
-(reject-only); one by a cashier is held as `PHASE9_ACTOR_ROLE_NOT_PERMITTED`.
-Sales vouchers are PC-only. Covered by
-`tests/pc-sync-offline-sales-vouchers.test.ts`.
+or `PHASE9_PURCHASE_VOUCHER_REFUSED` (reject-only); one by a cashier is held as
+`PHASE9_ACTOR_ROLE_NOT_PERMITTED`. Each type is its own kind
+(`voucher.sales.v1`, `voucher.purchase.v1`), so a voucher is posted only as the
+type it was saved as. A save the PC answers as a replay of one it already made
+(same client request id) is not queued again. Both are PC-only, and container
+purchase orders stay online-only. Covered by
+`tests/pc-sync-offline-accounting-vouchers.test.ts`.
 
-Still to come: purchases, masters with held edits and duplicate-customer merge (Phase C),
+Still to come: masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 

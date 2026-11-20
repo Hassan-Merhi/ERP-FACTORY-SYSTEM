@@ -21,8 +21,8 @@ describe("frontend company-state isolation wiring", () => {
     expect(context).toContain("createCompanySwitchQueue");
     expect(context).toContain("cancelCompanySessionQueries(queryClient)");
     expect(context).toContain("removeCompanySessionQueries(queryClient, {");
-    expect(context).toContain("const ok = await switchCompanyOnServer(company.id)");
-    expect(context).toContain("commitCompanySelection(company, { prefetch: true, serverSynced: true })");
+    expect(context).toContain("const switched = await switchCompanyOnServer(company.id)");
+    expect(context).toContain("commitCompanySelection(company, { prefetch: true, serverSynced: true, revision: switched.revision })");
     expect(context).toContain("commitCompanySelection(company, { prefetch: false, serverSynced: false })");
     expect(context).toContain("scheduleInitialSyncRetry");
     expect(context).not.toContain("invalidateCompanyQueries");
@@ -59,10 +59,40 @@ describe("frontend company-state isolation wiring", () => {
     const app = source("client/src/app/AuthenticatedApp.tsx");
     const appData = source("client/src/app/useAuthenticatedAppData.ts");
 
-    expect(app).toContain("if (companyLoading || !selectedCompany) return <AppLoadingState />;");
+    expect(app).toContain("if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) return <AppLoadingState />;");
     expect(appData).toContain('companyQueryKey("/api/company-settings", selectedCompanyId)');
     expect(appData).toContain('companyQueryKey("/api/factory/my-access", selectedCompanyId)');
     expect(appData).toContain('companyQueryKey("/api/factory/settings", selectedCompanyId)');
+  });
+
+  it("gates all company-specific providers and portals before showing old records", () => {
+    const root = source("client/src/App.tsx");
+    const context = source("client/src/contexts/CompanyContext.tsx");
+    const follower = source("client/src/hooks/useCompanySessionFollower.ts");
+
+    expect(root).toContain("function CompanyWorkspaceBoundary(");
+    expect(root).toContain('if (!selectedCompany || (companyLoading && !isCheckingCompanySession))');
+    expect(root).toContain('data-testid="company-session-verification-cover"');
+    expect(root).toContain("isCheckingCompanySession && <CompanySessionVerificationCover />");
+    expect(root).toContain('<LocationProvider key={`${user.id}:${selectedCompany.id}`}>');
+    expect(root).toContain("<LegacyQueueRecoveryPanel />");
+    expect(root).toContain("<DeferredAuthenticatedUtilities />");
+    expect(context).toContain('externalSessionState === "switching"');
+    expect(context).toContain('externalSessionState !== "switching" && (externalSessionState === "checking" || isSyncingCompany)');
+    expect(follower).toContain('onTransitionStart("selection")');
+    expect(follower).toContain("onTransitionVerified()");
+  });
+
+  it("clears global confirmations and toast notices during actual company transitions", () => {
+    const context = source("client/src/contexts/CompanyContext.tsx");
+    const confirmHost = source("client/src/components/ConfirmHost.tsx");
+    const toaster = source("client/src/components/ui/toaster.tsx");
+
+    expect(context).toContain("announceCompanyWorkspaceTransition()");
+    expect(confirmHost).toContain("COMPANY_WORKSPACE_TRANSITION_EVENT");
+    expect(confirmHost).toContain("request.resolve(false)");
+    expect(confirmHost).toContain("request.resolve(null)");
+    expect(toaster).toContain("COMPANY_WORKSPACE_TRANSITION_EVENT, clearAllToasts");
   });
 
   it("remounts the active workspace when the company identity changes", () => {

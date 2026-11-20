@@ -16,6 +16,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { erpPageAccessQueryOptions } from "@/app/erpAccessQuery";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { apiRequest } from "@/lib/queryClient";
+import { ensureCompanyForNavigation } from "@/lib/ensureCompanyForNavigation";
 import { useToast } from "@/hooks/use-toast";
 import { PeriodFilterValue } from "@/components/ui/period-filter";
 import { usePaginatedFilterState } from "@/hooks/use-paginated-filter-state";
@@ -58,7 +59,7 @@ export function useTransactionJournalModel() {
     hasActiveFilters,
   } = usePaginatedFilterState<TransactionJournalFilters>({
     createInitialFilters: createTransactionJournalFilters,
-    storageKey: "erp-transaction-journal-filters-v3",
+    storageKey: `erp-transaction-journal-filters-v3:${selectedCompany?.id ?? "pending"}`,
   });
   const { periodFilter, selectedCos, voucherType, currency, optionalFilter, includeFactory, searchInput, search } =
     journalFilters;
@@ -266,32 +267,25 @@ export function useTransactionJournalModel() {
   };
 
   // ── Switch company and navigate ──
+  // Await the shared CompanyProvider queue. Neither a delay nor a direct POST
+  // can prove the selected company now matches the destination record.
   const openInCompany = async (companyId: number, path: string) => {
-    const company = contextCompanies.find((c) => c.id === companyId);
-    if (company) {
-      selectCompany(company);
-      await new Promise((r) => setTimeout(r, 300));
-    } else {
-      try {
-        await apiRequest("POST", "/api/auth/set-company", { companyId });
-      } catch {
-        toast({ title: "Could not switch company", variant: "destructive" });
-        return;
-      }
+    const ready = await ensureCompanyForNavigation(companyId, selectedCompany, contextCompanies, selectCompany);
+    if (!ready) {
+      toast({ title: "Could not switch company", variant: "destructive" });
+      return;
     }
     setDrawerOpen(false);
     setLocation(path);
   };
 
-  // Compare must open its own tab (as on normal Daybook), without losing the
-  // company-switch guard when All Daybook is viewing a different company.
+  // Compare opens its own tab, but only after the current session has
+  // completed the authorized switch. Close the placeholder on failure.
   const openComparisonInCompany = (companyId: number, path: string) => {
     if (selectedCompany?.id === companyId) {
       window.open(path, "_blank", "noopener,noreferrer");
       return;
     }
-    // Open synchronously from the click to avoid browser popup blocking while
-    // the authorized company switch completes.
     const tab = window.open("about:blank", "_blank");
     if (!tab) {
       toast({ title: "Allow pop-ups to open the comparison", variant: "destructive" });
@@ -299,13 +293,8 @@ export function useTransactionJournalModel() {
     }
     tab.opener = null;
     void (async () => {
-      const company = contextCompanies.find((item) => item.id === companyId);
-      if (company) {
-        const switched = await selectCompany(company);
-        if (!switched) throw new Error("Company switch failed");
-      } else {
-        await apiRequest("POST", "/api/auth/set-company", { companyId });
-      }
+      const ready = await ensureCompanyForNavigation(companyId, selectedCompany, contextCompanies, selectCompany);
+      if (!ready) throw new Error("Company switch failed");
       tab.location.replace(path);
     })().catch(() => {
       tab.close();

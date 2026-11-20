@@ -59,6 +59,7 @@ export function registerOrderCrudRoutesPart2(app: Express) {
         shippingCompany: r.shipping_company ?? null,
         containerNotes: r.container_notes ?? null,
         bookingInfo: canViewBookingInfo(req.session) ? (r.booking_info ?? null) : null,
+        agentName: canViewBookingInfo(req.session) ? (r.agent_name ?? null) : null,
         destination: r.destination ?? null,
         verifiedByUserId: r.verified_by_user_id ?? null,
         verifiedAt: r.verified_at ?? null,

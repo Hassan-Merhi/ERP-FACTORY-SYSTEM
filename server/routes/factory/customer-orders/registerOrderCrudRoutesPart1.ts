@@ -202,6 +202,7 @@ export function registerOrderCrudRoutesPart1(app: Express) {
           shippingCompany: customerOrders.shippingCompany,
           containerNotes: customerOrders.containerNotes,
           bookingInfo: canViewBookingInfo(req.session) ? customerOrders.bookingInfo : sql<string | null>`NULL`,
+          agentName: canViewBookingInfo(req.session) ? customerOrders.agentName : sql<string | null>`NULL`,
           destination: customerOrders.destination,
           locationId: customerOrders.locationId,
           loadingStartedAt: customerOrders.loadingStartedAt,

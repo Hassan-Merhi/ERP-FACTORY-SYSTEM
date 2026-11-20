@@ -109,6 +109,13 @@ async function selectCompany(page) {
   const result = await request(page, "POST", "/api/auth/set-company", { companyId: fixture.companyId });
   ok(result, "company switch");
   await page.evaluate((id) => window.localStorage.setItem("selectedCompanyId", String(id)), fixture.companyId);
+  // This legacy test helper changes the session directly instead of using
+  // CompanyContext. Reload the app before posting business writes so its
+  // verified company-revision fence matches the newly committed server token.
+  // Normal users switch through CompanySelector and do not require a reload.
+  await page.goto(`${baseUrl}/inventory?tab=by-location`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
+  await page.waitForFunction(() => Boolean(document.getElementById("main-content")), { timeout: timeoutMs });
+  await settle(page);
 }
 
 /** Opens a screen and checks the application shell rendered it, not a login page or a crash overlay. */

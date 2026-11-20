@@ -115,7 +115,7 @@ export function ContainerFilters({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      {(statusFilter !== "ALL" || supplierFilter.length > 0 || searchTerm) && (
+      {(statusFilter !== "OTW" || supplierFilter.length > 0 || searchTerm) && (
         <Button
           variant="ghost"
           size="sm"
