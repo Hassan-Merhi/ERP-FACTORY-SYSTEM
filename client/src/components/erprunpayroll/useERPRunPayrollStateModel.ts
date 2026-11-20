@@ -62,9 +62,9 @@ export function useERPRunPayrollStateModel() {
   });
 
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts", companyId],
+    queryKey: ["/api/ledger-accounts?profile=picker", companyId],
     queryFn: async () => {
-      const res = await fetch("/api/ledger-accounts", { credentials: "include" });
+      const res = await fetch("/api/ledger-accounts?profile=picker", { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
