@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingState } from "@/components/ui/page-state";
@@ -103,22 +104,16 @@ export function IntercompanyPosTab() {
               {/* Source interco account */}
               <div className="space-y-1.5">
                 <Label>Source Intercompany Account (this company)</Label>
-                <Select
-                  value={sourceIntercoAccountId}
-                  onValueChange={setSourceIntercoAccountId}
-                  data-testid="select-src-account"
-                >
-                  <SelectTrigger data-testid="select-src-account-trigger">
-                    <SelectValue placeholder="Select account…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {srcAccounts.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)} data-testid={`option-src-account-${a.id}`}>
-                        {a.name} <span className="text-muted-foreground text-xs ml-1">({a.accountType})</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div data-testid="select-src-account">
+                  <UnifiedAccountPicker
+                    value={sourceIntercoAccountId}
+                    onChange={setSourceIntercoAccountId}
+                    options={srcAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
+                    placeholder="Select account…"
+                    testId="select-src-account-trigger"
+                    optionTestId={(id) => `option-src-account-${id}`}
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   Debited in the source company journal (intercompany receivable / due-from account).
                 </p>
@@ -130,22 +125,17 @@ export function IntercompanyPosTab() {
                 {!destCompanyId ? (
                   <p className="text-xs text-muted-foreground italic">Select a destination company first.</p>
                 ) : (
-                  <Select
-                    value={destIntercoAccountId}
-                    onValueChange={setDestIntercoAccountId}
-                    data-testid="select-dest-account"
-                  >
-                    <SelectTrigger data-testid="select-dest-account-trigger">
-                      <SelectValue placeholder={destAccountsLoading ? "Loading…" : "Select account…"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {destAccounts.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)} data-testid={`option-dest-account-${a.id}`}>
-                          {a.name} <span className="text-muted-foreground text-xs ml-1">({a.accountType})</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div data-testid="select-dest-account">
+                    <UnifiedAccountPicker
+                      value={destIntercoAccountId}
+                      onChange={setDestIntercoAccountId}
+                      options={destAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
+                      placeholder="Select account…"
+                      disabled={destAccountsLoading}
+                      testId="select-dest-account-trigger"
+                      optionTestId={(id) => `option-dest-account-${id}`}
+                    />
+                  </div>
                 )}
                 <p className="text-xs text-muted-foreground">
                   Credited in the destination company journal (intercompany payable / due-to account).

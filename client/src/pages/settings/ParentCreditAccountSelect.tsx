@@ -35,10 +35,12 @@ export function ParentCreditAccountSelect({ company }: { company: Pick<Company, 
   });
 
   const { data: ledgerAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts", company.id],
+    queryKey: ["/api/ledger-accounts?profile=picker", company.id],
     queryFn: async () => {
       try {
-        const res = await fetch(`/api/ledger-accounts?companyId=${company.id}`, { credentials: "include" });
+        const res = await fetch(`/api/ledger-accounts?profile=picker&companyId=${company.id}`, {
+          credentials: "include",
+        });
         if (!res.ok) return [];
         return res.json();
       } catch {

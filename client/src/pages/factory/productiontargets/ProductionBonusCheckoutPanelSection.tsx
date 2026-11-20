@@ -3,6 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { usd, type Method } from "./ProductionBonusCheckoutPanelSummarizeByWorker";
 import { useProductionBonusCheckoutPanelState } from "./useProductionBonusCheckoutPanelState";
 
@@ -53,18 +54,14 @@ export function ProductionBonusCheckoutPanelSection({
       <div className="flex flex-wrap items-end gap-3">
         <label className="space-y-1 text-xs font-medium text-muted-foreground">
           {t("payFrom")}
-          <Select value={accountId} onValueChange={setAccountId}>
-            <SelectTrigger className="h-10 w-[230px]" aria-label={t("payFrom")}>
-              <SelectValue placeholder={t("chooseAccount")} />
-            </SelectTrigger>
-            <SelectContent>
-              {cashAccounts.map((account) => (
-                <SelectItem key={account.id} value={String(account.id)}>
-                  {account.name} ({account.code})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <UnifiedAccountPicker
+            options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+            value={accountId}
+            onChange={setAccountId}
+            placeholder={t("chooseAccount")}
+            ariaLabel={t("payFrom")}
+            className="h-10 w-[230px]"
+          />
         </label>
         <label className="space-y-1 text-xs font-medium text-muted-foreground">
           {t("paymentDate")}

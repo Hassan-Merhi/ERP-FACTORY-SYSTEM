@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,10 +57,10 @@ export function ExportAccountsSection() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Input
+            <SearchField
               placeholder="Search accounts..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onValueChange={setSearch}
               data-testid="input-account-search"
             />
             <div className="border rounded-md overflow-y-auto max-h-80 divide-y">

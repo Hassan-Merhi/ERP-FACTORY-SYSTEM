@@ -4,6 +4,7 @@ import { companyBusinessDate } from "../accounting/companyBusinessDate";
 import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements, retailPosPayments } from "@shared/schema";
 import { db, pool } from "../../db";
 import { getRetailAccountingSettings } from "./retailAccountingSettingsService";
+import { ledgerPostingLeafCondition } from "../accounting/postableLedgerAccountPolicy";
 
 /** Read-only Retail payment, shift and reconciliation queries. */
 
@@ -18,8 +19,8 @@ export async function getRetailCashDrawerBalance(
   locationId: number,
   requestedCashAccountId?: number | null
 ) {
-  const accountId = requestedCashAccountId ??
-    (await getRetailAccountingSettings(companyId, locationId)).cashLedgerAccountId;
+  const accountId =
+    requestedCashAccountId ?? (await getRetailAccountingSettings(companyId, locationId)).cashLedgerAccountId;
   if (!Number.isSafeInteger(accountId) || accountId <= 0) {
     throw new Error("A valid cash ledger account is required");
   }
@@ -31,11 +32,9 @@ export async function getRetailCashDrawerBalance(
       accountType: ledgerAccounts.accountType,
     })
     .from(ledgerAccounts)
-    .where(and(
-      eq(ledgerAccounts.companyId, companyId),
-      eq(ledgerAccounts.id, accountId),
-      isNull(ledgerAccounts.deletedAt)
-    ))
+    .where(
+      and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.id, accountId), isNull(ledgerAccounts.deletedAt))
+    )
     .limit(1);
   if (!account || account.accountType !== "Cash") {
     throw new Error("Select an active Cash ledger account belonging to this company");
@@ -97,8 +96,8 @@ export async function getRetailShiftSummary(companyId: number, shiftId: number) 
 
   // A cashier can route a payment to a different Cash ledger; that money must not inflate
   // the drawer account of this shift during reconciliation.
-  const drawerAccountId = shift.cashAccountId ??
-    (await getRetailAccountingSettings(companyId, shift.locationId)).cashLedgerAccountId;
+  const drawerAccountId =
+    shift.cashAccountId ?? (await getRetailAccountingSettings(companyId, shift.locationId)).cashLedgerAccountId;
   const methods: Record<string, number> = {};
   let cashSales = 0;
   let cashRefunds = 0;
@@ -142,7 +141,13 @@ export async function listRetailFinancialAccounts(companyId: number) {
         accountType: ledgerAccounts.accountType,
       })
       .from(ledgerAccounts)
-      .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)))
+      .where(
+        and(
+          eq(ledgerAccounts.companyId, companyId),
+          isNull(ledgerAccounts.deletedAt),
+          ledgerPostingLeafCondition(companyId)
+        )
+      )
       .orderBy(ledgerAccounts.name),
     db
       .select({ id: bankAccounts.id, code: bankAccounts.code, name: bankAccounts.name })

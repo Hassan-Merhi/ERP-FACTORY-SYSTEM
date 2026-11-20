@@ -1,8 +1,8 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Label } from "@/components/ui/label";
 import { MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import type { LedgerAccount, Location } from "@shared/schema";
 
 interface PosLocationManagerProps {
@@ -102,21 +102,16 @@ export function PosLocationManager({
                 </label>
                 {checked && (!posViewOnly || selectedLocationIds[0] === loc.id) && (
                   <div className="pl-6 pr-1 pb-1">
-                    <Select
+                    <UnifiedAccountPicker
+                      options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
                       value={locationCashAccounts[loc.id]?.toString() || ""}
-                      onValueChange={(v) => setLocationCashAccounts((prev) => ({ ...prev, [loc.id]: parseInt(v) }))}
-                    >
-                      <SelectTrigger className="h-7 text-xs" data-testid={`select-cash-account-loc-${loc.id}`}>
-                        <SelectValue placeholder="Select cash account *" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {cashAccounts.map((a) => (
-                          <SelectItem key={a.id} value={a.id.toString()}>
-                            {a.name} ({a.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(v) =>
+                        setLocationCashAccounts((prev) => ({ ...prev, [loc.id]: v ? Number(v) : undefined }))
+                      }
+                      placeholder="Select cash account *"
+                      testId={`select-cash-account-loc-${loc.id}`}
+                      className="h-8 text-xs"
+                    />
                     {!locationCashAccounts[loc.id] && (
                       <p className="text-xs text-destructive mt-0.5">Cash account required</p>
                     )}

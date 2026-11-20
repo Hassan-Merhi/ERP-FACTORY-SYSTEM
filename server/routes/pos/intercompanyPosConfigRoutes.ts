@@ -1,12 +1,12 @@
 import type { Express } from "express";
-import { and, eq, gte, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 
 import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { db } from "../../db";
 import { errorStatus, getErrorMessage } from "../../lib/httpHandlers";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
-import { storage } from "../../storage";
-import { intercompanyPosConfigs, vouchers } from "@shared/schema";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
+import { intercompanyPosConfigs, ledgerAccounts, vouchers } from "@shared/schema";
 
 export function registerIntercompanyPosConfigRoutes(app: Express): void {
   app.get("/api/intercompany-pos-config", requireAuth, requireNonPOS, async (req, res) => {
@@ -76,7 +76,22 @@ export function registerIntercompanyPosConfigRoutes(app: Express): void {
     try {
       const { companyId } = req.query;
       if (!companyId) return res.status(400).json({ message: "companyId required" });
-      const accounts = await storage.getAllLedgerAccounts(parseInt(companyId as string));
+      const targetCompanyId = Number.parseInt(String(companyId), 10);
+      if (!Number.isSafeInteger(targetCompanyId) || targetCompanyId <= 0) {
+        return res.status(400).json({ message: "Invalid company ID" });
+      }
+      const accounts = await db
+        .select()
+        .from(ledgerAccounts)
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, targetCompanyId),
+            isNull(ledgerAccounts.deletedAt),
+            eq(ledgerAccounts.isHidden, false),
+            ledgerPostingLeafCondition(targetCompanyId)
+          )
+        )
+        .orderBy(asc(ledgerAccounts.code));
       res.json(accounts);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

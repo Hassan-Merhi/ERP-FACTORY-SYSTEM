@@ -10,7 +10,11 @@
 import React, { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { RetailPaymentPanel } from "@/pages/pos/RetailPaymentPanel";
-import { paymentAccountValue, paymentFromAccount, type RetailPaymentAccounts } from "@/pages/pos/RetailPaymentAccountSelect";
+import {
+  paymentAccountValue,
+  paymentFromAccount,
+  type RetailPaymentAccounts,
+} from "@/pages/pos/RetailPaymentAccountSelect";
 import { outstandingSaleCredit, type RetailPaymentDraft } from "@/pages/pos/retailPosTypes";
 
 const accounts: RetailPaymentAccounts = {
@@ -18,7 +22,7 @@ const accounts: RetailPaymentAccounts = {
     { id: 11, code: "C-001", name: "Main Cash", accountType: "Cash" },
     { id: 12, code: "B-001", name: "Bank Ledger", accountType: "Bank" },
   ],
-  banks: [{ id: 21, code: "B-002", name: "Bank Current", }],
+  banks: [{ id: 21, code: "B-002", name: "Bank Current" }],
 };
 
 function Harness({
@@ -85,6 +89,7 @@ describe("RetailPaymentPanel Split", () => {
     const { unmount } = render(
       <Harness total={10} initial={[{ method: "cash", amount: 10, tenderedAmount: 10 }]} onChange={() => {}} />
     );
+    fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
     expect(screen.queryByRole("option", { name: /customer credit/i })).toBeNull();
     unmount();
     render(
@@ -95,6 +100,7 @@ describe("RetailPaymentPanel Split", () => {
         onChange={() => {}}
       />
     );
+    fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
     expect(screen.getByRole("option", { name: /customer credit/i })).toBeTruthy();
   });
 });
@@ -120,7 +126,9 @@ describe("Retail money account selection", () => {
         onChange={(next) => changes.push(next)}
       />
     );
-    fireEvent.change(screen.getByRole("combobox", { name: /account/i }), { target: { value: "bank:21" } });
+    fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
+    expect(screen.queryByText("B-002")).toBeNull();
+    fireEvent.click(screen.getByText("Bank Current"));
     expect(changes.at(-1)?.[0]).toMatchObject({ method: "bank", bankAccountId: 21, amount: 100 });
     expect(changes.at(-1)?.[0].ledgerAccountId).toBeUndefined();
   });

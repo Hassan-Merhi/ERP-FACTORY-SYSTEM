@@ -4,6 +4,7 @@ import { z } from "zod";
 import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements, userLocations } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
+import { ledgerPostingLeafCondition } from "../services/accounting/postableLedgerAccountPolicy";
 import { getErrorMessage, HttpError } from "../lib/httpHandlers";
 import { closedPeriodErrorResponse } from "../lib/closedPeriodError";
 import {
@@ -91,9 +92,19 @@ async function assertAccountOwnership(companyId: number, patch: z.infer<typeof s
     const owned = await db
       .select({ id: ledgerAccounts.id })
       .from(ledgerAccounts)
-      .where(and(eq(ledgerAccounts.companyId, companyId), inArray(ledgerAccounts.id, [...new Set(ledgerIds)])));
-    if (owned.length !== new Set(ledgerIds).size)
-      throw new Error("One or more Retail ledger accounts belong to another company");
+      .where(
+        and(
+          eq(ledgerAccounts.companyId, companyId),
+          inArray(ledgerAccounts.id, [...new Set(ledgerIds)]),
+          ledgerPostingLeafCondition(companyId)
+        )
+      );
+    if (owned.length !== new Set(ledgerIds).size) {
+      throw new HttpError(
+        400,
+        "One or more Retail ledger accounts are unavailable, belong to another company, or are group headings"
+      );
+    }
   }
   if (typeof patch.bankAccountId === "number") {
     const [bank] = await db
@@ -207,11 +218,13 @@ export function registerRetailFinancialRoutes(app: Express): void {
         const [assigned] = await db
           .select({ locationId: userLocations.locationId })
           .from(userLocations)
-          .where(and(
-            eq(userLocations.companyId, companyId),
-            eq(userLocations.userId, req.user.id),
-            eq(userLocations.locationId, locationId)
-          ))
+          .where(
+            and(
+              eq(userLocations.companyId, companyId),
+              eq(userLocations.userId, req.user.id),
+              eq(userLocations.locationId, locationId)
+            )
+          )
           .limit(1);
         if (!assigned) return res.status(403).json({ message: "This location is not assigned to you" });
       }

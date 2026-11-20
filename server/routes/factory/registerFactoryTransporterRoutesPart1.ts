@@ -9,6 +9,7 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { parseMoneyInput, toMoney } from "../../lib/money";
 import { factorySessionActor, postFactoryVoucherTx } from "../../services/factory/factoryVoucherPosting";
+import { PostingValidationError } from "../../services/accounting/postingValidationError";
 
 export function getCompanyId(req: Request): number | null {
   const s = req.session;
@@ -125,6 +126,7 @@ export function registerFactoryTransporterRoutesPart1(app: Express) {
       res.json(tx);
     } catch (e: unknown) {
       if (e instanceof z.ZodError) return res.status(400).json({ message: e.issues.map((x) => x.message).join(", ") });
+      if (e instanceof PostingValidationError) return res.status(400).json({ message: e.message, code: e.code });
       res.status(500).json({ message: getErrorMessage(e) });
     }
   });
@@ -198,6 +200,7 @@ export function registerFactoryTransporterRoutesPart1(app: Express) {
       res.json(tx);
     } catch (e: unknown) {
       if (e instanceof z.ZodError) return res.status(400).json({ message: e.issues.map((x) => x.message).join(", ") });
+      if (e instanceof PostingValidationError) return res.status(400).json({ message: e.message, code: e.code });
       res.status(500).json({ message: getErrorMessage(e) });
     }
   });

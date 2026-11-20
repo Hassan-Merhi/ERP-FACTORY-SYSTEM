@@ -1,3 +1,7 @@
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { db } from "../../db";
+import { ledgerAccounts } from "@shared/schema";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 import {
   buildCompanyTransferPostingRequest,
   createDatabasePostingDependencies,
@@ -100,7 +104,19 @@ export const simpleCompanyTransferService = {
   },
 
   listCompanyAccounts(companyId: number) {
-    return transferRepository.listLedgerAccounts(companyId, true);
+    // This route supplies transfer posting choices, not Chart of Accounts.
+    // Include previously hidden *leaves* for compatibility, never a group.
+    return db
+      .select()
+      .from(ledgerAccounts)
+      .where(
+        and(
+          eq(ledgerAccounts.companyId, companyId),
+          isNull(ledgerAccounts.deletedAt),
+          ledgerPostingLeafCondition(companyId)
+        )
+      )
+      .orderBy(asc(ledgerAccounts.code));
   },
 
   async create(userId: string, input: unknown, actor?: PostingActor) {

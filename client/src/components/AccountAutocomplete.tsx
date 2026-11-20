@@ -95,7 +95,7 @@ export const AccountAutocomplete = forwardRef<AccountAutocompleteHandle, Account
     }));
 
     const filteredAccounts = useMemo(
-      () => allAccounts.filter((acc) => searchAny(searchTerm, acc?.name, acc?.code)),
+      () => allAccounts.filter((acc) => searchAny(searchTerm, acc?.name)),
       [allAccounts, searchTerm]
     );
 

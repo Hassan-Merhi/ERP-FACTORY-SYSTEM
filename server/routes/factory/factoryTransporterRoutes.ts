@@ -5,10 +5,11 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { getOrCreateLedgerAccount } from "./_helpers";
 import { factoryTransporters, factoryTransporterTransactions, ledgerAccounts } from "@shared/schema";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, asc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import { registerFactoryTransporterRoutesPart1, getCompanyId } from "./registerFactoryTransporterRoutesPart1";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 
 export function registerFactoryTransporterRoutes(app: Express) {
   // ── LIST all transporters (with balance summary) ──
@@ -193,7 +194,14 @@ export function registerFactoryTransporterRoutes(app: Express) {
       const accounts = await db
         .select({ id: ledgerAccounts.id, name: ledgerAccounts.name, accountType: ledgerAccounts.accountType })
         .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.active, true)))
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            eq(ledgerAccounts.active, true),
+            isNull(ledgerAccounts.deletedAt),
+            ledgerPostingLeafCondition(companyId)
+          )
+        )
         .orderBy(asc(ledgerAccounts.name));
 
       res.json(accounts);

@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { useProductionBonusManualPaymentPanelState, type Props } from "./useProductionBonusManualPaymentPanelState";
 export type { ManualBonusPayment, ManualBonusHistory } from "./useProductionBonusManualPaymentPanelState";
 
@@ -72,18 +72,14 @@ export function ProductionBonusManualPaymentPanel({ rosterDate, workers, selecte
         <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1 text-xs font-medium text-muted-foreground">
             Pay from USD Cash / Bank
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger className="w-[245px]" aria-label="Manual bonus paying account">
-                <SelectValue placeholder="Select paying account" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((account) => (
-                  <SelectItem key={account.id} value={String(account.id)}>
-                    {account.name} ({account.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+              options={accounts.map((account) => ({ value: String(account.id), name: account.name }))}
+              value={accountId}
+              onChange={setAccountId}
+              placeholder="Select paying account"
+              ariaLabel="Manual bonus paying account"
+              className="w-[245px]"
+            />
           </label>
           <label className="space-y-1 text-xs font-medium text-muted-foreground">
             Payment date

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 
 import { useQuery } from "@tanstack/react-query";
@@ -43,11 +43,11 @@ export function LoginHistoryTab() {
           Login History
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <Input
+          <SearchField
             placeholder="Filter by username..."
             value={filterUser}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFilterUser(e.target.value)}
-            className="w-48"
+            onValueChange={setFilterUser}
+            wrapperClassName="w-full sm:w-48"
             data-testid="input-filter-username"
           />
         </div>

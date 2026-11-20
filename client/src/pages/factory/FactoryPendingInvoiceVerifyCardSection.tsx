@@ -1,11 +1,10 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./FactoryPendingInvoiceVerify.tsx to keep that module under the source-size cap.
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Check, ChevronsUpDown, Package, Plus, Trash2, Truck } from "lucide-react";
+import { Package, Plus, Trash2, Truck } from "lucide-react";
 import { fmtNum } from "./factorypendinginvoiceverify/utils";
 import { useFactoryPendingInvoiceVerifyState } from "./FactoryPendingInvoiceVerifyPageHeaderSection";
 export { FactoryPendingInvoiceVerifyCardSection2 } from "./FactoryPendingInvoiceVerifyCardSection2";
@@ -13,7 +12,6 @@ export { FactoryPendingInvoiceVerifyCardSection2 } from "./FactoryPendingInvoice
 export function FactoryPendingInvoiceVerifyCardSection({
   addChargeMutation,
   canChange,
-  chargeAccountOpen,
   chargeAmount,
   chargeLedgerAccountId,
   chargeName,
@@ -23,7 +21,6 @@ export function FactoryPendingInvoiceVerifyCardSection({
   ledgerAccounts,
   recordChanges,
   removeChargeMutation,
-  setChargeAccountOpen,
   setChargeAmount,
   setChargeLedgerAccountId,
   setChargeName,
@@ -113,52 +110,15 @@ export function FactoryPendingInvoiceVerifyCardSection({
             />
           )}
 
-          <Popover open={chargeAccountOpen} onOpenChange={setChargeAccountOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={chargeAccountOpen}
-                className="w-full justify-between font-normal"
-                data-testid="select-charge-account"
-              >
-                <span className="truncate text-left">
-                  {chargeLedgerAccountId
-                    ? (ledgerAccounts.find((a) => String(a.id) === chargeLedgerAccountId)?.name ?? "Select account...")
-                    : chargeType !== "FREIGHT"
-                      ? "Select account (required)..."
-                      : "Select account (optional)..."}
-                </span>
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[min(320px,calc(100vw-2rem))] p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search accounts..." data-testid="input-charge-account-search" />
-                <CommandList>
-                  <CommandEmpty>No account found.</CommandEmpty>
-                  <CommandGroup>
-                    {ledgerAccounts.map((acct) => (
-                      <CommandItem
-                        key={acct.id}
-                        value={`${acct.name} ${acct.code}`}
-                        onSelect={() => {
-                          setChargeLedgerAccountId(String(acct.id));
-                          setChargeAccountOpen(false);
-                        }}
-                        data-testid={`option-account-${acct.id}`}
-                      >
-                        <Check
-                          className={`mr-2 h-4 w-4 shrink-0 ${String(acct.id) === chargeLedgerAccountId ? "opacity-100" : "opacity-0"}`}
-                        />
-                        <span className="flex-1 truncate">{acct.name}</span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <UnifiedAccountPicker
+            options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+            value={chargeLedgerAccountId}
+            onChange={setChargeLedgerAccountId}
+            placeholder={chargeType !== "FREIGHT" ? "Select account (required)..." : "Select account (optional)..."}
+            testId="select-charge-account"
+            searchTestId="input-charge-account-search"
+            optionTestId={(id) => `option-account-${id}`}
+          />
           {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
               A ledger account is required so the charge posts to accounting.

@@ -2,8 +2,8 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, UserPlus } from "lucide-react";
+import { SearchField } from "@/components/ui/search-field";
+import { UserPlus } from "lucide-react";
 
 export interface NotifRule {
   id: number;
@@ -67,12 +67,11 @@ export function UserPicker({
     <div ref={containerRef} className="relative">
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
+          <SearchField
             ref={inputRef}
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
+            onValueChange={(value) => {
+              setSearch(value);
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
@@ -86,7 +85,7 @@ export function UserPicker({
               }
             }}
             placeholder="Search user to add…"
-            className="pl-8 h-8 text-sm"
+            className="h-8 text-sm"
             disabled={disabled}
             data-testid={`input-search-user-${eventId}`}
           />

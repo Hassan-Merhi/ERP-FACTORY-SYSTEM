@@ -26,6 +26,8 @@ import { normalizeVoucherEntryAmounts } from "../../services/accounting/currency
 import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
 import { journalBaseTotal, journalRate, journalTotals, syncJournalToOrderCharge } from "./syncJournalToOrderCharge";
 import { registerVoucherJournalRoutesPart1 } from "./registerVoucherJournalRoutesPart1";
+import { assertPostingLedgerLeavesTx } from "../../services/accounting/postableLedgerAccountPolicy";
+import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
 
 export function registerVoucherJournalRoutes(app: Express) {
   registerVoucherJournalRoutesPart1(app);
@@ -143,6 +145,16 @@ function registerVoucherJournalRoutesPart2(app: Express) {
         if (existingVoucher.currency === "ZMW") {
           await assertResolvedZmwVoucherEntriesTx(tx, existingVoucher.companyId, oldEntries);
         }
+
+        // Validate the *new* journal targets before replacing historical lines.
+        // This protects against stale clients or a hand-crafted group account ID.
+        await assertPostingLedgerLeavesTx(
+          tx,
+          existingVoucher.companyId,
+          entries
+            .filter((entry: { accountType: string }) => entry.accountType === "ledger")
+            .map((entry: { accountId: number | string }) => Number(entry.accountId))
+        );
 
         // Update voucher
         const [updatedVoucher] = await tx
@@ -284,7 +296,9 @@ function registerVoucherJournalRoutesPart2(app: Express) {
       });
       logger.error("Error updating journal voucher:", { error: error });
       if (sendVoucherCorrectionRefusal(res, error)) return;
-      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+      res
+        .status(error instanceof PostingValidationError ? 400 : errorStatus(error))
+        .json({ message: getErrorMessage(error) });
     }
   });
 }

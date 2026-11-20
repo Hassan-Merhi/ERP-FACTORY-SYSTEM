@@ -49,7 +49,8 @@ vi.mock("@tanstack/react-query", () => ({
     if (key === "/api/auth/me") return { data: { role: "Developer" } };
     if (key === "/api/employees") return { data: employees, isLoading: false };
     if (key === "/api/worker-groups/with-members") return { data: workerGroups, isLoading: false };
-    if (key === "/api/ledger-accounts") return { data: [{ id: 90, accountType: "Cash", name: "Cashbox" }] };
+    if (key === "/api/ledger-accounts?profile=picker")
+      return { data: [{ id: 90, accountType: "Cash", name: "Cashbox" }] };
     if (key === "/api/salary-advances")
       return {
         data: [

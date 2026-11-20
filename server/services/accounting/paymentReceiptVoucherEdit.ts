@@ -16,6 +16,7 @@ import { paymentVoucherTotals } from "./paymentReceiptVoucherPosting";
 import { assertVoucherEditableTx, recordVoucherEditAuditTx } from "./voucherCorrection";
 import { isVoucherAccountType, voucherEntryAccountLink } from "./voucherEntryAccountLink";
 import { assertLockedZmwVoucherEdit, assertResolvedZmwVoucherEntriesTx } from "./zambiaVoucherRatePolicy";
+import { assertPostingLedgerLeavesTx } from "./postableLedgerAccountPolicy";
 
 export interface PaymentReceiptEditBody {
   voucherType: "Payment" | "Receipt";
@@ -125,6 +126,13 @@ export async function applyPaymentReceiptEditTx(
   if (existingVoucher.currency === "ZMW") {
     await assertResolvedZmwVoucherEntriesTx(tx, existingVoucher.companyId, oldEntries);
   }
+
+  // A manual edit is a new posting decision. Never permit a stale client
+  // to replace a payment/receipt with a chart-of-accounts group header.
+  await assertPostingLedgerLeavesTx(tx, existingVoucher.companyId, [
+    ...(paymentAccountType === "ledger" ? [Number(paymentAccountId)] : []),
+    ...entries.filter((entry) => entry.accountType === "ledger").map((entry) => Number(entry.accountId)),
+  ]);
 
   // Update voucher — store historical base (USD) total
   const [updatedVoucher] = await tx

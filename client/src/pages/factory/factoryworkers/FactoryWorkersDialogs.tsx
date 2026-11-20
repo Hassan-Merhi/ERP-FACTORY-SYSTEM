@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Calculator, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +13,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { FactoryWorkerFormFields } from "./FactoryWorkerFormFields";
 import { PersonFormDialog } from "../people/PersonFormDialog";
@@ -253,18 +252,13 @@ export function FactoryWorkersDialogs({ model }: FactoryWorkersModelProps) {
               {balance > 0 && (
                 <div className="space-y-1">
                   <Label className="text-xs">Cash Account (for Pay Now)</Label>
-                  <Select value={endCashAccountId} onValueChange={setEndCashAccountId}>
-                    <SelectTrigger data-testid="select-end-cash-account">
-                      <SelectValue placeholder="Select account..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cashAccounts?.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {a.name} ({a.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <UnifiedAccountPicker
+                    value={endCashAccountId}
+                    onChange={setEndCashAccountId}
+                    options={(cashAccounts ?? []).map((account) => ({ value: String(account.id), name: account.name }))}
+                    placeholder="Select cash account"
+                    testId="select-end-cash-account"
+                  />
                 </div>
               )}
 

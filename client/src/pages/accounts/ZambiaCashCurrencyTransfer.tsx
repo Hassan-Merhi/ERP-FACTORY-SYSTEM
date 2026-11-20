@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -174,45 +175,35 @@ export function ZambiaCashCurrencyTransfer() {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Funds leaving</Label>
-            <Select
+            <UnifiedAccountPicker
+              options={accounts.map((a) => ({ value: keyForAccount(a), name: a.name }))}
               value={source}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 setSource(v);
                 requestId.current = null;
               }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Source cash/bank account" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((a) => (
-                  <SelectItem key={keyForAccount(a)} value={keyForAccount(a)}>
-                    {a.name} ({a.accountKind}) — {fromCurrency} {a.nativeBalancesByCurrency[fromCurrency] ?? "0"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Source cash/bank account"
+              ariaLabel="Source cash or bank account"
+            />
+            {source && (
+              <p className="text-xs text-muted-foreground" data-testid="zambia-transfer-source-balance">
+                Available {fromCurrency}:{" "}
+                {accounts.find((a) => keyForAccount(a) === source)?.nativeBalancesByCurrency[fromCurrency] ?? "0"}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label>Funds arriving</Label>
-            <Select
+            <UnifiedAccountPicker
+              options={accounts.map((a) => ({ value: keyForAccount(a), name: a.name }))}
               value={destination}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 setDestination(v);
                 requestId.current = null;
               }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Destination cash/bank account" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.map((a) => (
-                  <SelectItem key={keyForAccount(a)} value={keyForAccount(a)}>
-                    {a.name} ({a.accountKind})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Destination cash/bank account"
+              ariaLabel="Destination cash or bank account"
+            />
           </div>
           <div className="space-y-1">
             <Label>Source currency</Label>

@@ -6,7 +6,8 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { containers, ledgerAccounts, purchaseOrders, voucherEntries, vouchers } from "@shared/schema";
-import { and, asc, eq, inArray, like } from "drizzle-orm";
+import { and, asc, eq, inArray, like, isNull } from "drizzle-orm";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 import { calcPoAmountsExact, isCreditOnlyEntry, isDebitOnlyEntry, syncIntercoParentVoucher } from "./containerHelpers";
 import { toMoney } from "../../lib/money";
 import { runWithVerifiedPoParentScope } from "../../services/security/parentCompanyPostingScope";
@@ -63,7 +64,14 @@ export function registerContainerFreightReadRoutesPart1(app: Express) {
           accountType: ledgerAccounts.accountType,
         })
         .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.companyId, parentCompanyId), eq(ledgerAccounts.active, true)))
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, parentCompanyId),
+            eq(ledgerAccounts.active, true),
+            isNull(ledgerAccounts.deletedAt),
+            ledgerPostingLeafCondition(parentCompanyId)
+          )
+        )
         .orderBy(asc(ledgerAccounts.name));
       res.json(accounts);
     } catch (error: unknown) {

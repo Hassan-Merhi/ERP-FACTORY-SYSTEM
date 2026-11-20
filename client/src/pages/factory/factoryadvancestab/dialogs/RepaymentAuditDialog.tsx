@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * RepaymentAuditDialog — extracted from AdvancesView.tsx during the Phase 4 split.
  *
@@ -22,7 +23,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt } from "../utils";
 
 import type { AuditAdvance } from "../types";
@@ -131,21 +131,16 @@ export function RepaymentAuditDialog({
                         <Label>
                           Default Cash Account <span className="text-destructive">*</span>
                         </Label>
-                        <Select
+                        <UnifiedAccountPicker
+                          options={(cashAccounts || []).map((account) => ({
+                            value: String(account.id),
+                            name: account.name,
+                          }))}
                           value={repayAuditForm.cashAccountId}
-                          onValueChange={(v) => setRepayAuditForm((p) => ({ ...p, cashAccountId: v }))}
-                        >
-                          <SelectTrigger data-testid="select-audit-cash-account">
-                            <SelectValue placeholder="Select cash account" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(cashAccounts || []).map((a) => (
-                              <SelectItem key={a.id} value={String(a.id)}>
-                                {a.name} ({a.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          onChange={(v) => setRepayAuditForm((p) => ({ ...p, cashAccountId: v }))}
+                          placeholder={"Select cash account"}
+                          testId={"select-audit-cash-account"}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>

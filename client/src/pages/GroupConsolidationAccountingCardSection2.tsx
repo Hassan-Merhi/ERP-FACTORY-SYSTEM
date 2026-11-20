@@ -1,5 +1,5 @@
 // Extracted from ./GroupConsolidationAccounting.tsx to keep that module under the source-size cap.
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGroupConsolidationAccountingState } from "./useGroupConsolidationAccountingState";
 
@@ -20,11 +20,11 @@ export function GroupConsolidationAccountingCardSection2({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-3 items-center">
-          <Input
-            className="max-w-xs"
+          <SearchField
+            wrapperClassName="w-full sm:max-w-xs"
             placeholder="Search company, account, code or class"
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onValueChange={setFilter}
           />
           <label className="flex gap-2 items-center text-sm">
             <input type="checkbox" checked={includeZero} onChange={(e) => setIncludeZero(e.target.checked)} /> Show

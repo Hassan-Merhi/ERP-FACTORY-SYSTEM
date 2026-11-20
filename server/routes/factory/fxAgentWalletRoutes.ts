@@ -11,6 +11,10 @@ import { logAudit } from "../helpers/auditWriteAdapter";
 import { toMoney } from "../../lib/money";
 import { getPartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
 import {
+  ledgerPostingLeafCondition,
+  assertPostingLedgerLeavesTx,
+} from "../../services/accounting/postableLedgerAccountPolicy";
+import {
   fxAgentTablesExist,
   getFxAgentWalletSnapshot,
   loadFxAgentWallets,
@@ -36,6 +40,7 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
         SELECT id, name, code, account_type AS "accountType" FROM ledger_accounts
         WHERE company_id = ${cid} AND deleted_at IS NULL AND active = true
         AND account_type NOT IN ('Income','Indirect Income','Expense','Indirect Expense','Direct Expense','Equity','Profit','Cash','Bank')
+        AND ${ledgerPostingLeafCondition(cid)}
         ORDER BY name LIMIT 1200`);
       const supplierChoices = await db.execute(sql`
         SELECT id, name FROM factory_suppliers
@@ -64,6 +69,7 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
       if (req.body?.confirmUsdSource !== true)
         throw new Error("Confirm this ledger currently represents USD funds held by the FX agent");
       const created = await db.transaction(async (tx) => {
+        await assertPostingLedgerLeavesTx(tx, cid, [accountId]);
         const accounts = await tx.execute(sql`
           SELECT id, account_type AS type, opening_balance_currency AS "openingCurrency" FROM ledger_accounts
           WHERE company_id = ${cid} AND id = ${accountId} AND deleted_at IS NULL AND active = true

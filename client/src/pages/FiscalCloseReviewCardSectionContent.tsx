@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./useFiscalCloseReviewState.tsx
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +18,6 @@ import {
   type ReviewKind,
   type ReviewPolicy,
 } from "./FiscalCloseReviewTypes";
-import { SelectContent, SelectItem, SelectTrigger, SelectValue, Select } from "@/components/ui/select";
 
 export function useFiscalCloseReviewState() {
   const { selectedCompany } = useCompany(),
@@ -249,25 +249,20 @@ export function FiscalCloseReviewCardSectionContent({
       </div>
       <div>
         <Label>Existing Retained Earnings / Equity account</Label>
-        <Select
+        <UnifiedAccountPicker
           value={retainedId || "__none__"}
-          onValueChange={(value) => {
+          onChange={(value) => {
             setRetainedId(value === "__none__" ? "" : value);
             setConfirmText("");
           }}
-        >
-          <SelectTrigger className="h-10 w-full" aria-label="Existing Retained Earnings / Equity account">
-            <SelectValue placeholder="Select an active Equity account" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">Select an active Equity account</SelectItem>
-            {accounts.data?.accounts.map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>
-                {a.code} · {a.name} (#{a.id})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={[
+            { value: "__none__", name: "Select an active Equity account" },
+            ...(accounts.data?.accounts ?? []).map((a) => ({ value: String(a.id), name: a.name })),
+          ]}
+          placeholder="Select an active Equity account"
+          ariaLabel="Existing Retained Earnings / Equity account"
+          className="h-10"
+        />
         {accounts.isError && <p className="text-xs text-destructive">Unable to list existing Equity accounts</p>}
       </div>
     </div>

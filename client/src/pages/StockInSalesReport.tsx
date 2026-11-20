@@ -12,7 +12,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { ErpListTable, ErpReportExportMenu, ErpReportPrintFooter } from "@/erp-core";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -114,14 +114,7 @@ function StockInSalesReportSummary() {
             data-testid="period-filter-stock-in-sales-report"
           />
         }
-        quick={
-          <Input
-            placeholder="Search items..."
-            value={m.searchTerm}
-            onChange={(event) => m.setSearchTerm(event.target.value)}
-            className="w-full"
-          />
-        }
+        quick={<SearchField placeholder="Search items..." value={m.searchTerm} onValueChange={m.setSearchTerm} />}
         activeCount={m.stockInSalesActiveFilterCount}
         onClear={m.clearFilters}
         canClear={m.stockInSalesActiveFilterCount > 0 || !!m.searchTerm || m.periodFilter.preset !== "this_year"}
@@ -170,11 +163,12 @@ function StockInSalesReportSummary() {
                 onChange={m.setSelectedStockGroups}
                 testId="button-stock-in-sales-group-filter"
               />
-              <Input
+              <SearchField
                 placeholder="Search items..."
                 value={m.searchTerm}
-                onChange={(event) => m.setSearchTerm(event.target.value)}
-                className="h-9 w-48"
+                onValueChange={m.setSearchTerm}
+                wrapperClassName="w-48"
+                className="h-9"
               />
               <Button variant="ghost" size="sm" onClick={m.clearFilters}>
                 Clear

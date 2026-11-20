@@ -6,7 +6,10 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { storage } from "../../storage";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { db } from "../../db";
+import { ledgerAccounts } from "@shared/schema";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 import { requireAuth } from "../../auth";
 
 export function registerAccountLedgerListRoutes(app: Express) {
@@ -15,7 +18,18 @@ export function registerAccountLedgerListRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const accounts = await storage.getAllLedgerAccounts(companyId);
+      const accounts = await db
+        .select()
+        .from(ledgerAccounts)
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            isNull(ledgerAccounts.deletedAt),
+            eq(ledgerAccounts.isHidden, false),
+            ledgerPostingLeafCondition(companyId)
+          )
+        )
+        .orderBy(asc(ledgerAccounts.code));
       res.json(
         accounts.map((acc) => ({
           id: acc.id,

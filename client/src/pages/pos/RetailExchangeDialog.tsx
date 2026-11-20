@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Minus, Plus, ScanLine, Trash2 } from "lucide-react";
@@ -22,7 +23,6 @@ import {
   type RetailPosItem,
   type RetailSale,
 } from "./retailPosTypes";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ExchangeResult {
   replayed: boolean;
@@ -359,27 +359,17 @@ export function RetailExchangeDialog({
           {canOverride && tenderRefund > 0.005 && (
             <label className="block space-y-1 text-sm">
               <span>Refund from account</span>
-              <Select
+              <UnifiedAccountPicker
+                options={[
+                  { value: "__original__", name: "Original payment accounts" },
+                  ...(accounts?.ledgers ?? []).map((a) => ({ value: `ledger:${a.id}`, name: a.name })),
+                  ...(accounts?.banks ?? []).map((a) => ({ value: `bank:${a.id}`, name: a.name })),
+                ]}
                 value={refundAccount || "__original__"}
-                onValueChange={(v) => setRefundAccount(v === "__original__" ? "" : v)}
-              >
-                <SelectTrigger className="h-9 w-full" aria-label="Exchange refund account">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__original__">Original payment accounts</SelectItem>
-                  {accounts?.ledgers.map((entry) => (
-                    <SelectItem key={`ledger:${entry.id}`} value={`ledger:${entry.id}`}>
-                      {entry.code} · {entry.name}
-                    </SelectItem>
-                  ))}
-                  {accounts?.banks.map((entry) => (
-                    <SelectItem key={`bank:${entry.id}`} value={`bank:${entry.id}`}>
-                      {entry.code} · {entry.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setRefundAccount(v === "__original__" ? "" : v)}
+                placeholder="Original payment accounts"
+                ariaLabel="Exchange refund account"
+              />
             </label>
           )}
           <Input

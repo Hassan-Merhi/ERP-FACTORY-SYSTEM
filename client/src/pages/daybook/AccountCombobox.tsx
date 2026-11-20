@@ -1,9 +1,4 @@
-import { useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { LedgerAccount, BankAccount, Supplier, Employee, FixedAsset } from "./types";
 
 export function AccountCombobox({
@@ -30,79 +25,26 @@ export function AccountCombobox({
   onArrowDown?: () => void;
   onArrowRight?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-
-  const allAccounts = [
-    ...ledgerAccounts.map((a) => ({
-      type: "ledger" as const,
-      id: a.id,
-      name: a.name,
-    })),
-    ...bankAccounts.map((a) => ({
-      type: "bank" as const,
-      id: a.id,
-      name: a.bankName,
-    })),
-    ...suppliers.map((s) => ({
-      type: "supplier" as const,
-      id: s.id,
-      name: s.legalName,
-    })),
-    ...employees.map((e) => ({
-      type: "employee" as const,
-      id: e.id,
-      name: `${e.firstName} ${e.lastName}`,
-    })),
-    ...fixedAssets.map((f) => ({
-      type: "fixedAsset" as const,
-      id: f.id,
-      name: f.assetName,
-    })),
+  const accounts = [
+    ...ledgerAccounts.map((a) => ({ type: "ledger" as const, id: a.id, name: a.name })),
+    ...bankAccounts.map((a) => ({ type: "bank" as const, id: a.id, name: a.bankName })),
+    ...suppliers.map((a) => ({ type: "supplier" as const, id: a.id, name: a.legalName })),
+    ...employees.map((a) => ({ type: "employee" as const, id: a.id, name: `${a.firstName} ${a.lastName}` })),
+    ...fixedAssets.map((a) => ({ type: "fixedAsset" as const, id: a.id, name: a.assetName })),
   ].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between font-normal"
-          data-testid={`${testIdPrefix}-${rowIndex}`}
-        >
-          {value ? value.name : "Select account..."}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0 bg-popover text-popover-foreground">
-        <Command className="bg-popover text-popover-foreground">
-          <CommandInput placeholder="Search accounts..." className="bg-popover text-popover-foreground" />
-          <CommandList className="bg-popover text-popover-foreground">
-            <CommandEmpty>No account found.</CommandEmpty>
-            <CommandGroup>
-              {allAccounts.map((account) => (
-                <CommandItem
-                  key={`${account.type}-${account.id}`}
-                  value={account.name}
-                  onSelect={() => {
-                    onChange(account.type, account.id, account.name);
-                    setOpen(false);
-                  }}
-                  data-testid={`option-account-${account.type}-${account.id}`}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value?.type === account.type && value?.id === account.id ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {account.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <UnifiedAccountPicker
+      options={accounts.map((a) => ({ value: `${a.type}:${a.id}`, name: a.name }))}
+      value={value ? `${value.type}:${value.id}` : ""}
+      selectedFallbackName={value?.name}
+      onChange={(next) => {
+        const selected = accounts.find((a) => `${a.type}:${a.id}` === next);
+        if (selected) onChange(selected.type, selected.id, selected.name);
+      }}
+      placeholder="Select account..."
+      testId={`${testIdPrefix}-${rowIndex}`}
+      optionTestId={(key) => `option-account-${key.replace(":", "-")}`}
+    />
   );
 }

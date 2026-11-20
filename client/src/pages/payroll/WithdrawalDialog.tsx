@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { usePayrollModel } from "./usePayrollModel";
 
 type PayrollModel = ReturnType<typeof usePayrollModel>;
@@ -90,38 +91,23 @@ export function WithdrawalDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{form.watch("paymentAccountType") === "cash" ? "Cash Account" : "Bank Account"}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-withdrawal-account">
-                        <SelectValue placeholder="Select account" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {form.watch("paymentAccountType") === "cash" ? (
-                        cashAccounts.length === 0 ? (
-                          <SelectItem value="none" disabled>
-                            No cash accounts available
-                          </SelectItem>
-                        ) : (
-                          cashAccounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id.toString()}>
-                              {account.name}
-                            </SelectItem>
-                          ))
-                        )
-                      ) : bankAccountsLoading ? (
-                        <SelectItem value="loading" disabled>
-                          Loading...
-                        </SelectItem>
-                      ) : (
-                        bankAccounts?.map((account) => (
-                          <SelectItem key={account.id} value={account.id.toString()}>
-                            {account.name} ({account.accountNumber})
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <UnifiedAccountPicker
+                    options={(form.watch("paymentAccountType") === "cash"
+                      ? cashAccounts
+                      : (bankAccounts ?? [])
+                    ).flatMap((account) =>
+                      account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
+                    )}
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder={
+                      bankAccountsLoading && form.watch("paymentAccountType") !== "cash"
+                        ? "Loading bank accounts..."
+                        : "Select account"
+                    }
+                    disabled={bankAccountsLoading && form.watch("paymentAccountType") !== "cash"}
+                    testId="select-withdrawal-account"
+                  />
                   <FormMessage />
                 </FormItem>
               )}

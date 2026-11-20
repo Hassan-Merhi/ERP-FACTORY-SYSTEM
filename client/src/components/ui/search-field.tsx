@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Search, X } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,10 @@ export interface SearchFieldProps extends Omit<
   clearTestId?: string;
   /** Clear the query with Escape when the owner has no competing Escape behavior. */
   clearOnEscape?: boolean;
+  /** Show a spinner and prevent edits while results are being loaded. */
+  loading?: boolean;
+  /** Let a surrounding menu handle Escape rather than suppressing it. */
+  propagateEscape?: boolean;
 }
 
 /**
@@ -33,6 +37,8 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
       showClear = true,
       clearTestId = "button-clear-search",
       clearOnEscape = false,
+      loading = false,
+      propagateEscape = false,
       className,
       onKeyDown,
       placeholder = "Search...",
@@ -58,12 +64,21 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
     };
     return (
       <div className={cn("relative min-w-0 w-full", wrapperClassName)}>
-        <Search
-          className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
+        {loading ? (
+          <Loader2
+            className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+        ) : (
+          <Search
+            className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+        )}
         <Input
           {...props}
+          disabled={loading || props.disabled}
+          aria-busy={loading || undefined}
           ref={setInputRef}
           type="search"
           value={value}
@@ -74,15 +89,18 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
             if (clearOnEscape && value) {
               event.preventDefault();
               clear();
-            } else {
-              // WebKit/Chrome clear type="search" inputs natively on Escape; keep
-              // the owner's opt-in the only path and let overlays handle the key.
+            } else if (!propagateEscape) {
+              // Prevent silent native clears unless a surrounding overlay owns Escape.
               event.preventDefault();
             }
           }}
           placeholder={placeholder}
           aria-label={ariaLabel ?? placeholder}
-          className={cn("min-h-11 w-full ps-9 sm:min-h-9", showClear && "pe-11 sm:pe-9", className)}
+          className={cn(
+            "min-h-11 w-full ps-9 sm:min-h-9 [&::-webkit-search-cancel-button]:hidden",
+            showClear && "pe-11 sm:pe-9",
+            className
+          )}
         />
         {showClear && value.length > 0 ? (
           <Button
@@ -91,6 +109,7 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
             variant="ghost"
             className="absolute end-0 top-1/2 h-11 w-11 -translate-y-1/2 sm:end-1 sm:h-8 sm:w-8"
             aria-label="Clear search"
+            disabled={loading}
             data-testid={clearTestId}
             onClick={clear}
           >

@@ -216,7 +216,13 @@ const PAGES: Array<{
     factory: true,
     seedRoutes: { "/whatsapp-preview": () => ({ files: [], defaultMessage: "" }) },
   },
-  { name: "FactoryInvoices", load: () => import("@/pages/factory/FactoryInvoices"), factory: true },
+  {
+    name: "FactoryInvoices",
+    load: () => import("@/pages/factory/FactoryInvoices"),
+    factory: true,
+    // The loading-agent endpoint returns names, unlike the generic object-record fixture.
+    seedRoutes: { "/api/factory/loading-agents": () => ["Agent A", "Agent B"] },
+  },
   { name: "WasteDispatch", load: () => import("@/pages/factory/WasteDispatch"), factory: true },
   { name: "StockEntryTab", load: () => import("@/pages/factory/bale-stock-entry/StockEntryTab"), factory: true },
   {
@@ -297,10 +303,14 @@ describe("wave 4 page interaction sweep", () => {
       for (const id of buttonIds) {
         const button = document.querySelector<HTMLButtonElement | HTMLAnchorElement>(`[data-testid="${id}"]`);
         if (!button || (button instanceof HTMLButtonElement && button.disabled)) continue;
-        await act(async () => {
-          fireEvent.click(button);
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        });
+        try {
+          await act(async () => {
+            fireEvent.click(button);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          });
+        } catch (error) {
+          throw new Error(`${name}: clicking ${id} failed: ${String(error)}`);
+        }
         pressed += 1;
         fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
       }

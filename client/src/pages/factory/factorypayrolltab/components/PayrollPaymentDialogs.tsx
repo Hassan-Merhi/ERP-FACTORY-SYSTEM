@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { CheckCircle2, Trash2, CalendarDays, Printer, Wrench, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtDate } from "../utils";
 import type { FactoryPayrollState } from "../useFactoryPayroll";
 
@@ -185,18 +185,13 @@ export function PayrollPaymentDialogs({ payroll }: { payroll: FactoryPayrollStat
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Cash / Bank Account</Label>
-              <Select value={payCashAccountId} onValueChange={setPayCashAccountId}>
-                <SelectTrigger data-testid="select-pay-cash-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts?.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name} ({a.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                options={(cashAccounts ?? []).map((a) => ({ value: String(a.id), name: a.name }))}
+                value={payCashAccountId}
+                onChange={setPayCashAccountId}
+                placeholder="Select account"
+                testId="select-pay-cash-account"
+              />
             </div>
           </div>
           <DialogFooter>
@@ -241,18 +236,13 @@ export function PayrollPaymentDialogs({ payroll }: { payroll: FactoryPayrollStat
           <div className="space-y-3">
             <div className="space-y-1">
               <Label className="text-xs">Cash / Bank Account</Label>
-              <Select value={fixAcctCashId} onValueChange={setFixAcctCashId}>
-                <SelectTrigger data-testid="select-fix-cash-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts?.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name} ({a.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                options={(cashAccounts ?? []).map((a) => ({ value: String(a.id), name: a.name }))}
+                value={fixAcctCashId}
+                onChange={setFixAcctCashId}
+                placeholder="Select account"
+                testId="select-fix-cash-account"
+              />
             </div>
           </div>
           <DialogFooter>
@@ -292,18 +282,13 @@ export function PayrollPaymentDialogs({ payroll }: { payroll: FactoryPayrollStat
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Cash / Bank Account</Label>
-              <Select value={bulkCashAccountId} onValueChange={setBulkCashAccountId}>
-                <SelectTrigger data-testid="select-bulk-cash-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts?.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name} ({a.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                options={(cashAccounts ?? []).map((a) => ({ value: String(a.id), name: a.name }))}
+                value={bulkCashAccountId}
+                onChange={setBulkCashAccountId}
+                placeholder="Select account"
+                testId="select-bulk-cash-account"
+              />
             </div>
           </div>
           <DialogFooter>

@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Label } from "@/components/ui/label";
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { EmptyState, ErrorState } from "@/components/ui/page-state";
@@ -68,9 +69,9 @@ export default function RetailSalesHistory() {
             </div>
           ) : (
             <>
-              <Input
+              <SearchField
                 value={customerTerm}
-                onChange={(event) => setCustomerTerm(event.target.value)}
+                onValueChange={setCustomerTerm}
                 placeholder="Search customer by name, phone or code"
                 data-testid="retail-history-customer-search"
               />
@@ -164,10 +165,11 @@ export default function RetailSalesHistory() {
             </div>
             <div>
               <Label htmlFor="retail-history-item">Item / name / SKU</Label>
-              <Input
+              <SearchField
                 id="retail-history-item"
                 value={filters.search}
-                onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+                onValueChange={(value) => setFilters((current) => ({ ...current, search: value }))}
+                placeholder="Search items..."
               />
             </div>
             <div>

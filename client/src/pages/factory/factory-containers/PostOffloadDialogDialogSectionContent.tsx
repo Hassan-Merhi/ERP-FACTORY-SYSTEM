@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./PostOffloadDialogDialogSection.tsx
 import { Fragment } from "react";
 import { Info, Plus, X } from "lucide-react";
@@ -132,25 +133,20 @@ export function PostOffloadDialogDialogSectionContent({
                       ))}
                     </SelectContent>
                   </Select>
-                  <Select
+                  <UnifiedAccountPicker
+                    options={ledgerAccounts
+                      .filter((a) => a.isPostingLeaf !== false)
+                      .map((a) => ({ value: String(a.id), name: String(a.name ?? "") }))}
                     value={charge.ledgerAccountId || ""}
-                    onValueChange={(v) =>
+                    onChange={(v) =>
                       setNewCharges((prev) =>
                         prev.map((c) => (c.id === charge.id ? { ...c, ledgerAccountId: v, supplierId: "" } : c))
                       )
                     }
-                  >
-                    <SelectTrigger data-testid={`select-poc-account-${idx}`}>
-                      <SelectValue placeholder="Select account (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ledgerAccounts.map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {a.code ? `${a.code} - ${a.name}` : a.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={"Select account (optional)"}
+                    testId={`select-poc-account-${idx}`}
+                    allowClear
+                  />
                   <Button
                     variant="ghost"
                     size="icon"

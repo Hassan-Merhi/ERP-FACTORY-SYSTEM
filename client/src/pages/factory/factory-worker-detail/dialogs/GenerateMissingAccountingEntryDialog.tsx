@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * GenerateMissingAccountingEntryDialog — extracted from FactoryWorkerDetail.tsx during the Phase 4 split.
  *
@@ -18,7 +19,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function GenerateMissingAccountingEntryDialog({
   cashAccounts,
@@ -66,18 +66,13 @@ export function GenerateMissingAccountingEntryDialog({
         <div className="space-y-3">
           <div className="space-y-1">
             <Label className="text-xs">Cash Account</Label>
-            <Select value={fixAcctCashId} onValueChange={setFixAcctCashId}>
-              <SelectTrigger data-testid="select-fix-acct-cash">
-                <SelectValue placeholder="Select account" />
-              </SelectTrigger>
-              <SelectContent>
-                {cashAccounts?.map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name} ({a.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+              value={fixAcctCashId}
+              onChange={setFixAcctCashId}
+              options={(cashAccounts ?? []).map((account) => ({ value: String(account.id), name: account.name }))}
+              placeholder="Select cash account"
+              testId="select-fix-acct-cash"
+            />
           </div>
         </div>
         <DialogFooter>

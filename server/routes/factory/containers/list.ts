@@ -11,6 +11,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factorySuppliers, factoryContainers, ledgerAccounts } from "@shared/schema";
 import { eq, and, asc, desc, sql, isNull } from "drizzle-orm";
+import { ledgerPostingLeafCondition } from "../../../services/accounting/postableLedgerAccountPolicy";
 
 export function registerFactoryContainerListRoutes(app: Express) {
   app.get("/api/factory/containers", requireAuth, async (req: Request, res: Response) => {
@@ -166,7 +167,23 @@ export function registerFactoryContainerListRoutes(app: Express) {
         )
         .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.name));
 
-      res.json(rows);
+      // Keep every historical account name in the response, but derive
+      // posting eligibility with the same WHERE predicate used by voucher
+      // and paginated posting pickers. Avoid evaluating the correlated
+      // leaf predicate as a projected expression.
+      const eligibleRows = await db
+        .select({ id: ledgerAccounts.id })
+        .from(ledgerAccounts)
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            eq(ledgerAccounts.active, true),
+            isNull(ledgerAccounts.deletedAt),
+            ledgerPostingLeafCondition(companyId)
+          )
+        );
+      const eligibleIds = new Set(eligibleRows.map((account) => account.id));
+      res.json(rows.map((account) => ({ ...account, isPostingLeaf: eligibleIds.has(account.id) })));
     } catch (error: unknown) {
       logger.error("Error fetching Factory container account options:", { error });
       res.status(500).json({ message: getErrorMessage(error) });

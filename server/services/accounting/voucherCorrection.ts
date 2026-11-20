@@ -41,7 +41,8 @@ import {
 import { writeAuditEvent, type AuditChanges } from "../audit";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
 import { isDispatchFinancialVoucherTx } from "../factory/dispatchTripFinancialGuards";
-import type { PostedVoucher, PostedVoucherEntry, VoucherEntryInsertFields } from "./accountingTypes";
+import type { PostedVoucher, PostedVoucherEntry } from "./accountingTypes";
+import { ledgerExactMirrorLine } from "./voucherCorrectionMirrorLine";
 import { postBalancedVoucherTx, type CentralPostingDependencies, type PostingActor } from "./centralPostingEngine";
 import { companyBusinessDate } from "./companyBusinessDate";
 import { applyEmployeeBalanceDeltasTx } from "./employeeBalancePosting";
@@ -280,38 +281,6 @@ export async function recordVoucherEditAuditTx(
     reason: input.reason ?? null,
   });
   return after;
-}
-
-function present(value: unknown): boolean {
-  return value != null && String(value).trim() !== "";
-}
-
-function ledgerExactMirrorLine(entry: VoucherEntryInsertFields): VoucherEntryInsertFields {
-  const normalized =
-    present(entry.transactionCurrency) &&
-    present(entry.transactionDebitAmount) &&
-    present(entry.transactionCreditAmount) &&
-    present(entry.baseDebitAmount) &&
-    present(entry.baseCreditAmount) &&
-    present(entry.historicalExchangeRate) &&
-    present(entry.rateConvention);
-  if (normalized) {
-    return { ...entry, debitAmount: String(entry.baseDebitAmount), creditAmount: String(entry.baseCreditAmount) };
-  }
-  const debit = new Decimal(entry.debitAmount ?? "0");
-  const credit = new Decimal(entry.creditAmount ?? "0");
-  return {
-    ...entry,
-    debitAmount: debit.toFixed(2),
-    creditAmount: credit.toFixed(2),
-    transactionCurrency: "USD",
-    transactionDebitAmount: debit.toFixed(6),
-    transactionCreditAmount: credit.toFixed(6),
-    baseDebitAmount: debit.toFixed(6),
-    baseCreditAmount: credit.toFixed(6),
-    historicalExchangeRate: "1.0000000000",
-    rateConvention: "IDENTITY",
-  };
 }
 
 export interface ReverseVoucherInput {

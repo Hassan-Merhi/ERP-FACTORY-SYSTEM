@@ -6,6 +6,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { ledgerAccounts } from "@shared/schema";
 import { punctuationInsensitiveSearch } from "../lib/searchNormalization";
 import { parsePositiveInt } from "../lib/listPagination";
+import { ledgerPostingLeafCondition } from "../services/accounting/postableLedgerAccountPolicy";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 250;
@@ -67,46 +68,50 @@ export function registerLedgerAccountPaginationRoutes(app: Express): void {
         conditions.push(eq(ledgerAccounts.isHidden, false));
       }
 
+      const postingPicker = req.query.profile === "picker" || req.query.profile === "voucher-picker";
+      if (postingPicker) conditions.push(ledgerPostingLeafCondition(companyId));
+
       const accountType = typeof req.query.accountType === "string" ? req.query.accountType.trim() : "";
       if (accountType) conditions.push(eq(ledgerAccounts.accountType, accountType));
 
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
         conditions.push(
-          or(
-            punctuationInsensitiveSearch(ledgerAccounts.name, search),
-            punctuationInsensitiveSearch(ledgerAccounts.code, search)
-          )
+          postingPicker
+            ? punctuationInsensitiveSearch(ledgerAccounts.name, search)
+            : or(
+                punctuationInsensitiveSearch(ledgerAccounts.name, search),
+                punctuationInsensitiveSearch(ledgerAccounts.code, search)
+              )
         );
       }
 
       const { page, limit, offset } = parsePagination(req);
       const where = and(...conditions);
-      const dataQuery =
-        req.query.profile === "picker"
-          ? db
-              .select({
-                id: ledgerAccounts.id,
-                code: ledgerAccounts.code,
-                name: ledgerAccounts.name,
-                accountType: ledgerAccounts.accountType,
-                subType: ledgerAccounts.subType,
-                parentId: ledgerAccounts.parentId,
-                active: ledgerAccounts.active,
-                isHidden: ledgerAccounts.isHidden,
-              })
-              .from(ledgerAccounts)
-              .where(where)
-              .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
-              .limit(limit)
-              .offset(offset)
-          : db
-              .select()
-              .from(ledgerAccounts)
-              .where(where)
-              .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
-              .limit(limit)
-              .offset(offset);
+      const dataQuery = postingPicker
+        ? db
+            .select({
+              id: ledgerAccounts.id,
+              code: ledgerAccounts.code,
+              name: ledgerAccounts.name,
+              accountType: ledgerAccounts.accountType,
+              subType: ledgerAccounts.subType,
+              parentId: ledgerAccounts.parentId,
+              active: ledgerAccounts.active,
+              isHidden: ledgerAccounts.isHidden,
+            })
+            .from(ledgerAccounts)
+            .where(where)
+            .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
+            .limit(limit)
+            .offset(offset)
+        : db
+            .select()
+            .from(ledgerAccounts)
+            .where(where)
+            .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.id))
+            .limit(limit)
+            .offset(offset);
 
       const [countRows, data] = await Promise.all([
         db

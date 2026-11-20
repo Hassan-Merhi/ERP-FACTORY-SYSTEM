@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import {
   ArrowLeft,
   DollarSign,
@@ -14,7 +15,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAvatarColor, getInitials } from "@/pages/factory/factoryworkers/utils";
@@ -375,18 +375,13 @@ export default function FactoryEmployeeDetail() {
             </div>
             <div className="space-y-1">
               <Label>Cash Account *</Label>
-              <Select value={withdrawCashAccountId} onValueChange={setWithdrawCashAccountId}>
-                <SelectTrigger data-testid="select-cash-account">
-                  <SelectValue placeholder="Select cash account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)} data-testid={`option-cash-${a.id}`}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                value={withdrawCashAccountId}
+                onChange={setWithdrawCashAccountId}
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                placeholder="Select cash account"
+                testId="select-cash-account"
+              />
             </div>
             <div className="space-y-1">
               <Label>Notes</Label>

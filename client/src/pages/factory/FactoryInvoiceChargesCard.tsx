@@ -1,3 +1,6 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
+import { useQuery } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
 // Extracted from ./FactoryInvoiceDetail.tsx
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,6 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { FactoryInvoiceDetailPageModel, FactoryInvoiceView } from "./FactoryInvoiceDetailPageModel";
 
 export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPageModel; v: FactoryInvoiceView }) {
+  const { selectedCompany } = useCompany();
+  const { data: postingAccounts = [] } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ["/api/ledger-accounts?includeHidden=true&profile=picker", selectedCompany?.id],
+    enabled: Boolean(selectedCompany?.id),
+    queryFn: async () => {
+      const response = await fetch("/api/ledger-accounts?includeHidden=true&profile=picker", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Unable to load posting accounts");
+      return response.json();
+    },
+  });
   return (
     <>
       {m.isAdmin &&
@@ -115,29 +130,25 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                     </div>
                     {isEditingLedger ? (
                       <div className="flex items-center gap-2 print:hidden">
-                        <Select
+                        <UnifiedAccountPicker
+                          options={postingAccounts.map((account) => ({
+                            value: String(account.id),
+                            name: account.name,
+                          }))}
                           value={String(charge.ledgerAccountId ?? "")}
-                          onValueChange={(val) =>
+                          selectedFallbackName={
+                            m.ledgerAccounts.find((account) => account.id === charge.ledgerAccountId)?.name
+                          }
+                          onChange={(val) =>
                             m.updateChargeLedgerMutation.mutate({
                               chargeId: charge.id,
                               ledgerAccountId: val ? parseInt(val) : null,
                             })
                           }
-                        >
-                          <SelectTrigger
-                            className="h-8 text-xs flex-1"
-                            data-testid={`select-charge-ledger-${charge.id}`}
-                          >
-                            <SelectValue placeholder="Select ledger account..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {m.ledgerAccounts.map((acc) => (
-                              <SelectItem key={acc.id} value={String(acc.id)}>
-                                {acc.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          placeholder={"Select ledger account..."}
+                          testId={`select-charge-ledger-${charge.id}`}
+                          className={"h-8 text-xs flex-1"}
+                        />
                         <Button
                           size="sm"
                           variant="ghost"
@@ -209,18 +220,14 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                           <SelectItem value="OTHER">Other</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Select value={m.newChargeLedgerId} onValueChange={m.setNewChargeLedgerId}>
-                        <SelectTrigger className="text-sm" data-testid="select-new-charge-ledger">
-                          <SelectValue placeholder="Ledger account..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {m.ledgerAccounts.map((acc) => (
-                            <SelectItem key={acc.id} value={String(acc.id)}>
-                              {acc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <UnifiedAccountPicker
+                        options={postingAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                        value={m.newChargeLedgerId}
+                        onChange={m.setNewChargeLedgerId}
+                        placeholder={"Ledger account..."}
+                        testId={"select-new-charge-ledger"}
+                        className="text-sm"
+                      />
                     </div>
                     <p className="text-xs text-muted-foreground">Saving will immediately post an accounting voucher.</p>
                     <div className="flex items-center gap-2">

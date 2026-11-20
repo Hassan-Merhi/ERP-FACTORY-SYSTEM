@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Banknote, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +9,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fmt } from "../utils";
 import { BulkAdvanceDialog } from "../dialogs/BulkAdvanceDialog";
@@ -177,18 +177,14 @@ export function AdvancesPanel(props: { model: ReturnType<typeof useAdvancesModel
           </Button>
           {canChangeExistingRecords && (
             <div className="flex items-center gap-2 ml-auto flex-wrap">
-              <Select value={bulkCashAccountId} onValueChange={setBulkCashAccountId}>
-                <SelectTrigger className="w-52" data-testid="select-bulk-cash-account">
-                  <SelectValue placeholder="Select cash account…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(cashAccounts || []).map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                options={(cashAccounts || []).map((a) => ({ value: String(a.id), name: a.name }))}
+                value={bulkCashAccountId}
+                onChange={setBulkCashAccountId}
+                placeholder={"Select cash account…"}
+                testId={"select-bulk-cash-account"}
+                className="w-52"
+              />
               <Button
                 onClick={() => bulkUpdateCashAccountMutation.mutate()}
                 disabled={!bulkCashAccountId || bulkUpdateCashAccountMutation.isPending}

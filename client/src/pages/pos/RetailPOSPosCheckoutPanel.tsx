@@ -2,7 +2,7 @@
 import { CalendarDays, MapPin, Wallet } from "lucide-react";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { PosCheckoutField, PosCheckoutPanel } from "./pos-components/PosCheckoutPanel";
-import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions } from "./RetailPaymentAccountSelect";
+import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountPicker } from "./RetailPaymentAccountSelect";
 import { RetailCustomerPicker } from "./RetailCustomerPicker";
 import { money, type RetailPaymentDraft } from "./retailPosTypes";
 import { useRetailPOSState } from "./useRetailPOSState";
@@ -72,31 +72,27 @@ export function RetailPOSPosCheckoutPanel({
         />
       </PosCheckoutField>
       <PosCheckoutField field="account" icon={Wallet} label={t("pos.modern.account")} htmlFor="retail-pos-account">
-        <select
+        <RetailPaymentAccountPicker
           id="retail-pos-account"
+          testId="retail-pos-account"
           className="block h-9 w-full rounded-md border bg-background px-3 text-sm"
+          accounts={paymentAccounts}
+          allowCredit={Boolean(customer?.id)}
+          customerName={customer?.legalName}
           value={paymentAccountValue(payments[0] ?? { method: "cash", amount: 0 })}
-          onChange={(event) => {
+          onValueChange={(selection) => {
             if (!paymentAccounts) return;
-            const value = event.target.value;
             setPayments((current) =>
               current.map((payment, index) =>
                 index !== 0
                   ? payment
-                  : value
-                    ? paymentFromAccount(value, payment.amount, paymentAccounts)
+                  : selection
+                    ? paymentFromAccount(selection, payment.amount, paymentAccounts)
                     : ({ method: "cash", amount: payment.amount, tenderedAmount: null } as RetailPaymentDraft)
               )
             );
           }}
-          data-testid="retail-pos-account"
-        >
-          <RetailPaymentAccountOptions
-            accounts={paymentAccounts}
-            allowCredit={Boolean(customer?.id)}
-            customerName={customer?.legalName}
-          />
-        </select>
+        />
       </PosCheckoutField>
       <div className="min-w-[190px] flex-1 xl:max-w-[350px]">
         <RetailCustomerPicker customer={customer} onSelect={selectCustomer} />

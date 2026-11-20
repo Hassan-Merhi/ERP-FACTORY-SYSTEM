@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./SpReports.tsx to keep that module under the source-size cap.
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -168,23 +169,16 @@ export function SpReportsTabsSection({
               </div>
               <div className="min-w-48">
                 <label className="text-xs text-muted-foreground">Opening Cash Account</label>
-                <Select
+                <UnifiedAccountPicker
+                  options={[
+                    { value: "none", name: "No account (manual entry)" },
+                    ...accounts.map((a) => ({ value: String(a.id), name: a.name })),
+                  ]}
                   value={exportCashAccountId}
-                  onValueChange={setExportCashAccountId}
-                  data-testid="select-sp-export-cash-account"
-                >
-                  <SelectTrigger className="mt-1" data-testid="select-sp-export-cash-account-trigger">
-                    <SelectValue placeholder="GC Sales Cash" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No account (manual entry)</SelectItem>
-                    {accounts.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)} data-testid={`option-cash-account-${a.id}`}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={setExportCashAccountId}
+                  placeholder={"GC Sales Cash"}
+                  testId={"select-sp-export-cash-account"}
+                />
               </div>
             </div>
 

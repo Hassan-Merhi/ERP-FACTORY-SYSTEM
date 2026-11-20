@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * PostAccountingPreviewDialog — extracted from AdvancesView.tsx during the Phase 4 split.
  *
@@ -21,7 +22,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt } from "../utils";
 
 export function PostAccountingPreviewDialog({
@@ -67,18 +67,13 @@ export function PostAccountingPreviewDialog({
             <Label>
               Cash Account to Credit <span className="text-destructive">*</span>
             </Label>
-            <Select value={postCashAccountId} onValueChange={setPostCashAccountId}>
-              <SelectTrigger data-testid="select-post-cash-account">
-                <SelectValue placeholder="Select cash account" />
-              </SelectTrigger>
-              <SelectContent>
-                {(cashAccounts || []).map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name} ({a.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+              options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+              value={postCashAccountId}
+              onChange={setPostCashAccountId}
+              placeholder={"Select cash account"}
+              testId={"select-post-cash-account"}
+            />
           </div>
 
           {unvoucheredLoading ? (

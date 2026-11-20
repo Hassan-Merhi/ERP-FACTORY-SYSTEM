@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Plus, Gift, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -174,21 +175,13 @@ export default function FactoryWorkerBonusesTab() {
             </div>
             <div>
               <Label>Cash Account</Label>
-              <Select
+              <UnifiedAccountPicker
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
                 value={payForm.cashAccountId}
-                onValueChange={(v) => setPayForm((f) => ({ ...f, cashAccountId: v }))}
-              >
-                <SelectTrigger data-testid="select-pay-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setPayForm((f) => ({ ...f, cashAccountId: v }))}
+                placeholder="Select account"
+                testId="select-pay-account"
+              />
             </div>
           </div>
           <DialogFooter>

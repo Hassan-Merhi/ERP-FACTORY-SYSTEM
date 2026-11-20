@@ -4,6 +4,7 @@
  * Extracted from PaymentReceiptTab.tsx; selection is reported to the parent.
  */
 import { SearchField } from "@/components/ui/search-field";
+import { searchAny } from "@shared/searchNormalization";
 import {} from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -50,15 +51,9 @@ export function PayFromAccountSheet({
         </SheetHeader>
         <div className="flex-1 overflow-y-auto min-h-0">
           {(() => {
-            const search = payFromSearch.toLowerCase().replace(/[\s.-]/g, "");
-            const filtered = sidebarAccounts.filter((a) => {
-              // Only show cash / bank / loan eligible accounts in the Pay From sheet
-              if (!payFromKeys.has(`${a.type}:${a.id}`)) return false;
-              if (!payFromSearch) return true;
-              return a.name
-                .toLowerCase()
-                .replace(/[\s.-]/g, "")
-                .includes(search);
+            const filtered = sidebarAccounts.filter((account) => {
+              // Keep eligible cash/bank/loan targets and match only the display name.
+              return payFromKeys.has(`${account.type}:${account.id}`) && searchAny(payFromSearch, account.name);
             });
             if (filtered.length === 0) {
               return (

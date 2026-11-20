@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./OffloadDialog.tsx: account and location pickers.
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -25,50 +26,15 @@ export function AccountCombobox({
   disabled = false,
   testId,
 }: AccountComboboxProps) {
-  const [open, setOpen] = useState(false);
-  const selectedAccount = accounts.find((account) => account.id.toString() === value);
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between"
-          disabled={disabled}
-          data-testid={testId}
-        >
-          {selectedAccount ? selectedAccount.name : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search accounts..." />
-          <CommandList>
-            <CommandEmpty>No account found.</CommandEmpty>
-            <CommandGroup>
-              {accounts.map((account) => (
-                <CommandItem
-                  key={account.id}
-                  value={account.name}
-                  onSelect={() => {
-                    onValueChange(account.id.toString());
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn("mr-2 h-4 w-4", value === account.id.toString() ? "opacity-100" : "opacity-0")}
-                  />
-                  {account.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <UnifiedAccountPicker
+      options={accounts.map((account) => ({ value: String(account.id), name: account.name }))}
+      value={value}
+      onChange={onValueChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      testId={testId}
+    />
   );
 }
 

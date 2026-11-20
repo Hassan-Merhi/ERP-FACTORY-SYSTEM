@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./PosMobileLayout.tsx
 import { MapPin, User, ChevronDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -214,28 +215,20 @@ export function PosMobileCustomerSection({
                 <SelectItem value="bank">Bank</SelectItem>
               </SelectContent>
             </Select>
-            <Select
+            <UnifiedAccountPicker
+              options={(paymentAccountType === "bank"
+                ? Array.isArray(bankAccounts)
+                  ? bankAccounts
+                  : []
+                : cashLedgerAccounts
+              ).flatMap((account) => (account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []))}
               value={paymentAccountId || ""}
-              onValueChange={posUser ? undefined : setPaymentAccountId}
+              onChange={setPaymentAccountId}
               disabled={Boolean(posUser)}
-            >
-              <SelectTrigger className="min-h-11 w-full min-w-0" data-testid="select-mobile-payment-account">
-                <SelectValue placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"} />
-              </SelectTrigger>
-              <SelectContent>
-                {paymentAccountType === "bank"
-                  ? (Array.isArray(bankAccounts) ? bankAccounts : []).map((account) => (
-                      <SelectItem key={account.id} value={String(account.id)}>
-                        {account.name} ({account.code})
-                      </SelectItem>
-                    ))
-                  : cashLedgerAccounts.map((account) => (
-                      <SelectItem key={account.id} value={String(account.id)}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-              </SelectContent>
-            </Select>
+              placeholder={paymentAccountType === "bank" ? "Select Bank" : "Select Cash"}
+              testId="select-mobile-payment-account"
+              className="min-h-11 w-full min-w-0"
+            />
           </div>
         )}
       </div>

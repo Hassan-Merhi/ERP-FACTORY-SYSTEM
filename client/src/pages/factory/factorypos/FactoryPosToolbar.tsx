@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * Factory POS toolbar: location, date, currency, cash account, the
  * cash/credit payment toggle, customer and notes.
@@ -22,7 +23,10 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
       <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
         <MapPin className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
         <Select value={model.locationId} onValueChange={model.setLocationId}>
-          <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48" data-testid="select-location">
+          <SelectTrigger
+            className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48"
+            data-testid="select-location"
+          >
             <SelectValue placeholder="Select location" />
           </SelectTrigger>
           <SelectContent>
@@ -49,7 +53,10 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
       {/* Currency */}
       <div className="flex items-center gap-2">
         <Select value={model.currencyCode} onValueChange={model.setCurrencyCode}>
-          <SelectTrigger className="h-10 w-24 rounded-xl border-border/70 bg-background/60 sm:w-28" data-testid="select-currency">
+          <SelectTrigger
+            className="h-10 w-24 rounded-xl border-border/70 bg-background/60 sm:w-28"
+            data-testid="select-currency"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -65,27 +72,20 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
       {/* Cash Account */}
       <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
         <Wallet className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
-        <Select value={model.cashAccountId} onValueChange={model.setCashAccountId}>
-          <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48" data-testid="select-cash-account">
-            <SelectValue placeholder="Cash account" />
-          </SelectTrigger>
-          <SelectContent>
-            {model.cashAccounts.map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>
-                {a.name}
-              </SelectItem>
-            ))}
-            {model.cashAccounts.length === 0 && (
-              <div className="px-2 py-2 text-sm text-muted-foreground" role="status">
-                {model.accountOptionsLoading
-                  ? "Loading cash accounts…"
-                  : model.accountOptionsError
-                    ? "Unable to load cash accounts. Please refresh."
-                    : "No active cash accounts for this company."}
-              </div>
-            )}
-          </SelectContent>
-        </Select>
+        <UnifiedAccountPicker
+          options={model.cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+          value={model.cashAccountId}
+          onChange={model.setCashAccountId}
+          placeholder={model.accountOptionsLoading ? "Loading cash accounts…" : "Cash account"}
+          emptyMessage={
+            model.accountOptionsError
+              ? "Unable to load cash accounts. Please refresh."
+              : "No active cash accounts for this company."
+          }
+          disabled={model.accountOptionsLoading}
+          testId="select-cash-account"
+          className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48"
+        />
       </div>
 
       {/* Payment Type Toggle */}
@@ -139,7 +139,10 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
               if (customer) model.setCustomerName(customer.legalName || customer.name || "");
             }}
           >
-            <SelectTrigger className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48" data-testid="select-credit-customer">
+            <SelectTrigger
+              className="h-10 w-full rounded-xl border-border/70 bg-background/60 sm:w-48"
+              data-testid="select-credit-customer"
+            >
               <SelectValue placeholder="Select customer *" />
             </SelectTrigger>
             <SelectContent>

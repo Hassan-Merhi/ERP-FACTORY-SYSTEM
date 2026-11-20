@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -76,10 +77,10 @@ export default function IntercompanyRequests() {
 
   // Load accounts for the destination company when the approve dialog opens
   const { data: destAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts", approveDialogRequest?.destCompanyId],
+    queryKey: ["/api/ledger-accounts?profile=picker", approveDialogRequest?.destCompanyId],
     queryFn: async () => {
       if (!approveDialogRequest?.destCompanyId) return [];
-      const r = await fetch(`/api/ledger-accounts?companyId=${approveDialogRequest.destCompanyId}`, {
+      const r = await fetch(`/api/ledger-accounts?profile=picker&companyId=${approveDialogRequest.destCompanyId}`, {
         credentials: "include",
       });
       if (!r.ok) return [];
@@ -306,20 +307,16 @@ export default function IntercompanyRequests() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dest-account-select">Debit account (where money was received)</Label>
-                <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                  <SelectTrigger id="dest-account-select" data-testid="select-dest-account">
-                    <SelectValue placeholder="Select account…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {destAccounts
-                      .filter((a) => a.id !== approveDialogRequest.linkDestLedgerAccountId)
-                      .map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {a.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <UnifiedAccountPicker
+                  options={destAccounts
+                    .filter((a) => a.id !== approveDialogRequest.linkDestLedgerAccountId)
+                    .map((a) => ({ value: String(a.id), name: a.name }))}
+                  value={selectedAccountId}
+                  onChange={setSelectedAccountId}
+                  placeholder={"Select account…"}
+                  testId={"select-dest-account"}
+                  id="dest-account-select"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="approve-description">

@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { History, RotateCcw, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -233,11 +233,11 @@ export default function PressingCorrectionReview({
             {showAudit ? "Hide" : "Show"} audit
           </Button>
           {showAudit && (
-            <Input
-              className="max-w-[250px]"
+            <SearchField
+              wrapperClassName="w-full sm:max-w-[250px]"
               value={filterRef}
               placeholder="Filter by bale reference"
-              onChange={(e) => setFilterRef(e.target.value)}
+              onValueChange={setFilterRef}
             />
           )}
         </div>

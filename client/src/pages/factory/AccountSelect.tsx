@@ -1,5 +1,5 @@
 // Extracted from ./FactoryTransportersPaymentDialog.tsx
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 
 export const API = "/api/factory/transporters";
 
@@ -44,17 +44,12 @@ export function AccountSelect({
 }) {
   const list = filter ? accounts.filter(filter) : accounts;
   return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {list.map((a) => (
-          <SelectItem key={a.id} value={String(a.id)}>
-            {a.name} <span className="text-muted-foreground text-xs ml-1">({a.accountType})</span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <UnifiedAccountPicker
+      options={list.map((a) => ({ value: String(a.id), name: a.name }))}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      ariaLabel={placeholder}
+    />
   );
 }

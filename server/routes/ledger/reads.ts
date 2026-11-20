@@ -11,8 +11,9 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, or, asc, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, or, asc, isNull, isNotNull } from "drizzle-orm";
 import { toMoney } from "../../lib/money";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 
 export function registerLedgerAccountReadRoutes(app: Express) {
   app.get("/api/ledger-accounts", requireAuth, async (req, res) => {
@@ -34,24 +35,12 @@ export function registerLedgerAccountReadRoutes(app: Express) {
         }
         if (search && typeof search === "string" && search.trim()) {
           const term = search.trim();
-          const searchCondition = or(
-            punctuationInsensitiveSearch(ledgerAccounts.name, term),
-            punctuationInsensitiveSearch(ledgerAccounts.code, term)
-          );
+          const searchCondition = punctuationInsensitiveSearch(ledgerAccounts.name, term);
           if (searchCondition) conditions.push(searchCondition);
         }
         if (includeHidden !== "true") conditions.push(eq(ledgerAccounts.isHidden, false));
-        if (req.query.profile === "voucher-picker") {
-          // Group headers are for display, not accounts to post or pay from.
-          // Also exclude historical parent ledgers created before Group tagging.
-          conditions.push(sql`${ledgerAccounts.subType} IS DISTINCT FROM 'Group'`);
-          conditions.push(sql`NOT EXISTS (
-            SELECT 1 FROM ledger_accounts AS voucher_group_child
-            WHERE voucher_group_child.parent_id = ${ledgerAccounts.id}
-              AND voucher_group_child.company_id = ${effectiveCompanyId}
-              AND voucher_group_child.deleted_at IS NULL
-          )`);
-        }
+        // Both posting-picker profiles must omit explicit Group and untagged legacy parents.
+        conditions.push(ledgerPostingLeafCondition(effectiveCompanyId));
 
         const accounts = await db
           .select({

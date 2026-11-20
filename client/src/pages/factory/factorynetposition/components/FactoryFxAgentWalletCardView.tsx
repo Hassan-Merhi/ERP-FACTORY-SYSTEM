@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./FactoryFxAgentWalletCard.tsx to keep that module under the source-size cap.
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -108,18 +109,17 @@ export function FactoryFxAgentWalletCard(props: { asOf: string; readOnly: boolea
               <section className="space-y-2">
                 {scopeAccountId == null && <h4 className="text-sm font-semibold">Choose agent</h4>}
                 {scopeAccountId == null && (
-                  <Select value={String(active?.wallet.id || "")} onValueChange={setWalletId}>
-                    <SelectTrigger className="w-full h-10 text-sm" aria-label="Choose agent">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {visibleWallets.map((w) => (
-                        <SelectItem key={w.wallet.id} value={String(w.wallet.id)}>
-                          {w.wallet.accountName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <UnifiedAccountPicker
+                    value={String(active?.wallet.id || "")}
+                    onChange={setWalletId}
+                    options={visibleWallets.map((item) => ({
+                      value: String(item.wallet.id),
+                      name: item.wallet.accountName,
+                    }))}
+                    placeholder="Choose agent"
+                    ariaLabel="Choose agent"
+                    className="h-10"
+                  />
                 )}
                 {!!active && (
                   <p className="text-xs text-muted-foreground">
@@ -291,21 +291,19 @@ export function FactoryFxAgentWalletCard(props: { asOf: string; readOnly: boolea
                       <SelectItem value="ledger">Ledger account</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select value={targetId || "__none__"} onValueChange={(v) => setTargetId(v === "__none__" ? "" : v)}>
-                    <SelectTrigger className="w-full h-10 text-sm" aria-label="USD recipient">
-                      <SelectValue placeholder="Choose USD recipient" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Choose USD recipient</SelectItem>
-                      {(targetKind === "factorySupplier" ? data?.factorySuppliers || [] : data?.candidates || [])
+                  <UnifiedAccountPicker
+                    value={targetId || "__none__"}
+                    onChange={(v) => setTargetId(v === "__none__" ? "" : v)}
+                    options={[
+                      { value: "__none__", name: "Choose USD recipient" },
+                      ...(targetKind === "factorySupplier" ? data?.factorySuppliers || [] : data?.candidates || [])
                         .filter((a) => targetKind !== "ledger" || a.id !== active.wallet.ledgerAccountId)
-                        .map((a) => (
-                          <SelectItem key={a.id} value={String(a.id)}>
-                            {a.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                        .map((a) => ({ value: String(a.id), name: a.name })),
+                    ]}
+                    placeholder="Choose USD recipient"
+                    ariaLabel="USD recipient"
+                    className="h-10"
+                  />
                   <Button
                     size="sm"
                     disabled={

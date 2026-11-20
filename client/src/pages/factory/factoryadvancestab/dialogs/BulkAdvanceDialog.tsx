@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * BulkAdvanceDialog — extracted from AdvancesView.tsx during the Phase 4 split.
  *
@@ -112,21 +113,13 @@ export function BulkAdvanceDialog({
             </div>
             <div className="space-y-2">
               <Label>Cash Account</Label>
-              <Select
+              <UnifiedAccountPicker
+                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
                 value={bulkForm.cashAccountId}
-                onValueChange={(v) => setBulkForm((p) => ({ ...p, cashAccountId: v }))}
-              >
-                <SelectTrigger data-testid="select-bulk-cash-account">
-                  <SelectValue placeholder="Optional" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(cashAccounts || []).map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setBulkForm((p) => ({ ...p, cashAccountId: v }))}
+                placeholder={"Optional"}
+                testId={"select-bulk-cash-account"}
+              />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

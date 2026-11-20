@@ -24,6 +24,7 @@ import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpet
 import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
 import { logAudit } from "../_helpers";
 import { assertVoucherEditableTx, sendVoucherCorrectionRefusal } from "../../services/accounting/voucherCorrection";
+import { assertPostingLedgerLeavesTx } from "../../services/accounting/postableLedgerAccountPolicy";
 
 /**
  * After a single-line write, the voucher's stored lines must still satisfy the
@@ -122,6 +123,11 @@ export function registerVoucherEntryWriteRoutes(app: Express) {
           // Phase 22 (B), G4: open period only (409 otherwise); audited below.
           await assertVoucherEditableTx(tx, voucher.id, { companyId: voucher.companyId });
           const [linked] = await linkCustomerLedgerTargets(tx, voucher.companyId, [target]);
+          await assertPostingLedgerLeavesTx(
+            tx,
+            voucher.companyId,
+            linked.ledgerAccountId == null ? [] : [Number(linked.ledgerAccountId)]
+          );
           const [created] = await tx
             .insert(voucherEntries)
             .values({

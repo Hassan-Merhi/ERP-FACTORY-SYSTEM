@@ -22,7 +22,12 @@ vi.mock("../server/auth", () => ({
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { registerLedgerAccountReadRoutes } from "../server/routes/ledger/reads";
+import { registerLedgerAccountPaginationRoutes } from "../server/routes/ledgerAccountPaginationRoutes";
+import { registerFactoryTransporterRoutes } from "../server/routes/factory/factoryTransporterRoutes";
+import { registerFactoryContainerListRoutes } from "../server/routes/factory/containers/list";
 import { registerAccountVoucherSidebarRoutes } from "../server/routes/accounts/voucher-sidebar";
+import { assertPostingLedgerLeavesTx } from "../server/services/accounting/postableLedgerAccountPolicy";
+import { PostingValidationError } from "../server/services/accounting/centralPostingEngine";
 
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const databaseDescribe = hasDatabase ? describe : describe.skip;
@@ -34,6 +39,53 @@ const app = {
 };
 registerLedgerAccountReadRoutes(app as never);
 registerAccountVoucherSidebarRoutes(app as never);
+
+const paginatedHandlers = new Map<string, Handler>();
+registerLedgerAccountPaginationRoutes({
+  get: (path: string, ...chain: Handler[]) => paginatedHandlers.set(path, chain[chain.length - 1]),
+} as never);
+
+const factoryContainerHandlers = new Map<string, Handler>();
+registerFactoryContainerListRoutes({
+  get: (path: string, ...chain: Handler[]) => factoryContainerHandlers.set(path, chain[chain.length - 1]),
+} as never);
+
+const transporterHandlers = new Map<string, Handler>();
+registerFactoryTransporterRoutes({
+  get: (path: string, ...chain: Handler[]) => transporterHandlers.set(path, chain[chain.length - 1]),
+  post: () => undefined,
+  patch: () => undefined,
+  delete: () => undefined,
+} as never);
+
+async function callFiltered(
+  handler: Handler,
+  companyId: number,
+  query: Record<string, string> = {}
+): Promise<{ items: Array<{ id: number; code?: string }>; total: number }> {
+  const response = {
+    statusCode: 200,
+    body: undefined as unknown,
+    headers: {} as Record<string, string>,
+    status(code: number) {
+      response.statusCode = code;
+      return response;
+    },
+    json(body: unknown) {
+      response.body = body;
+      return response;
+    },
+    setHeader(key: string, value: string) {
+      response.headers[key] = value;
+      return response;
+    },
+  };
+  await handler({ session: { currentCompanyId: companyId }, query }, response);
+  if (response.statusCode !== 200) {
+    throw new Error(`Filtered account read -> ${response.statusCode} ${JSON.stringify(response.body)}`);
+  }
+  return response.body as { items: Array<{ id: number; code?: string }>; total: number };
+}
 
 async function call(path: string, companyId: number, query: Record<string, string> = {}) {
   const res = {
@@ -98,8 +150,10 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
     expect(codes(await call("/api/ledger-accounts", companyId))).toEqual(
       ["CASH", "GROUP-TAG", "LEGACY-CHILD", "LEGACY-PARENT", "STALE-PARENT"].sort()
     );
+    // The chart of accounts still exposes groups; every posting-oriented
+    // picker (including the generic picker) only exposes leaf accounts.
     expect(codes(await call("/api/ledger-accounts", companyId, { profile: "picker" }))).toEqual(
-      ["CASH", "GROUP-TAG", "LEGACY-CHILD", "LEGACY-PARENT", "STALE-PARENT"].sort()
+      ["CASH", "LEGACY-CHILD", "STALE-PARENT"].sort()
     );
   });
 
@@ -118,5 +172,80 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
     expect(ledgers.map((row) => Number(row.id)).sort((a, b) => a - b)).toEqual(
       [ids.cash, ids.legacyChild, ids.staleParent].sort((a, b) => a - b)
     );
+  });
+  it("includes hidden leaf ledgers when requested, never hidden group headers", async () => {
+    expect(codes(await call("/api/ledger-accounts", companyId, { profile: "picker", includeHidden: "true" }))).toEqual(
+      ["CASH", "LEGACY-CHILD", "SP-OPNBAL", "SP-STOCK", "STALE-PARENT"].sort()
+    );
+  });
+
+  it("blocks explicit groups and legacy live parents from new posting transactions", async () => {
+    await db.transaction(async (tx) => {
+      await assertPostingLedgerLeavesTx(tx, companyId, [ids.cash, ids.legacyChild, ids.staleParent]);
+      await expect(assertPostingLedgerLeavesTx(tx, companyId, [ids.groupTag])).rejects.toMatchObject({
+        code: "POSTING_LEDGER_GROUP_NOT_ALLOWED",
+      } satisfies Partial<PostingValidationError>);
+      await expect(assertPostingLedgerLeavesTx(tx, companyId, [ids.cash, ids.legacyParent])).rejects.toMatchObject({
+        code: "POSTING_LEDGER_GROUP_NOT_ALLOWED",
+      } satisfies Partial<PostingValidationError>);
+    });
+  });
+
+  it("does not accept a foreign or unknown ledger target as a posting leaf", async () => {
+    await db.transaction(async (tx) => {
+      await expect(assertPostingLedgerLeavesTx(tx, companyId, [2147483600])).rejects.toMatchObject({
+        code: "POSTING_LEDGER_GROUP_NOT_ALLOWED",
+      } satisfies Partial<PostingValidationError>);
+    });
+  });
+
+  it("fails closed for missing, zero, or malformed ledger account IDs", async () => {
+    await db.transaction(async (tx) => {
+      for (const invalidId of [0, -1, Number.NaN, 1.25]) {
+        await expect(assertPostingLedgerLeavesTx(tx, companyId, [invalidId])).rejects.toMatchObject({
+          code: "POSTING_TARGET_ID_INVALID",
+        });
+      }
+    });
+  });
+
+  it("paged posting pickers return only leaves and count only eligible accounts", async () => {
+    const handler = paginatedHandlers.get("/api/ledger-accounts")!;
+    for (const profile of ["picker", "voucher-picker"]) {
+      const result = await callFiltered(handler, companyId, { profile, pagination: "1", limit: "2" });
+      expect(result.total).toBe(3);
+      expect(result.items).toHaveLength(2);
+      expect(result.items.some((account) => [ids.groupTag, ids.legacyParent].includes(Number(account.id)))).toBe(false);
+    }
+    const full = await callFiltered(handler, companyId, { pagination: "1", limit: "100" });
+    expect(full.total).toBe(5);
+  });
+
+  it("Factory transporter account choices do not expose tagged or legacy parent groups", async () => {
+    const handler = transporterHandlers.get("/api/factory/transporter-accounts")!;
+    const result = await callFiltered(handler, companyId);
+    const idsReturned = (result as unknown as Array<{ id: number }>).map((account) => account.id);
+    expect(idsReturned).toContain(ids.cash);
+    expect(idsReturned).toContain(ids.legacyChild);
+    expect(idsReturned).not.toContain(ids.groupTag);
+    expect(idsReturned).not.toContain(ids.legacyParent);
+    expect(idsReturned).not.toContain(ids.deletedChild);
+  });
+
+  it("Factory container account data retains historical group names but marks them unavailable for posting", async () => {
+    const handler = factoryContainerHandlers.get("/api/factory/containers/account-options")!;
+    const rows = (await callFiltered(handler, companyId)) as unknown as Array<{
+      id: number;
+      name: string;
+      isPostingLeaf: boolean;
+    }>;
+    const eligible = new Map(rows.map((account) => [account.id, account.isPostingLeaf]));
+    expect(eligible.get(ids.cash)).toBe(true);
+    expect(eligible.get(ids.groupTag)).toBe(false);
+    expect(eligible.get(ids.legacyParent)).toBe(false);
+    expect(eligible.get(ids.legacyChild)).toBe(true);
+    // A parent whose only child was soft-deleted remains a valid leaf.
+    expect(eligible.get(ids.staleParent)).toBe(true);
+    expect(rows.find((account) => account.id === ids.groupTag)?.name).toContain("GROUP-TAG");
   });
 });

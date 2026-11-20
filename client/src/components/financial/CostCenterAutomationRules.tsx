@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * Phase 5 opt-in mapping editor, used by both ERP and Factory Cost Centers.
  * Rules apply only to newly posted eligible expenses. Source amounts are never
@@ -343,22 +344,13 @@ export function CostCenterAutomationRules({ baseUrl, centers }: { baseUrl: strin
               <>
                 <div className="space-y-1">
                   <Label>Expense Ledger Account</Label>
-                  <Select
+                  <UnifiedAccountPicker
+                    options={(accountData?.accounts || []).map((a) => ({ value: String(a.id), name: a.name }))}
                     value={form.ledgerAccountId}
+                    onChange={(v) => setForm((p) => ({ ...p, ledgerAccountId: v }))}
+                    placeholder={"Choose an expense account"}
                     disabled={editing || accountsLoading}
-                    onValueChange={(v) => setForm((p) => ({ ...p, ledgerAccountId: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose an expense account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(accountData?.accounts || []).map((a) => (
-                        <SelectItem key={a.id} value={String(a.id)}>
-                          {a.code} — {a.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Source Module</Label>

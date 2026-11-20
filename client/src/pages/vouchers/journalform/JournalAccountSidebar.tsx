@@ -54,7 +54,7 @@ export function JournalAccountSidebar({ model }: { model: Model }) {
           </div>
         </div>
         <SearchField
-          placeholder="Search by name or code..."
+          placeholder="Search account name..."
           value={journalAccountSearchTerm}
           onValueChange={(value) => {
             setJournalAccountSearchTerm(value);

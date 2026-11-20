@@ -10,6 +10,7 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { factoryPosSales, factoryPosSaleItems, ledgerAccounts } from "@shared/schema";
 import { eq, and, desc, inArray, isNull, asc } from "drizzle-orm";
+import { ledgerPostingLeafCondition } from "../../../../services/accounting/postableLedgerAccountPolicy";
 
 export function registerPosSalesReadRoutes(app: Express) {
   // Read-only dropdown options for Factory POS. Do not use /api/ledger-accounts:
@@ -32,7 +33,8 @@ export function registerPosSalesReadRoutes(app: Express) {
             eq(ledgerAccounts.companyId, companyId),
             isNull(ledgerAccounts.deletedAt),
             eq(ledgerAccounts.active, true),
-            inArray(ledgerAccounts.accountType, ["Cash", "Expense", "Direct Expense", "Indirect Expense"])
+            inArray(ledgerAccounts.accountType, ["Cash", "Expense", "Direct Expense", "Indirect Expense"]),
+            ledgerPostingLeafCondition(companyId)
           )
         )
         .orderBy(asc(ledgerAccounts.name));
