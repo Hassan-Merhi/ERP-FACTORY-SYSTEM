@@ -6,7 +6,8 @@
  * A PC gives the rows it creates ids at or above PHASE9_PC_RECORD_ID_BASE. In
  * an entry from that PC, such an id is replaced by the cloud's where it names
  * a customer (`customerId`, or an `accountType: "customer"` account) or a
- * ledger account (`ledgerAccountId`, or an `accountType: "ledger"` account).
+ * ledger account (`ledgerAccountId`, an `accountType: "ledger"` account, or a
+ * POS sale's `credit` / `cash` payment account, which are ledger accounts).
  * One the cloud has not created yet makes the apply wait
  * (Phase9PcRecordNotYetSynced, no conflict recorded); the customer's own create
  * comes first on the same stream.
@@ -20,7 +21,14 @@ const ACCOUNT_PAIRS = Object.freeze([
   ["accountType", "accountId"],
   ["paymentAccountType", "paymentAccountId"],
 ]);
-const ACCOUNT_TYPES = Object.freeze({ customer: "customer", ledger: "ledger_account" });
+// POS sales pay into a ledger account for "cash" and "credit" (a customer's
+// receivable); "bank" names a bank account, which a PC does not create.
+const ACCOUNT_TYPES = Object.freeze({
+  customer: "customer",
+  ledger: "ledger_account",
+  cash: "ledger_account",
+  credit: "ledger_account",
+});
 
 export class Phase9PcRecordNotYetSynced extends Error {
   constructor(missing) {
@@ -44,6 +52,27 @@ function localFields(object) {
     if (type && isLocal(object[idField])) found.push([type, idField]);
   }
   return found;
+}
+
+/**
+ * The PC's own records an entry names, as "customer:<id>" / "ledger_account:<id>",
+ * in its finished envelope or in the person's input: a POS sale's input names
+ * its ledger as `cashAccountId`, or as `paymentAccountId` of a credit sale.
+ */
+export function phase9PcRecordReferences(value) {
+  const out = new Map();
+  collect(value, out);
+  const visit = (node) => {
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (!node || typeof node !== "object") return;
+    if (isLocal(node.cashAccountId)) out.set(mapKey("ledger_account", node.cashAccountId), null);
+    if (node.isCreditSale === true && isLocal(node.paymentAccountId)) {
+      out.set(mapKey("ledger_account", node.paymentAccountId), null);
+    }
+    Object.values(node).forEach(visit);
+  };
+  visit(value);
+  return new Set(out.keys());
 }
 
 function collect(value, out) {

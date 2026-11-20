@@ -34,3 +34,5 @@ export declare function recordPhase9PcRecordMapping(
     operationId: string;
   }
 ): Promise<void>;
+
+export declare function phase9PcRecordReferences(value: unknown): Set<string>;

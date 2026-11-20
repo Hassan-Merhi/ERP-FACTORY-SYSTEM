@@ -9,9 +9,11 @@
  * Sales voucher naming the PC's customer and ledger posts against the cloud's;
  * an entry naming a customer the cloud has not created yet waits; a customer
  * that looks like an existing one is held (owner decision) until an approver
- * creates it as new; envelopes are refused on the browser route; and the PC
- * records the customer in its own transaction, the guard letting
- * POST /api/customers through only in entry mode.
+ * creates it as new; a POS sale's credit and cash accounts translate as the
+ * PC's ledgers; envelopes are refused on the browser route; the PC records the
+ * customer in its own transaction; discarding a held customer on the PC also
+ * refuses the entries naming it; and the guard lets POST /api/customers
+ * through only in entry mode.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -24,6 +26,8 @@ import { pool, type DbTransaction } from "../server/db";
 import { makePcLocalReadOnlyGuard } from "../server/offline/pcLocal/localReadOnlyGuard";
 import { phase9CustomerCreateEnvelope } from "../server/edge/phase9CustomerCreateEnvelope.mjs";
 import { createCustomerTx } from "../server/routes/customers/customerService";
+import { translatePhase9PcRecords } from "../server/edge/phase9PcRecordMap.mjs";
+import { resolveConflict } from "../scripts/pc-sync/local/outbox.mjs";
 import { capturePcCustomerCreateTx } from "../server/routes/customers/customerPcCapture";
 import { loadPcSyncPolicy } from "../server/offline/pcSync/tablePolicy.mjs";
 import { prepareLocalDatabase } from "../scripts/pc-sync/local/localStore.mjs";
@@ -187,6 +191,26 @@ describe("PC offline customers: in the cloud", () => {
     expect(await mapping(sameName.localCustomerId)).toHaveLength(1);
   });
 
+  it("translates a POS sale's credit and cash accounts as the PC's ledgers", async () => {
+    const queryable = {
+      query: async () => ({
+        rows: [
+          { record_type: "ledger_account", local_id: 1_000_000_007, cloud_id: 70 },
+          { record_type: "customer", local_id: 1_000_000_007, cloud_id: 71 },
+        ],
+      }),
+    };
+    const event = (paymentAccountType: string) => ({
+      payload: { paymentAccountType, paymentAccountId: 1_000_000_007, items: [{ stockItemId: 5 }] },
+    });
+    expect((await translatePhase9PcRecords(queryable, DEVICE, event("credit"))).payload.paymentAccountId).toBe(70);
+    expect((await translatePhase9PcRecords(queryable, DEVICE, event("cash"))).payload.paymentAccountId).toBe(70);
+    // A bank account is never one the PC made: left as it is.
+    expect((await translatePhase9PcRecords(queryable, DEVICE, event("bank"))).payload.paymentAccountId).toBe(
+      1_000_000_007
+    );
+  });
+
   it("refuses customer envelopes on the browser route", async () => {
     const envelope = customerEnvelope(`${PREFIX} From A Browser`);
     const res = await agent.post("/api/offline/browser-sync/operations").send({
@@ -264,6 +288,34 @@ describe("PC offline customers: on the PC", () => {
     } finally {
       delete process.env.OFFLINE_PC_LOCAL_MODE;
     }
+  });
+
+  it("refuses the entries naming a held customer when it is discarded on the PC", async () => {
+    await local.query("DELETE FROM pc_local.outbox");
+    const envelope = customerEnvelope(`${PREFIX} Discarded Customer`);
+    const add = async (status: string, input: unknown, env: unknown = null) =>
+      (
+        await local.query(
+          `INSERT INTO pc_local.outbox (operation_id, kind, input, envelope, local_ref, user_id, company_id, status)
+           VALUES ($1::uuid, 'k', $2::jsonb, $3::jsonb, 1, 'u1', 7, $4) RETURNING operation_id`,
+          [randomUUID(), JSON.stringify(input), env === null ? null : JSON.stringify(env), status]
+        )
+      ).rows[0].operation_id as string;
+    const held = await add("conflict", {}, envelope);
+    await local.query("UPDATE pc_local.outbox SET kind = $1 WHERE operation_id = $2", [KIND, held]);
+    const sale = await add("waiting", { entries: [{ customerId: envelope.localCustomerId }] });
+    const credit = await add("pending", { isCreditSale: true, paymentAccountId: envelope.localLedgerAccountId });
+    const unrelated = await add("pending", { entries: [{ customerId: 42 }], localVoucherId: envelope.localCustomerId });
+
+    const result = await resolveConflict(local, null as never, held, "discard");
+    expect(result).toEqual({ discarded: true, dependentsRefused: 2 });
+    const { rows } = await local.query("SELECT operation_id, status, code FROM pc_local.outbox");
+    const byId = new Map(rows.map((r) => [r.operation_id, [r.status, r.code]]));
+    expect(byId.get(held)).toEqual(["refused", "DISCARDED"]);
+    expect(byId.get(sale)).toEqual(["refused", "PC_SYNC_NAMES_DISCARDED_CUSTOMER"]);
+    expect(byId.get(credit)).toEqual(["refused", "PC_SYNC_NAMES_DISCARDED_CUSTOMER"]);
+    expect(byId.get(unrelated)).toEqual(["pending", null]);
+    await local.query("DELETE FROM pc_local.outbox");
   });
 
   it("lets POST /api/customers through only in entry mode", async () => {
