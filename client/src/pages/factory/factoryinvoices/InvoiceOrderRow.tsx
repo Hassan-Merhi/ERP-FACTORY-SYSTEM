@@ -48,6 +48,7 @@ import {
 } from "./invoiceCalculations";
 import type { CustomerOrder } from "./types";
 import { EditableShippingCell } from "./EditableShippingCell";
+import { LoadingAgentCell } from "./LoadingAgentCell";
 
 export type EditableShippingField = "containerNumber" | "bookingInfo" | "destination" | "containerNotes";
 
@@ -56,6 +57,7 @@ export type InvoiceColumnKey =
   | "proforma"
   | "container"
   | "bookingInfo"
+  | "agent"
   | "destination"
   | "notes"
   | "date"
@@ -184,6 +186,11 @@ export function InvoiceOrderRow({
             maxLength={2000}
             onSave={onSaveShippingField}
           />
+        </TableCell>
+      )}
+      {isColumnVisible("agent") && (
+        <TableCell className="min-w-[170px]" data-testid={`text-agent-${order.id}`}>
+          <LoadingAgentCell order={order} onSave={onSaveShippingField} />
         </TableCell>
       )}
       {isColumnVisible("destination") && (
