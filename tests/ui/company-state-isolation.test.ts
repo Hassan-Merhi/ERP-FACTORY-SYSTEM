@@ -22,7 +22,9 @@ describe("frontend company-state isolation wiring", () => {
     expect(context).toContain("cancelCompanySessionQueries(queryClient)");
     expect(context).toContain("removeCompanySessionQueries(queryClient, {");
     expect(context).toContain("const switched = await switchCompanyOnServer(company.id)");
-    expect(context).toContain("commitCompanySelection(company, { prefetch: true, serverSynced: true, revision: switched.revision })");
+    expect(context).toContain(
+      "commitCompanySelection(company, { prefetch: true, serverSynced: true, revision: switched.revision })"
+    );
     expect(context).toContain("commitCompanySelection(company, { prefetch: false, serverSynced: false })");
     expect(context).toContain("scheduleInitialSyncRetry");
     expect(context).not.toContain("invalidateCompanyQueries");
@@ -59,7 +61,9 @@ describe("frontend company-state isolation wiring", () => {
     const app = source("client/src/app/AuthenticatedApp.tsx");
     const appData = source("client/src/app/useAuthenticatedAppData.ts");
 
-    expect(app).toContain("if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) return <AppLoadingState />;");
+    expect(app).toContain(
+      "if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) return <AppLoadingState />;"
+    );
     expect(appData).toContain('companyQueryKey("/api/company-settings", selectedCompanyId)');
     expect(appData).toContain('companyQueryKey("/api/factory/my-access", selectedCompanyId)');
     expect(appData).toContain('companyQueryKey("/api/factory/settings", selectedCompanyId)');
@@ -71,14 +75,18 @@ describe("frontend company-state isolation wiring", () => {
     const follower = source("client/src/hooks/useCompanySessionFollower.ts");
 
     expect(root).toContain("function CompanyWorkspaceBoundary(");
-    expect(root).toContain('if (!selectedCompany || (companyLoading && !isCheckingCompanySession))');
+    expect(root).toContain("if (!selectedCompany || (companyLoading && !isCheckingCompanySession))");
     expect(root).toContain('data-testid="company-session-verification-cover"');
     expect(root).toContain("isCheckingCompanySession && <CompanySessionVerificationCover />");
-    expect(root).toContain('<LocationProvider key={`${user.id}:${selectedCompany.id}`}>');
+    expect(root).toContain("<LocationProvider key={`${user.id}:${selectedCompany.id}`}>");
     expect(root).toContain("<LegacyQueueRecoveryPanel />");
     expect(root).toContain("<DeferredAuthenticatedUtilities />");
     expect(context).toContain('externalSessionState === "switching"');
-    expect(context).toContain('externalSessionState !== "switching" && (externalSessionState === "checking" || isSyncingCompany)');
+    // #3373: a resumed tab shows the cover only after a short grace period; a
+    // cross-tab hint shows it at once (showResumeVerificationCover).
+    expect(context).toContain(
+      'isSyncingCompany || (externalSessionState === "checking" && showResumeVerificationCover)'
+    );
     expect(follower).toContain('onTransitionStart("selection")');
     expect(follower).toContain("onTransitionVerified()");
   });

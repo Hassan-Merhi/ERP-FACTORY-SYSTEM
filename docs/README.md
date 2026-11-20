@@ -153,6 +153,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [fx-monetary-valuation/zambia-fx-phase3-preflight-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase3-preflight-2026-11-20.md) | Zambia FX: administrator-only read-only correction preview and disposable database regression |
 | [fx-monetary-valuation/zambia-fx-phase4-verification-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase4-verification-2026-11-20.md) | Zambia FX: controlled correction verification, exact reversal and native-zero replacement evidence |
 | [fx-monetary-valuation/zambia-fx-phase5-sales-net-position-bridge-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase5-sales-net-position-bridge-2026-11-20.md) | Zambia FX: source-backed reconciliation of Sales cost profit, actual stock relief, revenue rounding and Net Position |
+| [fx-monetary-valuation/zambia-fx-phase6-release-verification-2026-11-20.md](fx-monetary-valuation/zambia-fx-phase6-release-verification-2026-11-20.md) | Zambia FX: Phase 6 release verification and signoff gates (no financial change without finance approval) |
 
 ## Operating it
 

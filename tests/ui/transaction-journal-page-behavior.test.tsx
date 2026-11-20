@@ -91,9 +91,10 @@ vi.mock("wouter", () => ({ useLocation: () => ["/transaction-journal", harness.s
 vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => ({
     selectCompany: harness.selectCompany,
+    // Only an assigned, active company is switched to (ensureCompanyForNavigation).
     companies: [
-      { id: 4, name: "GC Lshi" },
-      { id: 5, name: "GC #2" },
+      { id: 4, name: "GC Lshi", active: true },
+      { id: 5, name: "GC #2", active: true },
     ],
   }),
 }));
@@ -167,6 +168,7 @@ import TransactionJournal from "@/pages/TransactionJournal";
 describe("transaction journal page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.selectCompany.mockResolvedValue(true);
     harness.queryError = null;
     harness.hiddenJournalVoucherIds = [];
     harness.detail = null;
