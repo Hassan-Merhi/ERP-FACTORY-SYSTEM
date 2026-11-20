@@ -149,7 +149,7 @@ export function useGroundScanModel() {
     if (scannedBales.length === 0) return;
     setExporting(true);
     try {
-      return await exportGroundScanWorkbook({ selectedLocationId, scannedBales, stockLocations, totalWeight });
+      return await exportGroundScanWorkbook({ selectedLocationId, stockLocations });
     } catch (err) {
       toast({ title: "Export failed", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
