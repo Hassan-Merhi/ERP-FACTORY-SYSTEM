@@ -101,7 +101,9 @@ afterAll(async () => {
   await pool.query("ALTER TABLE factory_edge_applied_events DISABLE TRIGGER USER");
   await pool.query("DELETE FROM factory_edge_applied_events WHERE site_id = $1::uuid", [DEVICE]);
   await pool.query("ALTER TABLE factory_edge_applied_events ENABLE TRIGGER USER");
+  await pool.query("ALTER TABLE factory_edge_pc_record_map DISABLE TRIGGER USER");
   await pool.query("DELETE FROM factory_edge_pc_record_map WHERE site_id = $1::uuid", [DEVICE]);
+  await pool.query("ALTER TABLE factory_edge_pc_record_map ENABLE TRIGGER USER");
   await cleanupTestData(PREFIX);
   closeTestServer();
 }, 60_000);
