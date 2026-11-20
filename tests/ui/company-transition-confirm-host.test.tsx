@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 
 vi.mock("@/components/ConfirmDialog", () => ({
   ConfirmDialog: ({
@@ -7,7 +8,7 @@ vi.mock("@/components/ConfirmDialog", () => ({
     title,
     onConfirm,
   }: {
-    children?: React.ReactNode;
+    children?: ReactNode;
     title: string;
     onConfirm: () => void;
   }) => (
