@@ -142,8 +142,10 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
     // Reconstruct the original native ZMW totals and two historical rates.
     await postSale("KIT-208", kitwe, "50450", "20.8");
     await postSale("KIT-209", kitwe, "18080", "20.9");
-    await postSale("LUS-208", lusaka, "147900", "20.8");
-    await postSale("LUS-209", lusaka, "13150", "20.9");
+    // Split the ZMW 161,050 so the 6dp base postings round to the
+    // production-equivalent cents: USD 7,739.77 before the manual journal.
+    await postSale("LUS-208", lusaka, "147910", "20.8");
+    await postSale("LUS-209", lusaka, "13140", "20.9");
     manualVoucherId = await createVoucher("MANUAL-FX", [
       { ledgerId: kitwe, debit: "0", credit: "11.60" },
       { ledgerId: lusaka, debit: "0", credit: "34.03" },
