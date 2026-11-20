@@ -92,10 +92,21 @@ async function postSale(name: string, ledgerId: number, zmw: string, rate: strin
 }
 
 async function countRows(table: "vouchers" | "voucher_entries" | "accounting_posting_requests"): Promise<number> {
-  const query = table === "voucher_entries"
-    ? `SELECT COUNT(*)::int AS n FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id WHERE v.company_id=$1`
-    : `SELECT COUNT(*)::int AS n FROM ${table} WHERE company_id=$1`;
-  const r = await pool.query<{ n: number }>(query, [companyId]);
+  if (table === "voucher_entries") {
+    const r = await pool.query<{ n: number }>(
+      "SELECT COUNT(*)::int AS n FROM voucher_entries e JOIN vouchers v ON v.id=e.voucher_id WHERE v.company_id=$1",
+      [companyId]
+    );
+    return r.rows[0].n;
+  }
+  if (table === "vouchers") {
+    const r = await pool.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM vouchers WHERE company_id=$1", [companyId]);
+    return r.rows[0].n;
+  }
+  const r = await pool.query<{ n: number }>(
+    "SELECT COUNT(*)::int AS n FROM accounting_posting_requests WHERE company_id=$1",
+    [companyId]
+  );
   return r.rows[0].n;
 }
 
@@ -149,9 +160,9 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
       await client.query("DELETE FROM vouchers WHERE company_id=$1", [companyId]);
     });
     await deleteAuditLogRowsForTests(pool, "company_id=$1", [companyId]);
-    for (const table of ["exchange_rates", "ledger_accounts", "company_settings"]) {
-      await pool.query(`DELETE FROM ${table} WHERE company_id=$1`, [companyId]);
-    }
+    await pool.query("DELETE FROM exchange_rates WHERE company_id=$1", [companyId]);
+    await pool.query("DELETE FROM ledger_accounts WHERE company_id=$1", [companyId]);
+    await pool.query("DELETE FROM company_settings WHERE company_id=$1", [companyId]);
     await pool.query("DELETE FROM companies WHERE id=$1", [companyId]);
   }, 120_000);
 
