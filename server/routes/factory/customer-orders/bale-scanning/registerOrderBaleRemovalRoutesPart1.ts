@@ -144,7 +144,7 @@ export function registerOrderBaleRemovalRoutesPart1(app: Express) {
           status: customerOrders.status,
           totalQtyBales: customerOrders.totalQtyBales,
           totalWeightKg: sql<string>`COALESCE(
-            (SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}),
+            (SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${sql.raw("customer_orders.id")}),
             0
           )::text`,
         })

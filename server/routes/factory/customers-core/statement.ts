@@ -45,7 +45,7 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
           freightAmount: customerOrders.freightAmount,
           otherChargesTotal: customerOrders.otherChargesTotal,
           totalQtyBales: customerOrders.totalQtyBales,
-          totalWeightKg: sql<string>`COALESCE((SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${customerOrders.id}), 0)`,
+          totalWeightKg: sql<string>`COALESCE((SELECT SUM(cob.weight) FROM customer_order_bales cob WHERE cob.order_id = ${sql.raw("customer_orders.id")}), 0)`,
           containerNumber: customerOrders.containerNumber,
           destination: customerOrders.destination,
           status: customerOrders.status,
@@ -62,14 +62,14 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         .orderBy(desc(customerOrders.createdAt));
 
       // Build orderId → field maps for the finalized statement rows.
-      const orderContainers = await db.select({
-        id: customerOrders.id,
-        containerNumber: customerOrders.containerNumber,
-        destination: customerOrders.destination,
-      }).from(customerOrders).where(and(
-        eq(customerOrders.companyId, companyId),
-        eq(customerOrders.customerId, customerId)
-      ));
+      const orderContainers = await db
+        .select({
+          id: customerOrders.id,
+          containerNumber: customerOrders.containerNumber,
+          destination: customerOrders.destination,
+        })
+        .from(customerOrders)
+        .where(and(eq(customerOrders.companyId, companyId), eq(customerOrders.customerId, customerId)));
       const containerByOrderId = new Map<number, string | null>(
         orderContainers.map((order) => [order.id, order.containerNumber ?? null])
       );

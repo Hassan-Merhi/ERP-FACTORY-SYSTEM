@@ -65,13 +65,16 @@ describe("bale products", () => {
     });
   });
 
-  it("scopes product edits and deletes to the selected company", async () => {
+  it("scopes product reads, edits and deletes to the selected company", async () => {
     await withFactoryWorld(async (w) => {
       const other = await otherCompany(w);
       const foreign = await w.one(
         `INSERT INTO bale_products (company_id, code, article_code, name) VALUES ($1, 'F1', 'F1', 'Foreign') RETURNING id`,
         [other]
       );
+      const foreignRead = await w.agent.get(`/api/bale-products/${foreign}`);
+      expect(foreignRead.status).toBe(404);
+      expect(foreignRead.body).toEqual({ message: "Product not found" });
       expect((await w.agent.patch(`/api/bale-products/${foreign}`).send({ name: "Taken" })).status).toBe(403);
       expect((await w.agent.delete(`/api/bale-products/${foreign}`)).status).toBe(403);
       const [kept] = await w.q(`SELECT name FROM bale_products WHERE id = $1`, [foreign]);

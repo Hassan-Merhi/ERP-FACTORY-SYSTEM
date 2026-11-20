@@ -151,7 +151,7 @@ export function registerFactoryWorkerListRoutes(app: Express, requireAuth: Reque
             pendingAdvanceBalance: sql<string>`COALESCE((
               SELECT SUM(fwa.remaining_balance)
               FROM factory_worker_advances fwa
-              WHERE fwa.worker_id = ${factoryWorkers.id}
+              WHERE fwa.worker_id = ${sql.raw("factory_workers.id")}
                 AND fwa.company_id = ${companyId}
                 AND fwa.remaining_balance > 0
             ), 0)::text`,

@@ -238,13 +238,19 @@ export function registerBaleProductRoutes(app: Express) {
 
   app.get("/api/bale-products/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) {
+        return res.status(400).json({ message: "No company selected" });
+      }
+
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid product ID" });
       }
 
+      // Another company's product is reported as not found, never returned.
       const product = await storage.getBaleProductById(id);
-      if (!product) {
+      if (!product || product.companyId !== companyId) {
         return res.status(404).json({ message: "Product not found" });
       }
 

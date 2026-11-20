@@ -47,7 +47,7 @@ export function registerBaleTransferRoutes(app: Express) {
           updatedAt: baleTransfers.updatedAt,
           sourceLocationName: sql<string>`(SELECT name FROM locations WHERE id = ${baleTransfers.sourceLocationId})`,
           destinationLocationName: sql<string>`(SELECT name FROM locations WHERE id = ${baleTransfers.destinationLocationId})`,
-          itemCount: sql<number>`(SELECT COUNT(*) FROM bale_transfer_items WHERE transfer_id = ${baleTransfers.id})::int`,
+          itemCount: sql<number>`(SELECT COUNT(*) FROM bale_transfer_items WHERE transfer_id = ${sql.raw("bale_transfers.id")})::int`,
         })
         .from(baleTransfers)
         .where(eq(baleTransfers.companyId, companyId))
