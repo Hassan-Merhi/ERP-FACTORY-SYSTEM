@@ -116,6 +116,7 @@ async function switchCompanyOnServer(companyId: number): Promise<boolean> {
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isSyncingCompany, setIsSyncingCompany] = useState(false);
+  const [isVerifyingExternalSession, setIsVerifyingExternalSession] = useState(false);
   const [initialSyncAttempt, setInitialSyncAttempt] = useState(0);
   const selectedCompanyRef = useRef<Company | null>(null);
   const lastSyncedCompanyId = useRef<number | null>(null);
@@ -308,11 +309,16 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     refreshRealtimeSessionScope();
   }, [commitCompanySelection]);
 
+  const beginExternalSessionVerification = useCallback(() => setIsVerifyingExternalSession(true), []);
+  const finishExternalSessionVerification = useCallback(() => setIsVerifyingExternalSession(false), []);
+
   useCompanySessionFollower({
     companiesRef,
     selectedCompanyRef,
     switchQueueRef,
     externalChangeObservedRef,
+    onTransitionStart: beginExternalSessionVerification,
+    onTransitionVerified: finishExternalSessionVerification,
     onAdopt: adoptOtherTabCompany,
   });
 
@@ -321,7 +327,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       value={{
         selectedCompany,
         companies,
-        isLoading: isLoading || isSyncingCompany || (companies.length > 0 && !selectedCompany),
+        isLoading:
+          isLoading || isSyncingCompany || isVerifyingExternalSession || (companies.length > 0 && !selectedCompany),
         error: companyAssignmentsError instanceof Error ? companyAssignmentsError : null,
         selectCompany,
       }}
