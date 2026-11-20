@@ -33,8 +33,10 @@ export function captureCompanyReadSnapshot(): CompanyReadSnapshot {
   return { companyId, revision, transitioning };
 }
 
-/** Internal cache identity; includes a generation so validators and inflight
- * deduplication never cross a company switch or a failed verification. */
+/**
+ * Internal cache identity; includes a generation so validators and inflight
+ * deduplication never cross a company switch or a failed verification.
+ */
 export function companyReadCacheIdentity(): string {
   return `${companyId ?? "unselected"}:${revision}:${transitioning ? "pending" : "verified"}`;
 }
@@ -45,8 +47,12 @@ export function companyReadAbortError(): DOMException {
 
 /** Protect all company-owned GETs, including raw fetch and pagination reads. */
 export function assertCompanyReadSnapshot(snapshot: CompanyReadSnapshot): void {
-  if (snapshot.transitioning || transitioning || revision !== snapshot.revision ||
-      (snapshot.companyId !== null && snapshot.companyId !== companyId)) {
+  if (
+    snapshot.transitioning ||
+    transitioning ||
+    revision !== snapshot.revision ||
+    (snapshot.companyId !== null && snapshot.companyId !== companyId)
+  ) {
     throw companyReadAbortError();
   }
 }
