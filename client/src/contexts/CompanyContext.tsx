@@ -340,7 +340,10 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         companies,
         isLoading:
           isLoading || isSyncingCompany || externalSessionState === "switching" || (companies.length > 0 && !selectedCompany),
-        isCheckingCompanySession: externalSessionState === "checking",
+        // Pending local changes stay covered rather than unmounting forms.
+        // A confirmed external company mismatch still hard-gates the workspace.
+        isCheckingCompanySession:
+          externalSessionState !== "switching" && (externalSessionState === "checking" || isSyncingCompany),
         error: companyAssignmentsError instanceof Error ? companyAssignmentsError : null,
         selectCompany,
       }}
