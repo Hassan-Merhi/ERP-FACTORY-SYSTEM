@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express, Request, Response } from "express";
+import type { Express, NextFunction, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -13,6 +13,34 @@ import { eq, and, asc } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// Multipart form fields arrive as strings after multer; a request that is not
+// multipart reaches the handler without a body and gets "No image uploaded".
+const uploadLogoInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ name: z.string().optional() })]),
+} satisfies RequestSchemas;
+
+const renameLogoInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ name: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+
+const deleteLogoInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerFactoryCustomerLogoRoutes(app: Express) {
   // ── Customer Logos ──────────────────────────────────────────────────────────
@@ -61,10 +89,21 @@ export function registerFactoryCustomerLogoRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/customers/:id/logos", requireAuth, (req: Request, res: Response) => {
-    customerLogoUpload.single("image")(req, res, async (err) => {
+  // Runs multer before validateRequest so the form fields can be checked.
+  function customerLogoUploadStep(req: Request, res: Response, next: NextFunction) {
+    customerLogoUpload.single("image")(req, res, (err) => {
+      if (err) return res.status(400).json({ message: err.message });
+      next();
+    });
+  }
+
+  app.post(
+    "/api/factory/customers/:id/logos",
+    requireAuth,
+    customerLogoUploadStep,
+    validateRequest(uploadLogoInput),
+    async (req: Request, res: Response) => {
       try {
-        if (err) return res.status(400).json({ message: err.message });
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!req.file) return res.status(400).json({ message: "No image uploaded" });
@@ -91,54 +130,64 @@ export function registerFactoryCustomerLogoRoutes(app: Express) {
       } catch (e: unknown) {
         res.status(500).json({ message: getErrorMessage(e) });
       }
-    });
-  });
-
-  app.patch("/api/factory/customer-logos/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const logoId = parseInt(req.params.id);
-      if (isNaN(logoId)) return res.status(400).json({ message: "Invalid logo ID" });
-      const [existing] = await db
-        .select()
-        .from(customerLogos)
-        .where(and(eq(customerLogos.id, logoId), eq(customerLogos.companyId, companyId)));
-      if (!existing) return res.status(404).json({ message: "Logo not found" });
-      const { name } = req.body;
-      if (!name || !name.trim()) return res.status(400).json({ message: "Name is required" });
-      const [updated] = await db
-        .update(customerLogos)
-        .set({ name: name.trim().substring(0, 100), updatedAt: new Date() })
-        .where(eq(customerLogos.id, logoId))
-        .returning();
-      res.json(updated);
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
     }
-  });
+  );
 
-  app.delete("/api/factory/customer-logos/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const logoId = parseInt(req.params.id);
-      if (isNaN(logoId)) return res.status(400).json({ message: "Invalid logo ID" });
-      const [existing] = await db
-        .select()
-        .from(customerLogos)
-        .where(and(eq(customerLogos.id, logoId), eq(customerLogos.companyId, companyId)));
-      if (!existing) return res.status(404).json({ message: "Logo not found" });
-      const [updated] = await db
-        .update(customerLogos)
-        .set({ active: false, updatedAt: new Date() })
-        .where(eq(customerLogos.id, logoId))
-        .returning();
-      res.json(updated);
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+  app.patch(
+    "/api/factory/customer-logos/:id",
+    requireAuth,
+    validateRequest(renameLogoInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const logoId = parseInt(req.params.id);
+        if (isNaN(logoId)) return res.status(400).json({ message: "Invalid logo ID" });
+        const [existing] = await db
+          .select()
+          .from(customerLogos)
+          .where(and(eq(customerLogos.id, logoId), eq(customerLogos.companyId, companyId)));
+        if (!existing) return res.status(404).json({ message: "Logo not found" });
+        const { name } = req.body;
+        if (!name || !name.trim()) return res.status(400).json({ message: "Name is required" });
+        const [updated] = await db
+          .update(customerLogos)
+          .set({ name: name.trim().substring(0, 100), updatedAt: new Date() })
+          .where(eq(customerLogos.id, logoId))
+          .returning();
+        res.json(updated);
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
+
+  app.delete(
+    "/api/factory/customer-logos/:id",
+    requireAuth,
+    validateRequest(deleteLogoInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const logoId = parseInt(req.params.id);
+        if (isNaN(logoId)) return res.status(400).json({ message: "Invalid logo ID" });
+        const [existing] = await db
+          .select()
+          .from(customerLogos)
+          .where(and(eq(customerLogos.id, logoId), eq(customerLogos.companyId, companyId)));
+        if (!existing) return res.status(404).json({ message: "Logo not found" });
+        const [updated] = await db
+          .update(customerLogos)
+          .set({ active: false, updatedAt: new Date() })
+          .where(eq(customerLogos.id, logoId))
+          .returning();
+        res.json(updated);
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
 
   app.get("/api/factory/customer-logos/:id/image", requireAuth, async (req: Request, res: Response) => {
     try {

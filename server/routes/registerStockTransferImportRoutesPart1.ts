@@ -15,6 +15,30 @@ import type { ParsedStockTransferItem, SpreadsheetRow, ValidatedStockTransferIte
 import { type Decimal, requestQuantity, rowQuantity } from "./stockTransferImportQuantity";
 import { type ProvisionalRateBasis, StockTransferImportSourceMissingError } from "./stockTransferImportPosting";
 import { sendBaleMirrorMovementRefusal } from "../services/accounting/perpetualInventory/cutoverRefusal";
+import { z } from "zod";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const looseNumber = z.union([z.number(), z.string()]);
+
+/** Multipart: no form fields are read, only the file. */
+const parseInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+/** A row as /parse returns it (ParsedStockTransferItem), optionally with its own source location. */
+const transferItem = z.strictObject({
+  rowNum: looseNumber.optional(),
+  barcode: z.union([z.string(), z.number()]).optional(),
+  quantity: looseNumber.optional(),
+  sourceLocation: z.string().optional(),
+  sourceLocationId: looseNumber.nullable().optional(),
+});
+const validateInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    sourceLocationId: looseNumber.nullable().optional(),
+    destinationLocationId: looseNumber.nullable().optional(),
+    items: z.array(transferItem).optional(),
+  }),
+} satisfies RequestSchemas;
 
 /** Sends a wave 11/15 refusal (bale mirror, missing source after the cut-over); returns whether it did. */
 /** The lines moved at a provisional cost (wave 17 B), for the response. */
@@ -37,66 +61,72 @@ export function registerStockTransferImportRoutesPart1(app: Express) {
   // ============= Stock Transfer Import Endpoints =============
 
   // Stock Transfer Import - Parse and Preview Excel
-  app.post("/api/stock-transfer-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
-
-      const workbook = await readExcel(req.file.buffer);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const rawData = sheetToJson(worksheet);
-
-      if (rawData.length === 0) {
-        return res.status(400).json({ message: "Excel file is empty" });
-      }
-
-      // Parse rows
-      const rows = rawData as SpreadsheetRow[];
-      const items: ParsedStockTransferItem[] = [];
-
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const rowNum = i + 2;
-
-        // Expected columns: Barcode, Quantity
-        const barcode = row.Barcode || row.barcode || row.Code || row.code;
-        const quantity = rowQuantity(row);
-
-        if (!barcode) {
-          continue; // Skip rows without barcode
+  app.post(
+    "/api/stock-transfer-import/parse",
+    requireAuth,
+    spreadsheetUpload.single("file"),
+    validateRequest(parseInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
         }
 
-        if (quantity <= 0) {
-          continue; // Skip invalid quantities
+        if (!req.file) {
+          return res.status(400).json({ message: "No file uploaded" });
         }
 
-        items.push({
-          rowNum,
-          barcode: barcode.toString().trim(),
-          quantity,
+        const workbook = await readExcel(req.file.buffer);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rawData = sheetToJson(worksheet);
+
+        if (rawData.length === 0) {
+          return res.status(400).json({ message: "Excel file is empty" });
+        }
+
+        // Parse rows
+        const rows = rawData as SpreadsheetRow[];
+        const items: ParsedStockTransferItem[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const rowNum = i + 2;
+
+          // Expected columns: Barcode, Quantity
+          const barcode = row.Barcode || row.barcode || row.Code || row.code;
+          const quantity = rowQuantity(row);
+
+          if (!barcode) {
+            continue; // Skip rows without barcode
+          }
+
+          if (quantity <= 0) {
+            continue; // Skip invalid quantities
+          }
+
+          items.push({
+            rowNum,
+            barcode: barcode.toString().trim(),
+            quantity,
+          });
+        }
+
+        res.json({
+          items,
+          totalItems: items.length,
+          fileName: req.file.originalname,
         });
+      } catch (error: unknown) {
+        logger.error("Stock Transfer Import parse error:", { error: error });
+        // File-parse errors are client errors (bad/corrupt file) — return 400, not 500
+        res.status(400).json({ message: getErrorMessage(error) || "Failed to parse Excel file" });
       }
-
-      res.json({
-        items,
-        totalItems: items.length,
-        fileName: req.file.originalname,
-      });
-    } catch (error: unknown) {
-      logger.error("Stock Transfer Import parse error:", { error: error });
-      // File-parse errors are client errors (bad/corrupt file) — return 400, not 500
-      res.status(400).json({ message: getErrorMessage(error) || "Failed to parse Excel file" });
     }
-  });
+  );
 
   // Stock Transfer Import - Validate data before import
-  app.post("/api/stock-transfer-import/validate", requireAuth, async (req, res) => {
+  app.post("/api/stock-transfer-import/validate", requireAuth, validateRequest(validateInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

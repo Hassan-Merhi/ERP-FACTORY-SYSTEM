@@ -7,6 +7,12 @@ import { getSuspenseReview, pn, validateMigrationPair } from "./spMigrationPhase
 import { importHistoricalSales } from "./spMigrationPhase2Sales";
 import { importContainers } from "./spMigrationPhase2Containers";
 import { resultRows, firstRow } from "../../lib/queryResult";
+import { validateRequest } from "../../lib/validateRequest";
+import {
+  importContainersInput,
+  importHistoricalSalesInput,
+  rollbackMigrationRunInput,
+} from "./spMigrationRequestSchemas";
 
 async function rollbackMigrationRun(req: Request, res: Response): Promise<unknown> {
   const runId = String(req.body?.runId ?? "");
@@ -146,9 +152,27 @@ export function registerSpMigrationPhase2Routes(app: Express): void {
 
   // registerSpRoutes runs before the legacy migration router, so these focused
   // handlers replace the older incomplete Step 6/7 and rollback implementations.
-  app.post("/api/sp/migration/gc-sales-readonly", requireAuth, requireRole("Developer"), importHistoricalSales);
-  app.post("/api/sp/migration/gc-containers", requireAuth, requireRole("Developer"), importContainers);
-  app.post("/api/sp/migration/rollback", requireAuth, requireRole("Developer"), rollbackMigrationRun);
+  app.post(
+    "/api/sp/migration/gc-sales-readonly",
+    requireAuth,
+    requireRole("Developer"),
+    validateRequest(importHistoricalSalesInput),
+    importHistoricalSales
+  );
+  app.post(
+    "/api/sp/migration/gc-containers",
+    requireAuth,
+    requireRole("Developer"),
+    validateRequest(importContainersInput),
+    importContainers
+  );
+  app.post(
+    "/api/sp/migration/rollback",
+    requireAuth,
+    requireRole("Developer"),
+    validateRequest(rollbackMigrationRunInput),
+    rollbackMigrationRun
+  );
 
   app.get(
     "/api/sp/migration/gc-suspense-review",

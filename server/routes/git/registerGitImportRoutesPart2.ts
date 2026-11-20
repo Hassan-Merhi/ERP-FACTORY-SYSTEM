@@ -6,10 +6,14 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { containers } from "../../../shared/schema";
 import { eq, or, sql } from "drizzle-orm";
 import { gitUpload, importUndoStore, pruneImportUndoStore } from "./_helpers";
 import { parseMoneyInput } from "../../lib/money";
+
+// Multipart upload of a single `file`; no form fields are read.
+const importExcelInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerGitImportRoutesPart2(app: Express) {
   // ─── Excel bulk import / update ───────────────────────────────────────────
@@ -30,6 +34,7 @@ export function registerGitImportRoutesPart2(app: Express) {
         return res.status(400).json({ message: err.message || "Invalid file upload." });
       });
     },
+    validateRequest(importExcelInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });

@@ -67,8 +67,8 @@ describe("supplier usage report", () => {
     let handler: (req: unknown, res: unknown) => Promise<void> = async () => undefined;
     registerFactorySupplierUsageReportRoutes(
       {
-        post: (_path: string, _auth: unknown, h: typeof handler) => {
-          handler = h;
+        post: (_path: string, ...chain: unknown[]) => {
+          handler = chain[chain.length - 1] as typeof handler;
         },
       } as never,
       (() => undefined) as never,

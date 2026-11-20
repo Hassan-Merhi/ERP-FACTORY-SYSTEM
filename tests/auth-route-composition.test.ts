@@ -42,7 +42,8 @@ describe("auth route composition", () => {
     expect(core).toContain('app.post("/api/auth/login"');
     expect(core).toContain("req.session.regenerate");
     expect(core).toContain('app.post("/api/auth/confirm-password"');
-    expect(users).toContain('app.post("/api/user-company-roles"');
+    // Whitespace-insensitive: the registration is formatted across lines once guards are added.
+    expect(users.replace(/\s+/g, "")).toContain('app.post("/api/user-company-roles"');
     expect(access).toContain('app.get("/api/my-locations"');
     expect(companies).toContain('app.post("/api/auth/set-company"');
     expect(audit).toContain('requireExportAccess("exp_audit_log")');

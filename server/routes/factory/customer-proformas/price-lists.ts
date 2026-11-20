@@ -10,6 +10,12 @@ import { pool } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { parseMoneyInput } from "../../../lib/money";
 import { normalizeProformaDestination } from "./destination";
+import { validateRequest } from "../../../lib/validateRequest";
+import {
+  deletePriceListEntryInput,
+  priceListFromProformaInput,
+  savePriceListInput,
+} from "./customerProformaRouteSchemas";
 
 export function registerFactoryCustomerPriceListRoutes(app: Express) {
   // Destinations with a proforma or an explicitly saved destination price list.
@@ -34,9 +40,13 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
            WHERE company_id = $1 AND customer_id = $2`,
           [companyId, customerId]
         );
-        const destinations = [...new Set(
-          result.rows.map((row) => normalizeProformaDestination(row.destination)).filter((value): value is string => !!value)
-        )].sort((a, b) => a.localeCompare(b));
+        const destinations = [
+          ...new Set(
+            result.rows
+              .map((row) => normalizeProformaDestination(row.destination))
+              .filter((value): value is string => !!value)
+          ),
+        ].sort((a, b) => a.localeCompare(b));
         return res.json(destinations);
       } catch (e: unknown) {
         return res.status(500).json({ message: getErrorMessage(e) });
@@ -97,6 +107,7 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
   app.post(
     "/api/factory/customer-price-lists/:customerId/from-proforma/:proformaId",
     requireAuth,
+    validateRequest(priceListFromProformaInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -156,6 +167,7 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
   app.put(
     "/api/factory/customer-price-lists/:customerId",
     requireAuth,
+    validateRequest(savePriceListInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -207,6 +219,7 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
   app.delete(
     "/api/factory/customer-price-lists/:customerId/:articleCode",
     requireAuth,
+    validateRequest(deletePriceListEntryInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -214,9 +227,8 @@ export function registerFactoryCustomerPriceListRoutes(app: Express) {
         const customerId = parseInt(req.params.customerId, 10);
         if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customerId" });
         const articleCode = req.params.articleCode;
-        const destination = req.query.destination === undefined
-          ? null
-          : normalizeProformaDestination(req.query.destination);
+        const destination =
+          req.query.destination === undefined ? null : normalizeProformaDestination(req.query.destination);
         if (req.query.destination !== undefined && !destination) {
           return res.status(400).json({ message: "Valid destination is required" });
         }

@@ -6,12 +6,16 @@ import { logger } from "../../lib/logger";
 import { recalculateOrderTotals } from "../factory/_helpers";
 import { customerOrders } from "@shared/schema";
 import { inArray } from "drizzle-orm";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const recalculateFactoryOrderTotalsInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerFactoryOrderRepairRoutes(app: Express) {
   app.post(
     "/api/admin/recalculate-factory-order-totals",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(recalculateFactoryOrderTotalsInput),
     async (req: Request, res: Response) => {
       try {
         const statuses = ["LOADING", "PENDING_VERIFICATION", "VERIFIED", "FINALIZED"];

@@ -10,6 +10,17 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { systemSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { encryptToken } from "./_helpers";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// The handler answers its own 400 when neither field is given.
+const updateGithubSettingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    repoUrl: z.string().nullable().optional(),
+    token: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerChatbotGithubSettingsRoutes(app: Express) {
   // ── GitHub settings ────────────────────────────────────────────────────────
@@ -45,45 +56,51 @@ export function registerChatbotGithubSettingsRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/chatbot/github-settings", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const userRole = req.session.currentRole;
-      if (userRole !== "Admin" && userRole !== "Owner" && userRole !== "Developer") {
-        return res.status(403).json({ message: "Only Admin/Developer users can configure GitHub settings" });
-      }
-
-      const { repoUrl, token } = req.body;
-      if (!repoUrl && !token) {
-        return res.status(400).json({ message: "repoUrl or token is required" });
-      }
-
-      // Helper to upsert a systemSettings key
-      const upsertSetting = async (key: string, value: string) => {
-        const existing = await db
-          .select({ id: systemSettings.id })
-          .from(systemSettings)
-          .where(eq(systemSettings.key, key))
-          .limit(1);
-        if (existing.length > 0) {
-          await db.update(systemSettings).set({ value, updatedAt: new Date() }).where(eq(systemSettings.key, key));
-        } else {
-          await db.insert(systemSettings).values({ key, value });
+  app.patch(
+    "/api/chatbot/github-settings",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateGithubSettingsInput),
+    async (req, res) => {
+      try {
+        const userRole = req.session.currentRole;
+        if (userRole !== "Admin" && userRole !== "Owner" && userRole !== "Developer") {
+          return res.status(403).json({ message: "Only Admin/Developer users can configure GitHub settings" });
         }
-      };
 
-      if (repoUrl && typeof repoUrl === "string" && repoUrl.trim()) {
-        // Strip any accidentally embedded token from URL — token is stored separately
-        const cleanUrl = repoUrl.trim().replace(/https?:\/\/[^@]+@/, "https://");
-        await upsertSetting("github_repo_url", cleanUrl);
+        const { repoUrl, token } = req.body;
+        if (!repoUrl && !token) {
+          return res.status(400).json({ message: "repoUrl or token is required" });
+        }
+
+        // Helper to upsert a systemSettings key
+        const upsertSetting = async (key: string, value: string) => {
+          const existing = await db
+            .select({ id: systemSettings.id })
+            .from(systemSettings)
+            .where(eq(systemSettings.key, key))
+            .limit(1);
+          if (existing.length > 0) {
+            await db.update(systemSettings).set({ value, updatedAt: new Date() }).where(eq(systemSettings.key, key));
+          } else {
+            await db.insert(systemSettings).values({ key, value });
+          }
+        };
+
+        if (repoUrl && typeof repoUrl === "string" && repoUrl.trim()) {
+          // Strip any accidentally embedded token from URL — token is stored separately
+          const cleanUrl = repoUrl.trim().replace(/https?:\/\/[^@]+@/, "https://");
+          await upsertSetting("github_repo_url", cleanUrl);
+        }
+
+        if (token && typeof token === "string" && token.trim()) {
+          await upsertSetting("github_token", encryptToken(token.trim()));
+        }
+
+        res.json({ success: true });
+      } catch (_error: unknown) {
+        res.status(500).json({ message: "Internal server error" });
       }
-
-      if (token && typeof token === "string" && token.trim()) {
-        await upsertSetting("github_token", encryptToken(token.trim()));
-      }
-
-      res.json({ success: true });
-    } catch (_error: unknown) {
-      res.status(500).json({ message: "Internal server error" });
     }
-  });
+  );
 }

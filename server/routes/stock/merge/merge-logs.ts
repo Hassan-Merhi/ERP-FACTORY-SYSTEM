@@ -12,6 +12,18 @@ import { stockItems, stockItemCodeAliases, stockItemMergeLogs } from "@shared/sc
 import { eq, and, desc, sql } from "drizzle-orm";
 import { registerStockMergeLogRoutesPart1 } from "./registerStockMergeLogRoutesPart1";
 
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// MergeHistoryCard sends both ids; the handler keeps its own required check.
+const historicalRestoreInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    mergedItemId: z.union([z.number(), z.string()]).nullable().optional(),
+    keptItemId: z.union([z.number(), z.string()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerStockMergeLogRoutes(app: Express) {
   // ── Merge Logs: GET /api/stock-items/merge-logs ──────────────────────────
   app.get("/api/stock-items/merge-logs", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
@@ -87,6 +99,7 @@ export function registerStockMergeLogRoutes(app: Express) {
     "/api/stock-items/merge-logs/historical-restore",
     requireAuth,
     requireNonPOS,
+    validateRequest(historicalRestoreInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;

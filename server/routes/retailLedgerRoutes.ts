@@ -15,6 +15,7 @@ import { requireAuth, requireNonPOS, requireRole } from "../auth";
 import { db } from "../db";
 import { closedPeriodErrorResponse } from "../lib/closedPeriodError";
 import { getErrorMessage, HttpError } from "../lib/httpHandlers";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { currentUserId, requireRetailCompany } from "./pos/retailPosContext";
 import {
   RETAIL_CASH_REASON_CODE,
@@ -47,6 +48,23 @@ const reasonsSchema = z.object({
     .max(50),
 });
 
+const saveCashReasonsInput = {
+  query: emptyQuery,
+  body: reasonsSchema
+    .extend({ reasons: z.array(reasonsSchema.shape.reasons.element.strict()).min(1).max(50) })
+    .strict(),
+} satisfies RequestSchemas;
+
+// The handler keeps its confirmation, date and plan hash checks.
+const applyInventoryOpeningInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    openingDate: z.string().optional(),
+    planHash: z.string().optional(),
+    confirm: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+
 function sendError(res: import("express").Response, error: unknown) {
   if (error instanceof RetailInventoryOpeningRefusal) return res.status(error.statusCode).json(error.body);
   if (error instanceof RetailAccountConflictError) {
@@ -71,28 +89,34 @@ export function registerRetailLedgerRoutes(app: Express): void {
     }
   });
 
-  app.put("/api/retail/financial/cash-reasons", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const body = reasonsSchema.parse(req.body);
-      const reasons = await db.transaction((tx) =>
-        saveRetailCashReasonAccountsTx(
-          tx,
-          companyId,
-          body.reasons.map((reason) => ({
-            reasonCode: reason.reasonCode,
-            ledgerAccountId: reason.ledgerAccountId ?? null,
-            bankAccountId: reason.bankAccountId ?? null,
-          })),
-          { userId: currentUserId(req), username: req.user?.username ?? req.session.username ?? "unknown" }
-        )
-      );
-      res.json({ reasons, builtIn: RETAIL_CASH_REASONS });
-    } catch (error) {
-      sendError(res, error);
+  app.put(
+    "/api/retail/financial/cash-reasons",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(saveCashReasonsInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const body = reasonsSchema.parse(req.body);
+        const reasons = await db.transaction((tx) =>
+          saveRetailCashReasonAccountsTx(
+            tx,
+            companyId,
+            body.reasons.map((reason) => ({
+              reasonCode: reason.reasonCode,
+              ledgerAccountId: reason.ledgerAccountId ?? null,
+              bankAccountId: reason.bankAccountId ?? null,
+            })),
+            { userId: currentUserId(req), username: req.user?.username ?? req.session.username ?? "unknown" }
+          )
+        );
+        res.json({ reasons, builtIn: RETAIL_CASH_REASONS });
+      } catch (error) {
+        sendError(res, error);
+      }
     }
-  });
+  );
 
   app.get("/api/retail/financial/inventory-opening/preview", requireAuth, requireRole("Owner"), async (req, res) => {
     try {
@@ -106,28 +130,34 @@ export function registerRetailLedgerRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/retail/financial/inventory-opening/apply", requireAuth, requireRole("Owner"), async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const openingDate = String(req.body?.openingDate ?? "");
-      if (!ISO_DATE.test(openingDate)) return res.status(400).json({ message: "Invalid date" });
-      const planHash = req.body?.planHash;
-      if (typeof planHash !== "string" || !PLAN_HASH.test(planHash)) {
-        return res.status(400).json({ message: "The reviewed plan hash is required" });
+  app.post(
+    "/api/retail/financial/inventory-opening/apply",
+    requireAuth,
+    requireRole("Owner"),
+    validateRequest(applyInventoryOpeningInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+        const openingDate = String(req.body?.openingDate ?? "");
+        if (!ISO_DATE.test(openingDate)) return res.status(400).json({ message: "Invalid date" });
+        const planHash = req.body?.planHash;
+        if (typeof planHash !== "string" || !PLAN_HASH.test(planHash)) {
+          return res.status(400).json({ message: "The reviewed plan hash is required" });
+        }
+        res.json(
+          await applyRetailInventoryOpening(companyId, {
+            openingDate,
+            planHash,
+            actor: { userId: currentUserId(req), username: req.user?.username ?? req.session.username ?? null },
+          })
+        );
+      } catch (error) {
+        sendError(res, error);
       }
-      res.json(
-        await applyRetailInventoryOpening(companyId, {
-          openingDate,
-          planHash,
-          actor: { userId: currentUserId(req), username: req.user?.username ?? req.session.username ?? null },
-        })
-      );
-    } catch (error) {
-      sendError(res, error);
     }
-  });
+  );
 
   app.get("/api/retail/financial/inventory-reconciliation", requireAuth, requireNonPOS, async (req, res) => {
     try {

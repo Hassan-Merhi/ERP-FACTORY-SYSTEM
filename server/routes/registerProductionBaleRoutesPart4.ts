@@ -8,6 +8,22 @@ import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../lib/money";
 import { baleProducts, baleSequences, mixBatches, pressingBatches, productionBales } from "@shared/schema";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const idValue = z.union([z.number(), z.string()]);
+
+// No screen calls this route today; the shape follows what the handler reads.
+const createBatchInput = {
+  body: z.strictObject({
+    mixBatchId: idValue.nullable().optional(),
+    productId: idValue.optional(),
+    locationId: idValue.nullable().optional(),
+    quantity: idValue.optional(),
+    weightPerBale: idValue.optional(),
+    mode: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerProductionBaleRoutesPart4(app: Express) {
   app.get("/api/production-bales/barcode/:barcode", requireAuth, async (req, res) => {
@@ -30,7 +46,7 @@ export function registerProductionBaleRoutesPart4(app: Express) {
     }
   });
 
-  app.post("/api/production-bales/create-batch", requireAuth, async (req, res) => {
+  app.post("/api/production-bales/create-batch", requireAuth, validateRequest(createBatchInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {

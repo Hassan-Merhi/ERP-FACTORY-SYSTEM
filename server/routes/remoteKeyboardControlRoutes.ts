@@ -22,6 +22,33 @@ import {
   isRemoteSupportCommandAuditAccepting,
 } from "../services/remoteSupportCommandAuditQueue";
 import { isRemoteKeyboardAllowedOnRoute } from "../services/remoteSupportSensitiveActionPolicy";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const sessionParams = z.strictObject({ sessionId: stringParam });
+const authorizationInput = { params: sessionParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+// The keyboard command service checks the type, text and key and answers with its own codes.
+const keyboardCommandInput = {
+  params: sessionParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    type: z.string().optional(),
+    text: z.string().optional(),
+    key: z.string().optional(),
+    shiftKey: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const keyboardResultInput = {
+  params: z.strictObject({ sessionId: stringParam, commandId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    tabId: z.string().optional(),
+    status: z.string().optional(),
+    reason: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 const STREAM_HEARTBEAT_MS = 5000;
 const keyboardPermission = requireActionAccess("remote_support_keyboard");
@@ -125,6 +152,7 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
     "/api/screen-feed/control/sessions/:sessionId/keyboard-authorization",
     requireAuth,
     keyboardPermission,
+    validateRequest(authorizationInput),
     async (req, res) => {
       if (!requireController(req, res)) return;
       try {
@@ -164,6 +192,7 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
     "/api/screen-feed/control/sessions/:sessionId/keyboard-authorization/revoke",
     requireAuth,
     keyboardPermission,
+    validateRequest(authorizationInput),
     async (req, res) => {
       if (!requireController(req, res)) return;
       try {
@@ -223,6 +252,7 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
     "/api/screen-feed/control/sessions/:sessionId/keyboard-commands",
     requireAuth,
     keyboardPermission,
+    validateRequest(keyboardCommandInput),
     async (req, res) => {
       if (!requireController(req, res)) return;
       try {
@@ -324,6 +354,7 @@ export function registerRemoteKeyboardControlRoutes(app: Express): void {
   app.post(
     "/api/screen-feed/control/sessions/:sessionId/keyboard-commands/:commandId/result",
     requireLogin,
+    validateRequest(keyboardResultInput),
     (req, res) => {
       try {
         const result = publishRemoteKeyboardCommandResult({

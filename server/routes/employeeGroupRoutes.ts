@@ -11,6 +11,57 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { employees, insertEmployeeGroupSchema } from "@shared/schema";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The handlers parse ids with parseInt and re-check the create body with
+// insertEmployeeGroupSchema, so these schemas only fix the shape.
+const groupIdParams = z.strictObject({ id: stringParam });
+const groupBodyFields = {
+  name: z.string().optional(),
+  description: z.string().optional(),
+  active: z.boolean().optional(),
+};
+
+const createEmployeeGroupInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    ...groupBodyFields,
+    groupType: z.enum(["Employee", "Worker"]).optional(),
+    companyId: z.unknown().optional(), // sent by client/src/pages/payroll/usePayrollGroupMutations.tsx; not used (session company wins)
+  }),
+} satisfies RequestSchemas;
+
+const updateEmployeeGroupInput = {
+  params: groupIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    name: z.string().optional(),
+    description: z.string().nullable().optional(),
+    groupType: z.string().optional(),
+    active: z.boolean().optional(),
+    companyId: z.number().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteGroupInput = { params: groupIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+const createWorkerGroupInput = {
+  query: emptyQuery,
+  body: z.strictObject({ ...groupBodyFields, groupType: z.unknown().optional() }),
+} satisfies RequestSchemas;
+
+const employeeMemberInput = {
+  params: z.strictObject({ groupId: stringParam, employeeId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
+const workerMemberInput = {
+  params: z.strictObject({ groupId: stringParam, workerId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerEmployeeGroupRoutes(app: Express) {
   // Employee Groups
@@ -45,7 +96,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
     }
   });
 
-  app.post("/api/employee-groups", requireAuth, async (req, res) => {
+  app.post("/api/employee-groups", requireAuth, validateRequest(createEmployeeGroupInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
@@ -61,7 +112,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/employee-groups/:id", requireAuth, async (req, res) => {
+  app.patch("/api/employee-groups/:id", requireAuth, validateRequest(updateEmployeeGroupInput), async (req, res) => {
     try {
       const group = await storage.updateEmployeeGroup(parseInt(req.params.id), req.body);
       res.json(group);
@@ -70,7 +121,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/employee-groups/:id", requireAuth, async (req, res) => {
+  app.delete("/api/employee-groups/:id", requireAuth, validateRequest(deleteGroupInput), async (req, res) => {
     try {
       await storage.deleteEmployeeGroup(parseInt(req.params.id));
       res.status(204).send();
@@ -88,41 +139,51 @@ export function registerEmployeeGroupRoutes(app: Express) {
     }
   });
 
-  app.post("/api/employee-groups/:groupId/members/:employeeId", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const groupId = parseInt(req.params.groupId);
-      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
-      const employeeId = parseInt(req.params.employeeId);
-      if (isNaN(employeeId)) return res.status(400).json({ message: "Invalid employee ID" });
-      const group = await storage.getEmployeeGroupById(groupId);
-      if (!group || group.companyId !== companyId) {
-        return res.status(403).json({ message: "Group not found or access denied" });
+  app.post(
+    "/api/employee-groups/:groupId/members/:employeeId",
+    requireAuth,
+    validateRequest(employeeMemberInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const groupId = parseInt(req.params.groupId);
+        if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+        const employeeId = parseInt(req.params.employeeId);
+        if (isNaN(employeeId)) return res.status(400).json({ message: "Invalid employee ID" });
+        const group = await storage.getEmployeeGroupById(groupId);
+        if (!group || group.companyId !== companyId) {
+          return res.status(403).json({ message: "Group not found or access denied" });
+        }
+        await storage.addEmployeeToGroup(groupId, employeeId);
+        res.status(201).send();
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      await storage.addEmployeeToGroup(groupId, employeeId);
-      res.status(201).send();
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
-  app.delete("/api/employee-groups/:groupId/members/:employeeId", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const groupId = parseInt(req.params.groupId);
-      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
-      const group = await storage.getEmployeeGroupById(groupId);
-      if (!group || group.companyId !== companyId) {
-        return res.status(403).json({ message: "Group not found or access denied" });
+  app.delete(
+    "/api/employee-groups/:groupId/members/:employeeId",
+    requireAuth,
+    validateRequest(employeeMemberInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const groupId = parseInt(req.params.groupId);
+        if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+        const group = await storage.getEmployeeGroupById(groupId);
+        if (!group || group.companyId !== companyId) {
+          return res.status(403).json({ message: "Group not found or access denied" });
+        }
+        await storage.removeEmployeeFromGroup(groupId, parseInt(req.params.employeeId));
+        res.status(204).send();
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      await storage.removeEmployeeFromGroup(groupId, parseInt(req.params.employeeId));
-      res.status(204).send();
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Worker Groups
   app.get("/api/worker-groups", requireAuth, async (req, res) => {
@@ -175,7 +236,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
     }
   });
 
-  app.post("/api/worker-groups", requireAuth, async (req, res) => {
+  app.post("/api/worker-groups", requireAuth, validateRequest(createWorkerGroupInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
@@ -192,7 +253,7 @@ export function registerEmployeeGroupRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/worker-groups/:id", requireAuth, async (req, res) => {
+  app.delete("/api/worker-groups/:id", requireAuth, validateRequest(deleteGroupInput), async (req, res) => {
     try {
       await storage.deleteEmployeeGroup(parseInt(req.params.id));
       res.status(204).send();
@@ -229,60 +290,70 @@ export function registerEmployeeGroupRoutes(app: Express) {
     }
   });
 
-  app.post("/api/worker-groups/:groupId/members/:workerId", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-      const companyId = req.session.currentCompanyId;
-      const groupId = parseInt(req.params.groupId);
-      const workerId = parseInt(req.params.workerId);
-      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
-      if (isNaN(workerId)) return res.status(400).json({ message: "Invalid worker ID" });
+  app.post(
+    "/api/worker-groups/:groupId/members/:workerId",
+    requireAuth,
+    validateRequest(workerMemberInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+        const companyId = req.session.currentCompanyId;
+        const groupId = parseInt(req.params.groupId);
+        const workerId = parseInt(req.params.workerId);
+        if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+        if (isNaN(workerId)) return res.status(400).json({ message: "Invalid worker ID" });
 
-      const group = await storage.getEmployeeGroupById(groupId);
-      if (!group || group.companyId !== companyId || group.groupType !== "Worker") {
-        return res.status(403).json({ message: "Worker group not found or access denied" });
-      }
+        const group = await storage.getEmployeeGroupById(groupId);
+        if (!group || group.companyId !== companyId || group.groupType !== "Worker") {
+          return res.status(403).json({ message: "Worker group not found or access denied" });
+        }
 
-      const [worker] = await db
-        .select()
-        .from(employees)
-        .where(and(eq(employees.id, workerId), eq(employees.companyId, companyId)));
-      if (!worker) {
-        return res.status(404).json({ message: "Worker not found" });
-      }
-      if (worker.employeeType !== "Worker") {
-        return res.status(400).json({ message: "Only Worker records can be added to worker groups" });
-      }
+        const [worker] = await db
+          .select()
+          .from(employees)
+          .where(and(eq(employees.id, workerId), eq(employees.companyId, companyId)));
+        if (!worker) {
+          return res.status(404).json({ message: "Worker not found" });
+        }
+        if (worker.employeeType !== "Worker") {
+          return res.status(400).json({ message: "Only Worker records can be added to worker groups" });
+        }
 
-      await storage.addEmployeeToGroup(groupId, workerId);
-      res.status(201).send();
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+        await storage.addEmployeeToGroup(groupId, workerId);
+        res.status(201).send();
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.delete("/api/worker-groups/:groupId/members/:workerId", requireAuth, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
+  app.delete(
+    "/api/worker-groups/:groupId/members/:workerId",
+    requireAuth,
+    validateRequest(workerMemberInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+        const companyId = req.session.currentCompanyId;
+        const groupId = parseInt(req.params.groupId);
+        const workerId = parseInt(req.params.workerId);
+        if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
+        if (isNaN(workerId)) return res.status(400).json({ message: "Invalid worker ID" });
+
+        const group = await storage.getEmployeeGroupById(groupId);
+        if (!group || group.companyId !== companyId || group.groupType !== "Worker") {
+          return res.status(403).json({ message: "Worker group not found or access denied" });
+        }
+
+        await storage.removeEmployeeFromGroup(groupId, workerId);
+        res.status(204).send();
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      const companyId = req.session.currentCompanyId;
-      const groupId = parseInt(req.params.groupId);
-      const workerId = parseInt(req.params.workerId);
-      if (isNaN(groupId)) return res.status(400).json({ message: "Invalid group ID" });
-      if (isNaN(workerId)) return res.status(400).json({ message: "Invalid worker ID" });
-
-      const group = await storage.getEmployeeGroupById(groupId);
-      if (!group || group.companyId !== companyId || group.groupType !== "Worker") {
-        return res.status(403).json({ message: "Worker group not found or access denied" });
-      }
-
-      await storage.removeEmployeeFromGroup(groupId, workerId);
-      res.status(204).send();
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

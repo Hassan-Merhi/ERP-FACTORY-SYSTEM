@@ -11,6 +11,41 @@ import { logger } from "../lib/logger";
 import { registerPosTransferDelegatedApprovalRoutes } from "./posTransferDelegatedApprovalRoutes";
 import { registerStockTransferOrderWaApprovalRoutes } from "./stockTransferOrderWaApprovalRoutes";
 import { getWaSettings, sendWhatsAppFileToChatId } from "../services/whatsappService";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Shapes sent by client/src/pages/settings/StockTransferExportWhatsAppSection.tsx
+// and client/src/pages/stock-transfer-order/SendStockTransferWhatsAppDialog.tsx.
+// The handlers keep their own value checks (group id pattern, 1-2 groups,
+// date format, item limits) and messages.
+const saveGroupInput = {
+  query: emptyQuery,
+  body: z.strictObject({ name: z.string().optional(), chatId: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const deleteGroupInput = {
+  params: z.strictObject({ groupId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
+const sendInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    groupIds: z.array(z.number()).optional(),
+    transferDate: z.string().optional(),
+    destination: z.string().optional(),
+    items: z
+      .array(
+        z.strictObject({
+          stockItemName: z.string().nullable().optional(),
+          sourceLocationName: z.string().nullable().optional(),
+          quantity: z.union([z.number(), z.string()]).nullable().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
 
 const groupIdPattern = /^\d{5,25}@g\.us$/;
 function companyId(req: Request) {
@@ -71,6 +106,7 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
     "/api/stock-transfer-order/whatsapp-groups",
     requireAuth,
     editPermission,
+    validateRequest(saveGroupInput),
     async (req: Request, res: Response) => {
       try {
         const id = companyId(req);
@@ -102,6 +138,7 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
     "/api/stock-transfer-order/whatsapp-groups/:groupId",
     requireAuth,
     editPermission,
+    validateRequest(deleteGroupInput),
     async (req: Request, res: Response) => {
       try {
         const id = companyId(req);
@@ -120,6 +157,7 @@ export function registerStockTransferExportWhatsAppRoutes(app: Express) {
     "/api/stock-transfer-order/send-whatsapp",
     requireAuth,
     sendPermission,
+    validateRequest(sendInput),
     async (req: Request, res: Response) => {
       try {
         const id = companyId(req);

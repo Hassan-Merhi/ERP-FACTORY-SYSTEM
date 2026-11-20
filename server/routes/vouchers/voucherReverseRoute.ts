@@ -1,6 +1,8 @@
 import type { Express, Request, Response } from "express";
 
 import { requireAuth, requireRole } from "../../auth";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { db } from "../../db";
 import { errorStatus, getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
@@ -22,11 +24,21 @@ const postingDependencies = createDatabasePostingDependencies();
  * and audited with the reason; the original is never changed. A second
  * reversal of the same voucher is 409 VOUCHER_ALREADY_REVERSED.
  */
+// The handler answers its own VOUCHER_ID_INVALID for the id, read with Number().
+const reverseVoucherInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: z
+    .strictObject({ reason: z.string().nullable().optional(), reversalDate: z.string().nullable().optional() })
+    .optional(),
+} satisfies RequestSchemas;
+
 export function registerVoucherReverseRoute(app: Express): void {
   app.post(
     "/api/vouchers/:id/reverse",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(reverseVoucherInput),
     async (req: Request, res: Response) => {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ code: "COMPANY_REQUIRED", message: "No company selected" });

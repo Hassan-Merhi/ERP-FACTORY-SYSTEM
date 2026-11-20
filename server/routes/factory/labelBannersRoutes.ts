@@ -1,4 +1,4 @@
-import type { Express, Request, Response, RequestHandler } from "express";
+import type { Express, NextFunction, Request, Response, RequestHandler } from "express";
 /**
  * labelBannersRoutes.ts
  * Manages label banner color slots — both the color metadata (DB) and the
@@ -21,6 +21,15 @@ import { db } from "../../db";
 import { labelDesignColors } from "../../../shared/schema";
 import { eq, asc } from "drizzle-orm";
 import { requireNonPOS } from "../../auth";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -30,6 +39,33 @@ const upload = multer({
     else cb(new Error("Only JPG, PNG or WEBP images are allowed"));
   },
 });
+
+/** Parses the optional "image" upload; a rejected file answers 400 with multer's message. */
+function labelImageUpload(req: Request, res: Response, next: NextFunction) {
+  upload.single("image")(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.message });
+    next();
+  });
+}
+
+const slugParams = z.strictObject({ slug: stringParam });
+// Multipart form fields (strings); the handler answers 400 when label or colorHex is missing.
+const createColorInput = {
+  query: emptyQuery,
+  body: z.strictObject({ label: z.string().optional(), colorHex: z.string().optional(), slug: z.string().optional() }),
+} satisfies RequestSchemas;
+const updateColorInput = {
+  params: slugParams,
+  query: emptyQuery,
+  body: z.strictObject({ label: z.string().optional(), colorHex: z.string().optional() }),
+} satisfies RequestSchemas;
+const deleteSlugInput = { params: slugParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+// Multipart: the banner image is the file; there are no form fields.
+const uploadBannerInput = {
+  params: z.strictObject({ slug: z.string().regex(/^[a-z0-9-]+$/) }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 function slugify(label: string): string {
   const dashed = label
@@ -119,11 +155,14 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
   });
 
   // ── POST /api/factory/label-design-colors — create new color (+ image) ─────
-  app.post("/api/factory/label-design-colors", requireAuth, requireNonPOS, (req: Request, res: Response) => {
-    upload.single("image")(req, res, async (err) => {
-      if (err) return res.status(400).json({ message: err.message });
-
-      const { label, colorHex, slug: slugOverride } = req.body;
+  app.post(
+    "/api/factory/label-design-colors",
+    requireAuth,
+    requireNonPOS,
+    labelImageUpload,
+    validateRequest(createColorInput),
+    async (req: Request, res: Response) => {
+      const { label, colorHex, slug: slugOverride } = validatedInput(req, createColorInput).body;
       if (!label || !colorHex) {
         return res.status(400).json({ message: "label and colorHex are required" });
       }
@@ -171,17 +210,19 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
       } catch (e: unknown) {
         res.status(500).json({ message: getErrorMessage(e) });
       }
-    });
-  });
+    }
+  );
 
   // ── PATCH /api/factory/label-design-colors/:slug — update label and/or hex ─
   app.patch(
     "/api/factory/label-design-colors/:slug",
     requireAuth,
     requireNonPOS,
+    validateRequest(updateColorInput),
     async (req: Request, res: Response) => {
-      const { slug } = req.params;
-      const { label, colorHex } = req.body;
+      const { params, body } = validatedInput(req, updateColorInput);
+      const { slug } = params;
+      const { label, colorHex } = body;
       if (!label && !colorHex) return res.status(400).json({ message: "Nothing to update" });
 
       try {
@@ -207,8 +248,9 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
     "/api/factory/label-design-colors/:slug",
     requireAuth,
     requireNonPOS,
+    validateRequest(deleteSlugInput),
     async (req: Request, res: Response) => {
-      const { slug } = req.params;
+      const { slug } = validatedInput(req, deleteSlugInput).params;
       try {
         const [row] = await db.select().from(labelDesignColors).where(eq(labelDesignColors.slug, slug));
         if (!row) return res.status(404).json({ message: "Color not found" });
@@ -223,12 +265,14 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
   );
 
   // ── POST /api/factory/label-banners/:slug — upload/replace banner image ────
-  app.post("/api/factory/label-banners/:slug", requireAuth, requireNonPOS, (req: Request, res: Response) => {
-    const { slug } = req.params;
-    if (!/^[a-z0-9-]+$/.test(slug)) return res.status(400).json({ message: "Invalid slug" });
-
-    upload.single("image")(req, res, async (err) => {
-      if (err) return res.status(400).json({ message: err.message });
+  app.post(
+    "/api/factory/label-banners/:slug",
+    requireAuth,
+    requireNonPOS,
+    labelImageUpload,
+    validateRequest(uploadBannerInput),
+    async (req: Request, res: Response) => {
+      const { slug } = validatedInput(req, uploadBannerInput).params;
       if (!req.file) return res.status(400).json({ message: "No image uploaded" });
 
       try {
@@ -248,21 +292,27 @@ export function registerLabelBannersRoutes(app: Express, requireAuth: RequestHan
       } catch (e: unknown) {
         res.status(500).json({ message: getErrorMessage(e) });
       }
-    });
-  });
+    }
+  );
 
   // ── DELETE /api/factory/label-banners/:slug — revert to default image ──────
-  app.delete("/api/factory/label-banners/:slug", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
-    const { slug } = req.params;
-    try {
-      await db
-        .update(labelDesignColors)
-        .set({ imageData: null, imageUpdatedAt: null })
-        .where(eq(labelDesignColors.slug, slug));
-      logger.info(`[LabelBanners] "${slug}" reverted to default`);
-      res.json({ slot: slug, hasCustom: false, lastModified: null });
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+  app.delete(
+    "/api/factory/label-banners/:slug",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deleteSlugInput),
+    async (req: Request, res: Response) => {
+      const { slug } = validatedInput(req, deleteSlugInput).params;
+      try {
+        await db
+          .update(labelDesignColors)
+          .set({ imageData: null, imageUpdatedAt: null })
+          .where(eq(labelDesignColors.slug, slug));
+        logger.info(`[LabelBanners] "${slug}" reverted to default`);
+        res.json({ slot: slug, hasCustom: false, lastModified: null });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 }

@@ -10,6 +10,14 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import {} from "../../chatService";
 import { users, systemSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// The handler answers its own 400 for a missing or unknown provider.
+const updateProviderInput = {
+  query: emptyQuery,
+  body: z.strictObject({ provider: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerChatbotStatusRoutes(app: Express) {
   app.get("/api/chatbot/status", requireAuth, async (req, res) => {
@@ -65,38 +73,44 @@ export function registerChatbotStatusRoutes(app: Express) {
   // Send a chat message
 
   // Update AI provider setting
-  app.patch("/api/chatbot/provider", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const userRole = req.session.currentRole;
-      if (userRole !== "Admin" && userRole !== "Owner" && userRole !== "Developer") {
-        return res.status(403).json({ message: "Only admins can change AI provider" });
+  app.patch(
+    "/api/chatbot/provider",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateProviderInput),
+    async (req, res) => {
+      try {
+        const userRole = req.session.currentRole;
+        if (userRole !== "Admin" && userRole !== "Owner" && userRole !== "Developer") {
+          return res.status(403).json({ message: "Only admins can change AI provider" });
+        }
+
+        const { provider } = req.body;
+        if (!provider || !["gemini", "chatgpt", "grok"].includes(provider.toLowerCase())) {
+          return res.status(400).json({ message: "Invalid provider. Must be gemini, chatgpt, or grok" });
+        }
+
+        const normalizedProvider = provider.toLowerCase();
+
+        // Check if setting exists
+        const existing = await db.select().from(systemSettings).where(eq(systemSettings.key, "ai_provider")).limit(1);
+
+        if (existing.length > 0) {
+          await db
+            .update(systemSettings)
+            .set({ value: normalizedProvider, updatedAt: new Date() })
+            .where(eq(systemSettings.key, "ai_provider"));
+        } else {
+          await db.insert(systemSettings).values({
+            key: "ai_provider",
+            value: normalizedProvider,
+          });
+        }
+
+        res.json({ success: true, provider: normalizedProvider });
+      } catch (_error: unknown) {
+        res.status(500).json({ message: "Internal server error" });
       }
-
-      const { provider } = req.body;
-      if (!provider || !["gemini", "chatgpt", "grok"].includes(provider.toLowerCase())) {
-        return res.status(400).json({ message: "Invalid provider. Must be gemini, chatgpt, or grok" });
-      }
-
-      const normalizedProvider = provider.toLowerCase();
-
-      // Check if setting exists
-      const existing = await db.select().from(systemSettings).where(eq(systemSettings.key, "ai_provider")).limit(1);
-
-      if (existing.length > 0) {
-        await db
-          .update(systemSettings)
-          .set({ value: normalizedProvider, updatedAt: new Date() })
-          .where(eq(systemSettings.key, "ai_provider"));
-      } else {
-        await db.insert(systemSettings).values({
-          key: "ai_provider",
-          value: normalizedProvider,
-        });
-      }
-
-      res.json({ success: true, provider: normalizedProvider });
-    } catch (_error: unknown) {
-      res.status(500).json({ message: "Internal server error" });
     }
-  });
+  );
 }

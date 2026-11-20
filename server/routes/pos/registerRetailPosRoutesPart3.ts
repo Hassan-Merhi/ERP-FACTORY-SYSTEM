@@ -27,15 +27,16 @@ import {
   type RetailSaleLineRequest,
 } from "../../services/retail/retailSaleService";
 import { aggregateRetailCartItems } from "../../services/retail/retailStockMath";
-import { saleSchema } from "./registerRetailPosRoutesPart1";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import { saleInput } from "./registerRetailPosRoutesPart1";
 
 export function registerRetailPosRoutesPart3(app: Express) {
-  app.post("/api/pos/retail/sales", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/sales", requireAuth, validateRequest(saleInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       const userId = currentUserId(req);
-      const body = saleSchema.parse(req.body);
+      const body = validatedInput(req, saleInput).body;
       await ensureCompanyLocation(companyId, body.locationId);
       const canSellNegativeStock = Boolean(req.user?.canSellNegativeStock);
 

@@ -11,77 +11,96 @@ import { customerOrders, customerProformas, customers } from "@shared/schema";
 import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { parseListPagination, setListPaginationHeaders } from "../../../lib/listPagination";
 import { canViewBookingInfo } from "./bookingInfo";
+import { z } from "zod";
+import {
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// The handler's parseId keeps its own "Valid order and customer IDs required" check.
+const changeCustomerInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ customerId: z.union([z.number(), z.string()]).optional() }),
+} satisfies RequestSchemas;
 
 export function registerOrderCrudRoutesPart1(app: Express) {
   // Reassign an unfinalized loading without touching its bales or creating
   // accounting entries. A proforma belongs to the original customer and
   // must be explicitly replaced after this move.
-  app.patch("/api/factory/customer-orders/:id/change-customer", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const role = String(req.session.currentRole || req.session.role || "").toLowerCase();
-      if (!["admin", "owner", "developer"].includes(role)) {
-        return res.status(403).json({ message: "Only Admin, Owner or Developer can reassign loadings" });
-      }
-      const orderId = parseId(req.params.id);
-      const customerId = parseId(req.body?.customerId);
-      if (orderId === null || customerId === null)
-        return res.status(400).json({ message: "Valid order and customer IDs required" });
-      const updated = await db.transaction(async (tx) => {
-        const [order] = await tx
-          .select()
-          .from(customerOrders)
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
-          .for("update");
-        if (!order || order.deletedAt) throw new HttpError(404, "Loading not found");
-        if (order.status !== "LOADING")
-          throw new HttpError(409, "Return the invoice to Loading before changing customer");
-        if (order.customerId === customerId) return order;
-        const [target] = await tx
-          .select({ id: customers.id })
-          .from(customers)
-          .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
-        if (!target) throw new HttpError(404, "Target customer not found in this company");
-        await tx.execute(
-          sql`DELETE FROM customer_order_expected_lines WHERE company_id = ${companyId} AND order_id = ${orderId}`
-        );
-        // Extras are priced for the old customer; never carry them to a new one.
-        await tx.execute(sql`DELETE FROM customer_order_extra_expected_lines
+  app.patch(
+    "/api/factory/customer-orders/:id/change-customer",
+    requireAuth,
+    validateRequest(changeCustomerInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const role = String(req.session.currentRole || req.session.role || "").toLowerCase();
+        if (!["admin", "owner", "developer"].includes(role)) {
+          return res.status(403).json({ message: "Only Admin, Owner or Developer can reassign loadings" });
+        }
+        const orderId = validatedInput(req, changeCustomerInput).params.id;
+        const customerId = parseId(req.body.customerId);
+        if (customerId === null) return res.status(400).json({ message: "Valid order and customer IDs required" });
+        const updated = await db.transaction(async (tx) => {
+          const [order] = await tx
+            .select()
+            .from(customerOrders)
+            .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+            .for("update");
+          if (!order || order.deletedAt) throw new HttpError(404, "Loading not found");
+          if (order.status !== "LOADING")
+            throw new HttpError(409, "Return the invoice to Loading before changing customer");
+          if (order.customerId === customerId) return order;
+          const [target] = await tx
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
+          if (!target) throw new HttpError(404, "Target customer not found in this company");
+          await tx.execute(
+            sql`DELETE FROM customer_order_expected_lines WHERE company_id = ${companyId} AND order_id = ${orderId}`
+          );
+          // Extras are priced for the old customer; never carry them to a new one.
+          await tx.execute(sql`DELETE FROM customer_order_extra_expected_lines
           WHERE company_id = ${companyId} AND order_id = ${orderId}`);
-        const [written] = await tx
-          .update(customerOrders)
-          .set({
-            customerId,
-            proformaIdUsed: null,
-            updatedAt: new Date(),
-          })
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
-          .returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || req.session.userId!,
-            companyId,
-            action: "update",
-            tableName: "factory_customer_orders",
-            recordId: orderId,
-            recordIdentifier: orderAuditIdentifier(order, orderId),
-            changes: {
-              customerId: { old: order.customerId, new: customerId },
-              proformaIdUsed: { old: order.proformaIdUsed, new: null },
+          const [written] = await tx
+            .update(customerOrders)
+            .set({
+              customerId,
+              proformaIdUsed: null,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+            .returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || req.session.userId!,
+              companyId,
+              action: "update",
+              tableName: "factory_customer_orders",
+              recordId: orderId,
+              recordIdentifier: orderAuditIdentifier(order, orderId),
+              changes: {
+                customerId: { old: order.customerId, new: customerId },
+                proformaIdUsed: { old: order.proformaIdUsed, new: null },
+              },
             },
-          },
-          tx
-        );
-        return written;
-      });
-      res.json(updated);
-    } catch (error: unknown) {
-      logger.error("Error reassigning loading customer:", { error });
-      sendHttpError(res, error);
+            tx
+          );
+          return written;
+        });
+        res.json(updated);
+      } catch (error: unknown) {
+        logger.error("Error reassigning loading customer:", { error });
+        sendHttpError(res, error);
+      }
     }
-  });
+  );
 
   app.get("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
     try {

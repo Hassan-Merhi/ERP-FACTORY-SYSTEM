@@ -96,13 +96,15 @@ describe("Stock Transfer Order WhatsApp approval Phase 2", () => {
   it("pins the new route and permission boundaries in the reviewed manifest", () => {
     expect(routeManifest.routeCount).toBe(routeManifest.routes.length);
     expect(routeManifest.middlewareMountCount).toBe(routeManifest.middlewareMounts.length);
-    expect(routeManifest.routes).toContain("POST /api/stock-transfer-orders [requireAuth > <anonymous>]");
     expect(routeManifest.routes).toContain(
-      "POST /api/stock-transfer-order/wa-approval/requests [requireAuth > <anonymous> > <anonymous>]"
+      "POST /api/stock-transfer-orders [requireAuth > validateRequest > <anonymous>]"
+    );
+    expect(routeManifest.routes).toContain(
+      "POST /api/stock-transfer-order/wa-approval/requests [requireAuth > <anonymous> > validateRequest > <anonymous>]"
     );
     expect(routeManifest.middlewareMounts).toContain("USE / [manifestAccessBoundary]");
     expect(accessManifest).toContain(
-      '{"id":"POST /api/stock-transfer-order/wa-approval/webhook#1","guards":"stockTransferOrderWaWebhookHandler","auth":"service-token","companyScope":"none","roles":"any","permission":"none"}'
+      '{"id":"POST /api/stock-transfer-order/wa-approval/webhook#1","guards":"validateRequest > stockTransferOrderWaWebhookHandler","auth":"service-token","companyScope":"none","roles":"any","permission":"none"}'
     );
   });
 });

@@ -12,6 +12,13 @@ import {
 } from "@shared/schema";
 import { checkFactoryAdmin } from "../../_helpers";
 import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../../lib/validateRequest";
+import {
   DATE_RE,
   getPositionState,
   replaceMemberships,
@@ -34,6 +41,28 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial().refine((v) => Object.keys(v).length > 0, "No changes supplied");
+
+// Request shapes for validateRequest. They only check the fields' types: the
+// handlers still parse with createSchema/updateSchema above, which coerce the
+// numbers, apply the defaults and answer their own 400s.
+const looseNumber = z.union([z.number(), z.string()]);
+const positionFields = {
+  name: z.string(),
+  targetBales: looseNumber,
+  bonusPerExtraBale: looseNumber,
+  bonusEnabled: z.boolean().optional(),
+  active: z.boolean().optional(),
+  workerIds: z.array(looseNumber).optional(),
+  effectiveFrom: z.string().optional(),
+};
+const positionParams = z.strictObject({ id: stringParam });
+const createPositionInput = { query: emptyQuery, body: z.strictObject(positionFields) } satisfies RequestSchemas;
+const updatePositionInput = {
+  params: positionParams,
+  query: emptyQuery,
+  body: z.strictObject(positionFields).partial(),
+} satisfies RequestSchemas;
+const archivePositionInput = { params: positionParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 async function validateWorkers(companyId: number, ids: number[]) {
   const unique = [...new Set(ids)];
@@ -159,112 +188,127 @@ export function registerProductionPositionRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/production-positions", requireAuth, async (req: Request, res: Response) => {
-    try {
-      if (!checkFactoryAdmin(req, res)) return;
-      const companyId = companyIdFor(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const body = createSchema.parse(req.body);
-      const workerIds = await validateWorkers(companyId, body.workerIds);
-      const effectiveFrom = body.effectiveFrom || todayIso();
-      const createdBy = actor(req);
-      const positionId = await db.transaction(async (tx) => {
-        const [position] = await tx
-          .insert(factoryProductionPositions)
-          .values({ companyId, name: body.name, active: body.active, createdBy })
-          .returning({ id: factoryProductionPositions.id });
-        await writeRuleVersion(
-          tx,
-          companyId,
-          position.id,
-          effectiveFrom,
-          {
-            targetBales: body.targetBales,
-            bonusPerExtraBale: String(body.bonusPerExtraBale),
-            bonusEnabled: body.bonusEnabled,
-          },
-          createdBy
-        );
-        if (body.active) await replaceMemberships(tx, companyId, position.id, effectiveFrom, workerIds, createdBy);
-        return position.id;
-      });
-      res.status(201).json(await getPositionState(companyId, positionId, effectiveFrom));
-    } catch (e: unknown) {
-      res.status(400).json({ message: getErrorMessage(e) });
-    }
-  });
-
-  app.patch("/api/factory/production-positions/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      if (!checkFactoryAdmin(req, res)) return;
-      const companyId = companyIdFor(req);
-      const positionId = Number(req.params.id);
-      if (!companyId || !Number.isInteger(positionId)) return res.status(400).json({ message: "Invalid request" });
-      const body = updateSchema.parse(req.body);
-      const effectiveFrom = body.effectiveFrom || todayIso();
-      const current = await getPositionState(companyId, positionId, effectiveFrom);
-      if (!current) return res.status(404).json({ message: "Production position not found" });
-      const workerIds =
-        body.workerIds === undefined ? current.workerIds : await validateWorkers(companyId, body.workerIds);
-      const targetBales = body.targetBales ?? current.targetBales;
-      const bonusPerExtraBale = body.bonusPerExtraBale ?? Number(current.bonusPerExtraBale || 0);
-      const bonusEnabled = body.bonusEnabled ?? current.bonusEnabled;
-      const active = body.active ?? current.active;
-      const createdBy = actor(req);
-      await db.transaction(async (tx) => {
-        await tx
-          .update(factoryProductionPositions)
-          .set({ name: body.name ?? current.name, active, updatedAt: new Date() })
-          .where(
-            and(eq(factoryProductionPositions.id, positionId), eq(factoryProductionPositions.companyId, companyId))
-          );
-        const ruleChanged =
-          targetBales !== current.targetBales ||
-          Number(bonusPerExtraBale) !== Number(current.bonusPerExtraBale || 0) ||
-          bonusEnabled !== current.bonusEnabled;
-        if (ruleChanged || !current.ruleEffectiveFrom) {
+  app.post(
+    "/api/factory/production-positions",
+    requireAuth,
+    validateRequest(createPositionInput),
+    async (req: Request, res: Response) => {
+      try {
+        if (!checkFactoryAdmin(req, res)) return;
+        const companyId = companyIdFor(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const body = createSchema.parse(req.body);
+        const workerIds = await validateWorkers(companyId, body.workerIds);
+        const effectiveFrom = body.effectiveFrom || todayIso();
+        const createdBy = actor(req);
+        const positionId = await db.transaction(async (tx) => {
+          const [position] = await tx
+            .insert(factoryProductionPositions)
+            .values({ companyId, name: body.name, active: body.active, createdBy })
+            .returning({ id: factoryProductionPositions.id });
           await writeRuleVersion(
             tx,
             companyId,
-            positionId,
+            position.id,
             effectiveFrom,
             {
-              targetBales,
-              bonusPerExtraBale: String(bonusPerExtraBale),
-              bonusEnabled,
+              targetBales: body.targetBales,
+              bonusPerExtraBale: String(body.bonusPerExtraBale),
+              bonusEnabled: body.bonusEnabled,
             },
             createdBy
           );
-        }
-        await replaceMemberships(tx, companyId, positionId, effectiveFrom, active ? workerIds : [], createdBy);
-      });
-      res.json(await getPositionState(companyId, positionId, effectiveFrom));
-    } catch (e: unknown) {
-      res.status(400).json({ message: getErrorMessage(e) });
+          if (body.active) await replaceMemberships(tx, companyId, position.id, effectiveFrom, workerIds, createdBy);
+          return position.id;
+        });
+        res.status(201).json(await getPositionState(companyId, positionId, effectiveFrom));
+      } catch (e: unknown) {
+        res.status(400).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
-  app.delete("/api/factory/production-positions/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      if (!checkFactoryAdmin(req, res)) return;
-      const companyId = companyIdFor(req);
-      const positionId = Number(req.params.id);
-      if (!companyId || !Number.isInteger(positionId)) return res.status(400).json({ message: "Invalid request" });
-      const effectiveFrom = todayIso();
-      const position = await getPositionState(companyId, positionId, effectiveFrom);
-      if (!position) return res.status(404).json({ message: "Production position not found" });
-      await db.transaction(async (tx) => {
-        await tx
-          .update(factoryProductionPositions)
-          .set({ active: false, updatedAt: new Date() })
-          .where(
-            and(eq(factoryProductionPositions.id, positionId), eq(factoryProductionPositions.companyId, companyId))
-          );
-        await replaceMemberships(tx, companyId, positionId, effectiveFrom, [], actor(req));
-      });
-      res.json({ ok: true, archived: true });
-    } catch (e: unknown) {
-      res.status(400).json({ message: getErrorMessage(e) });
+  app.patch(
+    "/api/factory/production-positions/:id",
+    requireAuth,
+    validateRequest(updatePositionInput),
+    async (req: Request, res: Response) => {
+      try {
+        if (!checkFactoryAdmin(req, res)) return;
+        const companyId = companyIdFor(req);
+        const positionId = Number(req.params.id);
+        if (!companyId || !Number.isInteger(positionId)) return res.status(400).json({ message: "Invalid request" });
+        const body = updateSchema.parse(req.body);
+        const effectiveFrom = body.effectiveFrom || todayIso();
+        const current = await getPositionState(companyId, positionId, effectiveFrom);
+        if (!current) return res.status(404).json({ message: "Production position not found" });
+        const workerIds =
+          body.workerIds === undefined ? current.workerIds : await validateWorkers(companyId, body.workerIds);
+        const targetBales = body.targetBales ?? current.targetBales;
+        const bonusPerExtraBale = body.bonusPerExtraBale ?? Number(current.bonusPerExtraBale || 0);
+        const bonusEnabled = body.bonusEnabled ?? current.bonusEnabled;
+        const active = body.active ?? current.active;
+        const createdBy = actor(req);
+        await db.transaction(async (tx) => {
+          await tx
+            .update(factoryProductionPositions)
+            .set({ name: body.name ?? current.name, active, updatedAt: new Date() })
+            .where(
+              and(eq(factoryProductionPositions.id, positionId), eq(factoryProductionPositions.companyId, companyId))
+            );
+          const ruleChanged =
+            targetBales !== current.targetBales ||
+            Number(bonusPerExtraBale) !== Number(current.bonusPerExtraBale || 0) ||
+            bonusEnabled !== current.bonusEnabled;
+          if (ruleChanged || !current.ruleEffectiveFrom) {
+            await writeRuleVersion(
+              tx,
+              companyId,
+              positionId,
+              effectiveFrom,
+              {
+                targetBales,
+                bonusPerExtraBale: String(bonusPerExtraBale),
+                bonusEnabled,
+              },
+              createdBy
+            );
+          }
+          await replaceMemberships(tx, companyId, positionId, effectiveFrom, active ? workerIds : [], createdBy);
+        });
+        res.json(await getPositionState(companyId, positionId, effectiveFrom));
+      } catch (e: unknown) {
+        res.status(400).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
+
+  app.delete(
+    "/api/factory/production-positions/:id",
+    requireAuth,
+    validateRequest(archivePositionInput),
+    async (req: Request, res: Response) => {
+      try {
+        if (!checkFactoryAdmin(req, res)) return;
+        const companyId = companyIdFor(req);
+        const positionId = Number(req.params.id);
+        if (!companyId || !Number.isInteger(positionId)) return res.status(400).json({ message: "Invalid request" });
+        const effectiveFrom = todayIso();
+        const position = await getPositionState(companyId, positionId, effectiveFrom);
+        if (!position) return res.status(404).json({ message: "Production position not found" });
+        await db.transaction(async (tx) => {
+          await tx
+            .update(factoryProductionPositions)
+            .set({ active: false, updatedAt: new Date() })
+            .where(
+              and(eq(factoryProductionPositions.id, positionId), eq(factoryProductionPositions.companyId, companyId))
+            );
+          await replaceMemberships(tx, companyId, positionId, effectiveFrom, [], actor(req));
+        });
+        res.json({ ok: true, archived: true });
+      } catch (e: unknown) {
+        res.status(400).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
 }

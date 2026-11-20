@@ -1,5 +1,6 @@
 // Extracted from ./whatsappRoutes.ts to keep that module under the source-size cap.
 import type { Express } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { requireAuth } from "../auth";
 import { pool } from "../db";
@@ -14,6 +15,30 @@ import {
 import { generateMonthEnds, generateNetPositionExcel } from "../helpers/generateNetPositionExcel";
 import { getClientDate } from "../lib/dateUtils";
 import { registerWhatsAppRoutesPart3 } from "./registerWhatsAppRoutesPart3";
+import { validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Absent (or null, for the ?? fields) keeps the stored value.
+const saveSettingsInput = {
+  body: z.strictObject({
+    instanceId: z.string().nullable().optional(),
+    // "" or the masked "••••••" keeps the stored token.
+    apiToken: z.string().nullable().optional(),
+    enabled: z.boolean().optional(),
+    monthlyAutoSend: z.boolean().optional(),
+    dailyAutoSend: z.boolean().optional(),
+    dailyRecipientId: z.union([z.number(), z.string()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const sendNetPositionInput = {
+  body: z.strictObject({
+    // parseInt; honoured for Admin/Developer only.
+    companyId: z.union([z.number(), z.string()]).nullable().optional(),
+    // "" falls back to the defaults like an absent date.
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerWhatsAppRoutesPart1(app: Express) {
   // ── Settings (singleton row id=1) ──────────────────────────────────────────
@@ -47,7 +72,7 @@ export function registerWhatsAppRoutesPart1(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/settings", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/settings", requireAuth, validateRequest(saveSettingsInput), async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
 
@@ -106,7 +131,7 @@ export function registerWhatsAppRoutesPart1(app: Express) {
 
   // ── Send net-position Excel manually ───────────────────────────────────────
 
-  app.post("/api/whatsapp/send-net-position", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp/send-net-position", requireAuth, validateRequest(sendNetPositionInput), async (req, res) => {
     const _t = Date.now();
     const _uid = req.session.userId;
     const _cid = req.session.currentCompanyId;

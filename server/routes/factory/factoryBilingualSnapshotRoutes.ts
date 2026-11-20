@@ -5,6 +5,8 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireActionAccess } from "../../lib/permissionMiddleware";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { z } from "zod";
 import { writeAuditEvent } from "../../services/audit/auditService";
 import {
   applyFactoryBilingualSnapshotBackfill,
@@ -31,6 +33,20 @@ function booleanValue(value: unknown): boolean {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+// booleanValue() reads true/"true"/1/"1" as true and anything else as false.
+const backfillFlag = z.union([z.boolean(), z.string(), z.number()]).nullable().optional();
+const backfillInput = {
+  query: emptyQuery,
+  body: z
+    .strictObject({
+      apply: backfillFlag,
+      includeFinalized: backfillFlag,
+      overwrite: backfillFlag,
+      confirmation: z.string().nullable().optional(),
+    })
+    .optional(),
+} satisfies RequestSchemas;
+
 function positiveId(value: unknown): number | null {
   const id = Number(value);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
@@ -55,24 +71,15 @@ function shouldPopulateAfterWrite(req: Request): boolean {
   );
 }
 
-function scopeFromRequest(
-  req: Request,
-  payload: unknown,
-  requestPath: string
-): FactoryBilingualSnapshotScope | null {
+function scopeFromRequest(req: Request, payload: unknown, requestPath: string): FactoryBilingualSnapshotScope | null {
   const responseRecord =
-    payload && typeof payload === "object" && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
-      : null;
+    payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : null;
   const responseId = positiveId(responseRecord?.id);
 
   // The compact bale-scan response tells us exactly which two snapshot rows
   // changed. Keep this synchronous post-write work row-scoped instead of
   // replaying every order-linked snapshot target before acknowledging a scan.
-  if (
-    /^\/customer-orders\/\d+\/bales$/.test(requestPath) &&
-    responseRecord?.compactBaleScan === true
-  ) {
+  if (/^\/customer-orders\/\d+\/bales$/.test(requestPath) && responseRecord?.compactBaleScan === true) {
     const baleRecord =
       responseRecord.bale && typeof responseRecord.bale === "object" && !Array.isArray(responseRecord.bale)
         ? (responseRecord.bale as Record<string, unknown>)
@@ -109,7 +116,8 @@ function scopeFromRequest(
 
   // Creation endpoints expose the newly-created resource id in their response.
   if (responseId) {
-    if (requestPath === "/customer-orders" || requestPath === "/customer-orders-loading") return { orderId: responseId };
+    if (requestPath === "/customer-orders" || requestPath === "/customer-orders-loading")
+      return { orderId: responseId };
     if (requestPath === "/customer-proformas") return { proformaId: responseId };
     if (requestPath === "/bales") return { baleId: responseId };
   }
@@ -117,11 +125,7 @@ function scopeFromRequest(
   return null;
 }
 
-async function populateAfterSuccessfulWrite(
-  req: Request,
-  payload: unknown,
-  requestPath: string
-): Promise<void> {
+async function populateAfterSuccessfulWrite(req: Request, payload: unknown, requestPath: string): Promise<void> {
   const companyId = getFactoryCompanyId(req);
   if (!companyId) return;
 
@@ -164,13 +168,8 @@ function factoryBilingualSnapshotWriteMiddleware(req: Request, res: Response, ne
     if (res.statusCode < 200 || res.statusCode >= 300) return originalJson(payload);
 
     const responseRecord =
-      payload && typeof payload === "object" && !Array.isArray(payload)
-        ? (payload as Record<string, unknown>)
-        : null;
-    if (
-      /^\/customer-orders\/\d+\/bales$/.test(requestPath) &&
-      responseRecord?.compactBaleScan === true
-    ) {
+      payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as Record<string, unknown>) : null;
+    if (/^\/customer-orders\/\d+\/bales$/.test(requestPath) && responseRecord?.compactBaleScan === true) {
       // Compact scans persist the Arabic bale and order-line snapshots inside
       // the scan transaction. Avoid the generic resolver UPDATE here: live
       // production evidence showed that one-row backfill dominating scan latency.
@@ -219,6 +218,7 @@ export function registerFactoryBilingualSnapshotRoutes(app: Express): void {
     "/api/factory/bilingual-snapshots/backfill",
     requireAuth,
     requireActionAccess("act_import_data"),
+    validateRequest(backfillInput),
     async (req: Request, res: Response) => {
       try {
         if (!isAdmin(req)) {

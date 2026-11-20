@@ -21,6 +21,8 @@ import {
   type ReverseOffloadOutcome,
 } from "./findConsumingMixBatchCodes";
 import { handlePostFactoryContainersIdReverseOffloadStep2 } from "./handlePostFactoryContainersIdReverseOffloadStep2";
+import { validateRequest } from "../../../lib/validateRequest";
+import { reverseOffloadInput } from "./containerChargeRouteSchemas";
 
 /**
  * POST /api/factory/containers/:id/reverse-offload — undoes an offload,
@@ -32,25 +34,30 @@ import { handlePostFactoryContainersIdReverseOffloadStep2 } from "./handlePostFa
  * so config/route-manifest.json is unchanged.
  */
 export function registerRawStockReverseOffloadRoute(app: Express) {
-  app.post("/api/factory/containers/:id/reverse-offload", requireAuth, async (req, res) => {
-    try {
-      const step1Result = await handlePostFactoryContainersIdReverseOffloadStep1(req, res);
-      if (step1Result.done) return step1Result.value;
-      const { companyId, containerId, requestId } = step1Result;
-      const { reverseOffload } = handlePostFactoryContainersIdReverseOffloadStep2({ companyId, containerId }, req);
-      await handlePostFactoryContainersIdReverseOffloadStep3({ companyId, requestId, reverseOffload }, req, res);
-    } catch (error: unknown) {
-      if (error instanceof ReverseOffloadError) {
-        return res.status(error.status).json({ message: error.message });
+  app.post(
+    "/api/factory/containers/:id/reverse-offload",
+    requireAuth,
+    validateRequest(reverseOffloadInput),
+    async (req, res) => {
+      try {
+        const step1Result = await handlePostFactoryContainersIdReverseOffloadStep1(req, res);
+        if (step1Result.done) return step1Result.value;
+        const { companyId, containerId, requestId } = step1Result;
+        const { reverseOffload } = handlePostFactoryContainersIdReverseOffloadStep2({ companyId, containerId }, req);
+        await handlePostFactoryContainersIdReverseOffloadStep3({ companyId, requestId, reverseOffload }, req, res);
+      } catch (error: unknown) {
+        if (error instanceof ReverseOffloadError) {
+          return res.status(error.status).json({ message: error.message });
+        }
+        if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
+        if (error instanceof DurableFinancialOperationError) {
+          return res.status(financialOperationErrorStatus(error)).json({ message: error.message });
+        }
+        logger.error("Error reversing offload:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
-      if (error instanceof DurableFinancialOperationError) {
-        return res.status(financialOperationErrorStatus(error)).json({ message: error.message });
-      }
-      logger.error("Error reversing offload:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }
 
 async function handlePostFactoryContainersIdReverseOffloadStep3(

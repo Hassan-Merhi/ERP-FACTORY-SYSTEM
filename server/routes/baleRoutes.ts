@@ -7,6 +7,30 @@ import { factoryBales, baleLabelPrints, referenceSequences, factoryBaleSequences
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { LabelPrintRequestError, registerBaleRoutesPart1 } from "./registerBaleRoutesPart1";
 import { registerBaleRoutesPart2 } from "./registerBaleRoutesPart2";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const numberOrString = z.union([z.number(), z.string()]);
+
+const allocatePoolInput = {
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ count: numberOrString.nullable().optional() })]),
+} satisfies RequestSchemas;
+
+const labelPrintBale = z.strictObject({
+  productionBaleId: numberOrString.nullable().optional(),
+  productId: numberOrString.nullable().optional(),
+  articleCode: z.string().nullable().optional(),
+  // Pre-allocated offline reference (client/src/lib/refPool.ts pool).
+  referenceNumber: z.string().nullable().optional(),
+  pieces: numberOrString.nullable().optional(),
+  approxWeightKg: numberOrString.nullable().optional(),
+});
+
+const labelPrintsInput = {
+  query: emptyQuery,
+  body: z.strictObject({ bales: z.array(labelPrintBale).optional() }),
+} satisfies RequestSchemas;
 
 export function registerBaleRoutes(app: Express) {
   registerBaleRoutesPart1(app);
@@ -53,27 +77,32 @@ export function registerBaleRoutes(app: Express) {
   }
 
   // Bale Label Prints - pre-allocate a batch of reference numbers for offline label printing
-  app.post("/api/bale-label-prints/allocate-pool", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const count = Math.min(Math.max(parseInt(req.body?.count ?? "200", 10) || 200, 1), 500);
-      const refs = await db.transaction(async (tx) => {
-        const result: string[] = [];
-        for (let i = 0; i < count; i++) {
-          result.push(await generateSafeRef(tx, companyId));
-        }
-        return result;
-      });
-      res.json({ refs });
-    } catch (error: unknown) {
-      logger.error("Error allocating label ref pool:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/bale-label-prints/allocate-pool",
+    requireAuth,
+    validateRequest(allocatePoolInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const count = Math.min(Math.max(parseInt(req.body?.count ?? "200", 10) || 200, 1), 500);
+        const refs = await db.transaction(async (tx) => {
+          const result: string[] = [];
+          for (let i = 0; i < count; i++) {
+            result.push(await generateSafeRef(tx, companyId));
+          }
+          return result;
+        });
+        res.json({ refs });
+      } catch (error: unknown) {
+        logger.error("Error allocating label ref pool:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // Bale Label Prints - create label print records with unique reference numbers
-  app.post("/api/bale-label-prints", requireAuth, async (req, res) => {
+  app.post("/api/bale-label-prints", requireAuth, validateRequest(labelPrintsInput), async (req, res) => {
     try {
       // Print records and offline/standalone references keep the active
       // session company, exactly as before.

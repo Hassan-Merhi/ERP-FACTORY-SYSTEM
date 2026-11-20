@@ -2,11 +2,38 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { db } from "../db";
 import { requireAuth } from "../auth";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../lib/validateRequest";
 import { notifications, notificationRules, users, companies, customerOrders } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { NOTIFICATION_EVENT_TYPES } from "../lib/notificationService";
 
 const ALLOWED_ROLES = ["Developer", "Admin"];
+
+// The handler keeps its role check and its eventType / recipientUserIds checks.
+const notificationRulesInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    eventType: z.string().optional(),
+    recipientUserIds: z.array(z.string()).optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler keeps its parseInt / NaN check on the id.
+const markNotificationReadInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
+const markAllNotificationsReadInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerNotificationRoutes(app: Express) {
   // GET /api/notifications — current user's notifications for the active company, enriched with triggered-by username
@@ -145,10 +172,11 @@ export function registerNotificationRoutes(app: Express) {
   app.post(
     "/api/notifications/:id/read",
     requireAuth,
+    validateRequest(markNotificationReadInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const userId = req.session?.userId;
-        const id = parseInt(req.params.id);
+        const id = parseInt(validatedInput(req, markNotificationReadInput).params.id);
         if (!userId || isNaN(id)) return res.status(400).json({ message: "Invalid request" });
         await db
           .update(notifications)
@@ -165,6 +193,7 @@ export function registerNotificationRoutes(app: Express) {
   app.post(
     "/api/notifications/read-all",
     requireAuth,
+    validateRequest(markAllNotificationsReadInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const userId = req.session?.userId;
@@ -205,6 +234,7 @@ export function registerNotificationRoutes(app: Express) {
   app.put(
     "/api/notification-rules",
     requireAuth,
+    validateRequest(notificationRulesInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const role = req.session?.currentRole;

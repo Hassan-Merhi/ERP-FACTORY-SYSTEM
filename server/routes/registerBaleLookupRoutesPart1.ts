@@ -6,12 +6,21 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { writeAuditEvent } from "../services/audit/auditService";
 import { deletePhysicalFactoryBalesTx, PhysicalBaleDeletionError } from "./factory/stock/physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "./factory/customer-orders/priorityScanQueue";
 import { auditLog, baleLabelPrints, factoryBales } from "@shared/schema";
 import { baleLookupRoutesStep } from "./baleLookupRoutesStep";
 import { baleLookupRoutesStep2 } from "./baleLookupRoutesStep2";
+
+// Both actions take only the reference number from the path; clients send {}.
+const referenceActionInput = {
+  params: z.strictObject({ referenceNumber: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerBaleLookupRoutesPart1(app: Express) {
   // Lookup by REFERENCE number
@@ -71,54 +80,60 @@ export function registerBaleLookupRoutesPart1(app: Express) {
   });
 
   // Mark a label as scanned
-  app.post("/api/lookup/reference/:referenceNumber/scan", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.post(
+    "/api/lookup/reference/:referenceNumber/scan",
+    requireAuth,
+    validateRequest(referenceActionInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      const referenceNumber = decodeURIComponent(req.params.referenceNumber).trim().toUpperCase();
-      const labelMatches = await db
-        .select({ id: baleLabelPrints.id })
-        .from(baleLabelPrints)
-        .where(
-          and(
-            sql`LOWER(TRIM(${baleLabelPrints.referenceNumber})) = LOWER(TRIM(${referenceNumber}))`,
-            eq(baleLabelPrints.companyId, companyId)
+        const referenceNumber = decodeURIComponent(req.params.referenceNumber).trim().toUpperCase();
+        const labelMatches = await db
+          .select({ id: baleLabelPrints.id })
+          .from(baleLabelPrints)
+          .where(
+            and(
+              sql`LOWER(TRIM(${baleLabelPrints.referenceNumber})) = LOWER(TRIM(${referenceNumber}))`,
+              eq(baleLabelPrints.companyId, companyId)
+            )
           )
-        )
-        .limit(2);
+          .limit(2);
 
-      if (labelMatches.length === 0) {
-        return res.status(404).json({ message: "Reference number not found" });
+        if (labelMatches.length === 0) {
+          return res.status(404).json({ message: "Reference number not found" });
+        }
+        if (labelMatches.length > 1) {
+          return res.status(409).json({ message: "Reference number not found", code: "AMBIGUOUS_REFERENCE" });
+        }
+
+        const [updated] = await db
+          .update(baleLabelPrints)
+          .set({
+            scannedByUserId: req.session.userId || null,
+            scannedAt: new Date(),
+          })
+          .where(eq(baleLabelPrints.id, labelMatches[0].id))
+          .returning();
+
+        const scannedUser = await storage.getUser(req.session.userId!);
+        res.json({ ...updated, scannedByName: scannedUser?.username || null });
+      } catch (error: unknown) {
+        logger.error("Error scanning label:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      if (labelMatches.length > 1) {
-        return res.status(409).json({ message: "Reference number not found", code: "AMBIGUOUS_REFERENCE" });
-      }
-
-      const [updated] = await db
-        .update(baleLabelPrints)
-        .set({
-          scannedByUserId: req.session.userId || null,
-          scannedAt: new Date(),
-        })
-        .where(eq(baleLabelPrints.id, labelMatches[0].id))
-        .returning();
-
-      const scannedUser = await storage.getUser(req.session.userId!);
-      res.json({ ...updated, scannedByName: scannedUser?.username || null });
-    } catch (error: unknown) {
-      logger.error("Error scanning label:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Admin: Delete bale/reference everywhere (soft-delete the factory bale)
   app.delete(
     "/api/lookup/reference/:referenceNumber/delete-everywhere",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(referenceActionInput),
     async (req, res) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

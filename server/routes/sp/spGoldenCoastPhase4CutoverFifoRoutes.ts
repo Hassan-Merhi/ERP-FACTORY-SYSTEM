@@ -21,6 +21,9 @@ import {
 } from "../../services/accounting/goldenCoastPhase4CutoverFifo";
 import { requireSpCompany } from "./spHelpers";
 import { goldenCoastExistingPositionCarryForwardVoucherNumber } from "../../services/accounting/goldenCoastCutoverMarkers";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { spWriteFields } from "./spRequestSchemas";
 
 const phase4RequestBudget = privilegedRequestBudget({ maxBodyBytes: 8 * 1024, maxCollectionItems: 10 });
 /**
@@ -274,6 +277,9 @@ async function handleCutover(req: Request, res: Response): Promise<void> {
   }
 }
 
+// handleCutover reads no body field; the access-control fields are for the SP guard.
+const phase4CutoverFifoInput = { body: z.strictObject(spWriteFields) } satisfies RequestSchemas;
+
 export function registerSpGoldenCoastPhase4CutoverFifoRoutes(app: Express): void {
   // The SP access-control middleware is registered before this module. Intercept the
   // exact superseded Golden Coast mutation shapes without registering shadow routes,
@@ -294,6 +300,7 @@ export function registerSpGoldenCoastPhase4CutoverFifoRoutes(app: Express): void
     phase4RequestBudget,
     requireAuth,
     requireRole("Admin"),
+    validateRequest(phase4CutoverFifoInput),
     (req, res) => void handleCutover(req, res)
   );
 }

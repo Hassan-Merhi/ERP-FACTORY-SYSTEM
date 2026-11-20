@@ -11,11 +11,15 @@ import { factoryBaleImportBatches, factoryBales, factoryBaleSequences } from "@s
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { lineAmount, MoneyDecimal, toMoney } from "../../../lib/money";
 
+import { validateRequest } from "../../../lib/validateRequest";
+import { baleImportInput } from "./balesImportRoutesSchemas";
+
 export function registerBalesImportRoutesPart2(app: Express) {
   app.post(
     "/api/factory/import/bales",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(baleImportInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

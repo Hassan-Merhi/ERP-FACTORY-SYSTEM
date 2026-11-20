@@ -14,6 +14,19 @@ import {
   historicalBaleCostAuditPreview,
   type HistoricalBaleAuditGroup,
 } from "../../../services/factory/historicalBaleCostAudit";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// No client screen posts this yet; the shape is the one the handler reads. It
+// keeps its own confirm and plan-hash checks.
+const recostApplyInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    planHash: z.string().optional(),
+    confirmVerifiedSoldBales: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 const companyOf = (req: Request) => req.session.factoryCompanyId || req.session.currentCompanyId;
 
@@ -92,6 +105,7 @@ export function registerBaleRecostRoutes(app: Express) {
     "/api/factory/bale-cost/recost-apply",
     requireAuth,
     requireRole("Owner"),
+    validateRequest(recostApplyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = companyOf(req);

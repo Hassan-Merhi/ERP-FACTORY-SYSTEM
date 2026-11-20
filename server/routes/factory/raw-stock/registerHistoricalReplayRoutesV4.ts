@@ -5,6 +5,8 @@ import { inspectPhase5ReplayScopeSafety } from "../../../services/factory/histor
 import { logger } from "../../../lib/logger";
 import crypto from "crypto";
 import { requireAuth, requireRole } from "../../../auth";
+import { validateRequest } from "../../../lib/validateRequest";
+import { historicalReplayApplyInput } from "./rawStockWriteRouteSchemas";
 import { pool } from "../../../db";
 import {
   applyHistoricalCostReplay,
@@ -194,6 +196,7 @@ export function registerHistoricalReplayRoutesV4(app: Express): void {
     "/api/factory/raw-stock/recalc/historical-replay/apply",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(historicalReplayApplyInput),
     async (req, res) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       const userId = String(req.session.userId ?? "");

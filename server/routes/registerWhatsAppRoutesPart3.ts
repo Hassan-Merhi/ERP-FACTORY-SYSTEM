@@ -11,6 +11,28 @@ import {
   getWaSettingsById,
   normaliseChatId,
 } from "../services/whatsappService";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The recipient handlers parse :id with parseInt, so it stays a string here.
+const addRecipientInput = {
+  query: emptyQuery,
+  body: z.strictObject({ chatId: z.string().nullable().optional(), name: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+const updateRecipientInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ name: z.string().nullable().optional(), active: z.boolean().nullable().optional() }),
+} satisfies RequestSchemas;
+const deleteRecipientInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const savePosSettingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    instanceId: z.string().nullable().optional(),
+    apiToken: z.string().nullable().optional(),
+    enabled: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerWhatsAppRoutesPart3(app: Express) {
   app.get("/api/whatsapp/recipients", requireAuth, async (req, res) => {
@@ -35,7 +57,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/whatsapp/recipients", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp/recipients", requireAuth, validateRequest(addRecipientInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -60,7 +82,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/recipients/:id", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/recipients/:id", requireAuth, validateRequest(updateRecipientInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -82,7 +104,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.delete("/api/whatsapp/recipients/:id", requireAuth, async (req, res) => {
+  app.delete("/api/whatsapp/recipients/:id", requireAuth, validateRequest(deleteRecipientInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -134,7 +156,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/settings/pos", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/settings/pos", requireAuth, validateRequest(savePosSettingsInput), async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
       const existing = await getWaSettingsById(2);

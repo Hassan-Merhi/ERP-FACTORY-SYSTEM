@@ -8,6 +8,36 @@ import { logger } from "../../lib/logger";
 import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValuationService";
 import { applyCurrentCustomerFxOverlay } from "../../services/accounting/monetaryFxReportOverlay";
 import { requireCreateOnlyVerifiedCreate } from "../../services/security/createOnlyVerifiedCreates";
+import { z } from "zod";
+import { insertCustomerSchema } from "@shared/schema";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// customerService re-parses the body with insertCustomerSchema and answers its
+// own 400s, so every column stays optional here.
+const customerFields = insertCustomerSchema.omit({ companyId: true }).partial();
+// parseCustomerId answers its own 400 for a bad id.
+const customerIdParams = z.strictObject({ id: stringParam });
+
+const createCustomerInput = {
+  query: emptyQuery,
+  // A companyId other than the session company is refused with 403 below.
+  body: customerFields.extend({ companyId: z.union([z.number(), z.string()]).optional() }).strict(),
+} satisfies RequestSchemas;
+
+const updateCustomerInput = {
+  params: customerIdParams,
+  query: emptyQuery,
+  body: customerFields
+    .extend({
+      companyId: z.unknown().optional(), // sent by client/src/pages/useCompanyCustomersState.tsx; removed by the service
+      id: z.unknown().optional(), // sent by client/src/pages/useCompanyCustomersState.tsx; not used
+      // Checked for duplicates by the service, then dropped by insertCustomerSchema.
+      code: z.string().optional(),
+    })
+    .strict(),
+} satisfies RequestSchemas;
+
+const deleteCustomerInput = { params: customerIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerCustomerMasterRoutes(app: Express) {
   app.get("/api/customers/for-pos", requireAuth, async (req, res) => {
@@ -76,6 +106,7 @@ export function registerCustomerMasterRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireCreateOnlyVerifiedCreate("customers"),
+    validateRequest(createCustomerInput),
     async (req, res) => {
       try {
         const companyId = getActiveCustomerCompanyId(req);
@@ -92,7 +123,7 @@ export function registerCustomerMasterRoutes(app: Express) {
     }
   );
 
-  app.put("/api/customers/:id", requireAuth, requireNonPOS, async (req, res) => {
+  app.put("/api/customers/:id", requireAuth, requireNonPOS, validateRequest(updateCustomerInput), async (req, res) => {
     try {
       const companyId = getActiveCustomerCompanyId(req);
       const customerId = parseCustomerId(req.params.id);
@@ -103,14 +134,20 @@ export function registerCustomerMasterRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/customers/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = getActiveCustomerCompanyId(req);
-      const customerId = parseCustomerId(req.params.id);
-      await customerService.delete(customerId, companyId, getCustomerAuditActor(req));
-      return res.status(204).send();
-    } catch (error: unknown) {
-      return sendCustomerRouteError(res, error, 500);
+  app.delete(
+    "/api/customers/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deleteCustomerInput),
+    async (req, res) => {
+      try {
+        const companyId = getActiveCustomerCompanyId(req);
+        const customerId = parseCustomerId(req.params.id);
+        await customerService.delete(customerId, companyId, getCustomerAuditActor(req));
+        return res.status(204).send();
+      } catch (error: unknown) {
+        return sendCustomerRouteError(res, error, 500);
+      }
     }
-  });
+  );
 }

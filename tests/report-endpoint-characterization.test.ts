@@ -345,9 +345,7 @@ async function captureWith(prefix: string, fixture: "erp" | "factory"): Promise<
     // report. Create one and pin the statement it actually produces.
     let supplierId = 0;
     if (fixture === "factory") {
-      const created = await agent
-        .post("/api/factory/suppliers")
-        .send({ name: `${prefix} supplier`, currencyCode: "USD" });
+      const created = await agent.post("/api/factory/suppliers").send({ name: `${prefix} supplier` });
       supplierId = (created.body as { id?: number })?.id ?? 0;
       if (!supplierId) throw new Error(`Could not seed a factory supplier: ${created.status}`);
     }

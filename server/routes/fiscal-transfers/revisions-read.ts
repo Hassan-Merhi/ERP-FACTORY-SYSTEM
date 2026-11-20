@@ -15,29 +15,42 @@ import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { stockTransferVouchers, vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
+import { stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const updateNotesInput = {
+  params: stringIdParams,
+  body: z.strictObject({ notes: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
 
 export function registerStockTransferRevisionReadRoutes(app: Express) {
   // Stock Transfers - PATCH endpoint (notes-only update)
-  app.patch("/api/stock-transfers/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      if (!id) return res.status(400).json({ message: "Transfer ID is required" });
-      const { notes } = req.body;
-      const [updatedTransfer] = await db
-        .update(stockTransferVouchers)
-        .set({ notes: notes ?? null })
-        .where(eq(stockTransferVouchers.id, id))
-        .returning({ voucherId: stockTransferVouchers.voucherId });
-      if (!updatedTransfer) return res.status(404).json({ message: "Transfer not found" });
+  app.patch(
+    "/api/stock-transfers/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateNotesInput),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (!id) return res.status(400).json({ message: "Transfer ID is required" });
+        const { notes } = req.body;
+        const [updatedTransfer] = await db
+          .update(stockTransferVouchers)
+          .set({ notes: notes ?? null })
+          .where(eq(stockTransferVouchers.id, id))
+          .returning({ voucherId: stockTransferVouchers.voucherId });
+        if (!updatedTransfer) return res.status(404).json({ message: "Transfer not found" });
 
-      await db
-        .update(vouchers)
-        .set({ description: notes ?? null })
-        .where(eq(vouchers.id, updatedTransfer.voucherId));
+        await db
+          .update(vouchers)
+          .set({ description: notes ?? null })
+          .where(eq(vouchers.id, updatedTransfer.voucherId));
 
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

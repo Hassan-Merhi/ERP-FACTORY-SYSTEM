@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { requireAuth, requireRole } from "../auth";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { resultRows } from "../lib/queryResult";
 import { sql } from "drizzle-orm";
 import { closeFiscalPeriod, FiscalPeriodCloseError } from "../storage/accounting/fiscal-periods";
@@ -41,6 +42,30 @@ const close = z.object({
   evidenceHash: z.string().regex(/^[a-f0-9]{64}$/),
   notes: z.string().max(2000).optional(),
 });
+// Shapes only: the handlers still parse with the schemas above and keep their FISCAL_* errors.
+const scopeFields = {
+  periodStartDate: z.string(),
+  periodEndDate: z.string(),
+  retainedEarningsAccountId: z.union([z.number(), z.string()]),
+  evidenceHash: z.string(),
+};
+const policyInput = {
+  query: emptyQuery,
+  body: z.strictObject({ enforce: z.boolean(), reason: z.string() }),
+} satisfies RequestSchemas;
+const signoffInput = {
+  query: emptyQuery,
+  body: z.strictObject({ ...scopeFields, reviewKind: z.string(), note: z.string() }),
+} satisfies RequestSchemas;
+const revokeSignoffInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string() }),
+} satisfies RequestSchemas;
+const closeInput = {
+  query: emptyQuery,
+  body: z.strictObject({ ...scopeFields, notes: z.string().optional() }),
+} satisfies RequestSchemas;
 function company(req: Request) {
   const n = Number(req.session.currentCompanyId);
   if (!Number.isSafeInteger(n) || n < 1)
@@ -104,25 +129,30 @@ export function registerFiscalReviewRoutes(app: Express) {
       return failure(res, e);
     }
   });
-  app.post("/api/accounting/fiscal-review/policy", ...gate, async (req: Request, res: Response) => {
-    try {
-      allowedSignoff(req, "OWNER");
-      const body = z.object({ enforce: z.boolean(), reason: z.string().trim().min(10).max(1000) }).parse(req.body);
-      const companyId = company(req);
-      return res.json(
-        await db.transaction((tx) =>
-          setFiscalReviewPolicyTx(tx, {
-            companyId,
-            enforce: body.enforce,
-            reason: body.reason,
-            actor: person(req),
-          })
-        )
-      );
-    } catch (e) {
-      return failure(res, e);
+  app.post(
+    "/api/accounting/fiscal-review/policy",
+    ...gate,
+    validateRequest(policyInput),
+    async (req: Request, res: Response) => {
+      try {
+        allowedSignoff(req, "OWNER");
+        const body = z.object({ enforce: z.boolean(), reason: z.string().trim().min(10).max(1000) }).parse(req.body);
+        const companyId = company(req);
+        return res.json(
+          await db.transaction((tx) =>
+            setFiscalReviewPolicyTx(tx, {
+              companyId,
+              enforce: body.enforce,
+              reason: body.reason,
+              actor: person(req),
+            })
+          )
+        );
+      } catch (e) {
+        return failure(res, e);
+      }
     }
-  });
+  );
   app.get("/api/accounting/fiscal-review/equity-accounts", ...gate, async (req: Request, res: Response) => {
     try {
       const companyId = company(req);
@@ -187,92 +217,108 @@ export function registerFiscalReviewRoutes(app: Express) {
       return failure(res, e);
     }
   });
-  app.post("/api/accounting/fiscal-review/signoffs", ...gate, async (req: Request, res: Response) => {
-    try {
-      const b = signed.parse(req.body),
-        companyId = company(req);
-      allowedSignoff(req, b.reviewKind);
-      const record = await db.transaction((tx) =>
-        recordFiscalReviewTx(tx, {
-          ...b,
-          companyId,
-          reviewer: person(req),
-        })
-      );
-      res.setHeader("Cache-Control", "no-store");
-      return res.status(201).json(record);
-    } catch (e) {
-      return failure(res, e);
-    }
-  });
-  app.post("/api/accounting/fiscal-review/signoffs/:id/revoke", ...gate, async (req: Request, res: Response) => {
-    try {
-      const companyId = company(req),
-        signoffId = id.parse(req.params.id);
-      const b = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(req.body);
-      // Only Owner may revoke signoffs to make approval-chain changes explicit
-      // rather than allowing a mere budget/finance reporter to erase review.
-      allowedSignoff(req, "OWNER");
-      return res.json(
-        await db.transaction((tx) =>
-          revokeFiscalReviewTx(tx, {
+  app.post(
+    "/api/accounting/fiscal-review/signoffs",
+    ...gate,
+    validateRequest(signoffInput),
+    async (req: Request, res: Response) => {
+      try {
+        const b = signed.parse(req.body),
+          companyId = company(req);
+        allowedSignoff(req, b.reviewKind);
+        const record = await db.transaction((tx) =>
+          recordFiscalReviewTx(tx, {
+            ...b,
             companyId,
-            signoffId,
-            reason: b.reason,
-            actor: person(req),
+            reviewer: person(req),
           })
-        )
-      );
-    } catch (e) {
-      return failure(res, e);
+        );
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(201).json(record);
+      } catch (e) {
+        return failure(res, e);
+      }
     }
-  });
-  app.post("/api/accounting/fiscal-review/close", ...gate, async (req: Request, res: Response) => {
-    // Defense in depth: never rely on the path-matching middleware alone.
-    if (!UNIFIED_FINANCIAL_POSTING_RELEASED) return res.status(423).json(UNIFIED_FINANCIAL_POSTING_LOCKED);
-    try {
-      allowedSignoff(req, "OWNER");
-      const b = close.parse(req.body),
-        companyId = company(req),
-        actor = person(req);
-      let validated: { accountingSignoffId: number; ownerSignoffId: number; evidenceHash: string } | null = null;
-      const closure = await closeFiscalPeriod(
-        companyId,
-        b.periodStartDate,
-        b.periodEndDate,
-        b.retainedEarningsAccountId,
-        actor.userId,
-        b.notes,
-        actor,
-        {
-          beforeClose: async (tx) => {
-            // This executes *after* the fiscal exclusive advisory lock in the
-            // original writer, so signoff hashes and balances cannot race a post.
-            validated = await ensureReviewedFiscalCloseTx(tx, { ...b, companyId });
-          },
-          afterClose: async (tx, posted) => {
-            if (!validated) throw new FiscalReviewError("FISCAL_ATTESTATION_MISSING", "Fiscal close was not verified");
-            await recordReviewedFiscalCloseTx(tx, {
+  );
+  app.post(
+    "/api/accounting/fiscal-review/signoffs/:id/revoke",
+    ...gate,
+    validateRequest(revokeSignoffInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = company(req),
+          signoffId = id.parse(req.params.id);
+        const b = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(req.body);
+        // Only Owner may revoke signoffs to make approval-chain changes explicit
+        // rather than allowing a mere budget/finance reporter to erase review.
+        allowedSignoff(req, "OWNER");
+        return res.json(
+          await db.transaction((tx) =>
+            revokeFiscalReviewTx(tx, {
               companyId,
-              closureId: posted.id,
-              voucherId: posted.closingVoucherId,
-              ...validated,
-              actor,
-            });
-          },
-        }
-      );
-      res.setHeader("Cache-Control", "no-store");
-      return res.status(201).json({
-        reviewed: true,
-        closed: true,
-        closureId: closure.id,
-        closingVoucherId: closure.closingVoucherId,
-        periodStartDate: closure.periodStartDate,
-        periodEndDate: closure.periodEndDate,
-      });
-    } catch (e) {
-      return failure(res, e);
+              signoffId,
+              reason: b.reason,
+              actor: person(req),
+            })
+          )
+        );
+      } catch (e) {
+        return failure(res, e);
+      }
     }
-  });
+  );
+  app.post(
+    "/api/accounting/fiscal-review/close",
+    ...gate,
+    validateRequest(closeInput),
+    async (req: Request, res: Response) => {
+      // Defense in depth: never rely on the path-matching middleware alone.
+      if (!UNIFIED_FINANCIAL_POSTING_RELEASED) return res.status(423).json(UNIFIED_FINANCIAL_POSTING_LOCKED);
+      try {
+        allowedSignoff(req, "OWNER");
+        const b = close.parse(req.body),
+          companyId = company(req),
+          actor = person(req);
+        let validated: { accountingSignoffId: number; ownerSignoffId: number; evidenceHash: string } | null = null;
+        const closure = await closeFiscalPeriod(
+          companyId,
+          b.periodStartDate,
+          b.periodEndDate,
+          b.retainedEarningsAccountId,
+          actor.userId,
+          b.notes,
+          actor,
+          {
+            beforeClose: async (tx) => {
+              // This executes *after* the fiscal exclusive advisory lock in the
+              // original writer, so signoff hashes and balances cannot race a post.
+              validated = await ensureReviewedFiscalCloseTx(tx, { ...b, companyId });
+            },
+            afterClose: async (tx, posted) => {
+              if (!validated)
+                throw new FiscalReviewError("FISCAL_ATTESTATION_MISSING", "Fiscal close was not verified");
+              await recordReviewedFiscalCloseTx(tx, {
+                companyId,
+                closureId: posted.id,
+                voucherId: posted.closingVoucherId,
+                ...validated,
+                actor,
+              });
+            },
+          }
+        );
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(201).json({
+          reviewed: true,
+          closed: true,
+          closureId: closure.id,
+          closingVoucherId: closure.closingVoucherId,
+          periodStartDate: closure.periodStartDate,
+          periodEndDate: closure.periodEndDate,
+        });
+      } catch (e) {
+        return failure(res, e);
+      }
+    }
+  );
 }

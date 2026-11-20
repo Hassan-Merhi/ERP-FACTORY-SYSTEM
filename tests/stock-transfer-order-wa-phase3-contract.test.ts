@@ -35,7 +35,7 @@ describe("Stock Transfer Order WhatsApp inbound Phase 3", () => {
     expect(manifest.routeCount).toBe(manifest.routes.length);
     expect(manifest.middlewareMountCount).toBe(manifest.middlewareMounts.length);
     expect(manifest.routes[0]).toBe(
-      "POST /api/stock-transfer-order/wa-approval/webhook [stockTransferOrderWaWebhookHandler]"
+      "POST /api/stock-transfer-order/wa-approval/webhook [validateRequest > stockTransferOrderWaWebhookHandler]"
     );
   });
 

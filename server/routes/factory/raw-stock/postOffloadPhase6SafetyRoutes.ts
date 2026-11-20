@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { requireAuth, requireRole } from "../../../auth";
+import { validateRequest } from "../../../lib/validateRequest";
+import { postOffloadRepairInput } from "./rawStockWriteRouteSchemas";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { persistPostOffloadPhase6Audit } from "../../../services/factory/postOffloadPhase6Audit";
@@ -140,129 +142,135 @@ export function registerPostOffloadPhase6SafetyRoutes(app: Express): void {
     }
   });
 
-  app.post(REPAIR_PATH, requireAuth, requireRole(...ADMIN_ROLES), async (req: Request, res: Response) => {
-    const context = requestContext(req);
-    if (!context) {
-      return res.status(400).json({
-        message: "Post-offload Phase 6 repair requires a selected company and authenticated user.",
-        code: "POST_OFFLOAD_PHASE6_CONTEXT_MISSING",
-      });
-    }
-
-    const confirmationToken = req.body?.confirmationToken;
-    const isDryRun = req.body?.dryRun === true || !confirmationToken;
-    let repairCommitted = false;
-    let committedUndoLogId: number | null = null;
-
-    try {
-      if (isDryRun) {
-        const prepared = await preparePostOffloadPhase6Repair({
-          companyId: context.companyId,
-          userId: context.userId,
-          supplierIds: req.body?.supplierIds,
+  app.post(
+    REPAIR_PATH,
+    requireAuth,
+    requireRole(...ADMIN_ROLES),
+    validateRequest(postOffloadRepairInput),
+    async (req: Request, res: Response) => {
+      const context = requestContext(req);
+      if (!context) {
+        return res.status(400).json({
+          message: "Post-offload Phase 6 repair requires a selected company and authenticated user.",
+          code: "POST_OFFLOAD_PHASE6_CONTEXT_MISSING",
         });
-        await persistPostOffloadPhase6Audit({
-          action:
-            prepared.status === "blocked" ? "post_offload_phase6_blocked" : "post_offload_phase6_preview_generated",
+      }
+
+      const confirmationToken = req.body?.confirmationToken;
+      const isDryRun = req.body?.dryRun === true || !confirmationToken;
+      let repairCommitted = false;
+      let committedUndoLogId: number | null = null;
+
+      try {
+        if (isDryRun) {
+          const prepared = await preparePostOffloadPhase6Repair({
+            companyId: context.companyId,
+            userId: context.userId,
+            supplierIds: req.body?.supplierIds,
+          });
+          await persistPostOffloadPhase6Audit({
+            action:
+              prepared.status === "blocked" ? "post_offload_phase6_blocked" : "post_offload_phase6_preview_generated",
+            companyId: context.companyId,
+            userId: context.userId,
+            username: context.username,
+            status: prepared.status,
+            details: {
+              confirmationIssued: Boolean(prepared.confirmationToken),
+              expiresInMs: prepared.expiresInMs,
+              selectedSupplierIds: prepared.readiness.selectedSupplierIds,
+              actualChangeRows: prepared.readiness.scope.actualChangeRows,
+              exactScopeRows: prepared.readiness.scope.totalWritableRows,
+              finalizedBalesExcluded: prepared.readiness.scope.finalizedBalesExcluded,
+              blockerCount: prepared.readiness.blockers.length,
+              blockers: prepared.readiness.blockers,
+              stateFingerprint: prepared.readiness.stateFingerprint,
+              scopeFingerprint: prepared.readiness.fingerprint,
+            },
+          });
+          logger.info("Post-offload Phase 6 repair preview generated", {
+            companyId: context.companyId,
+            userId: context.userId,
+            status: prepared.status,
+            confirmationIssued: Boolean(prepared.confirmationToken),
+            stateFingerprint: prepared.readiness.stateFingerprint,
+            scopeFingerprint: prepared.readiness.fingerprint,
+            actualChangeRows: prepared.readiness.scope.actualChangeRows,
+            blockerCount: prepared.readiness.blockers.length,
+          });
+          return res.json(prepared);
+        }
+
+        const result = await applyPostOffloadPhase6Repair({
           companyId: context.companyId,
           userId: context.userId,
           username: context.username,
-          status: prepared.status,
-          details: {
-            confirmationIssued: Boolean(prepared.confirmationToken),
-            expiresInMs: prepared.expiresInMs,
-            selectedSupplierIds: prepared.readiness.selectedSupplierIds,
-            actualChangeRows: prepared.readiness.scope.actualChangeRows,
-            exactScopeRows: prepared.readiness.scope.totalWritableRows,
-            finalizedBalesExcluded: prepared.readiness.scope.finalizedBalesExcluded,
-            blockerCount: prepared.readiness.blockers.length,
-            blockers: prepared.readiness.blockers,
-            stateFingerprint: prepared.readiness.stateFingerprint,
-            scopeFingerprint: prepared.readiness.fingerprint,
-          },
+          confirmationToken,
         });
-        logger.info("Post-offload Phase 6 repair preview generated", {
+        repairCommitted = true;
+        committedUndoLogId = result.undoLogId;
+        await persistPostOffloadPhase6Audit({
+          action: "post_offload_phase6_verified",
           companyId: context.companyId,
           userId: context.userId,
-          status: prepared.status,
-          confirmationIssued: Boolean(prepared.confirmationToken),
-          stateFingerprint: prepared.readiness.stateFingerprint,
-          scopeFingerprint: prepared.readiness.fingerprint,
-          actualChangeRows: prepared.readiness.scope.actualChangeRows,
-          blockerCount: prepared.readiness.blockers.length,
+          username: context.username,
+          status: result.status,
+          details: {
+            undoLogId: result.undoLogId,
+            applied: result.applied,
+            integrityIssueCount: result.readiness.integrity.issueCount,
+            remainingActualChangeRows: result.readiness.scope.actualChangeRows,
+            blockerCount: result.readiness.blockers.length,
+            stateFingerprint: result.readiness.stateFingerprint,
+            reportQueryKeys: result.reportQueryKeys,
+          },
         });
-        return res.json(prepared);
-      }
-
-      const result = await applyPostOffloadPhase6Repair({
-        companyId: context.companyId,
-        userId: context.userId,
-        username: context.username,
-        confirmationToken,
-      });
-      repairCommitted = true;
-      committedUndoLogId = result.undoLogId;
-      await persistPostOffloadPhase6Audit({
-        action: "post_offload_phase6_verified",
-        companyId: context.companyId,
-        userId: context.userId,
-        username: context.username,
-        status: result.status,
-        details: {
+        logger.info("Post-offload Phase 6 repair applied and verified", {
+          companyId: context.companyId,
+          userId: context.userId,
           undoLogId: result.undoLogId,
+          status: result.status,
           applied: result.applied,
-          integrityIssueCount: result.readiness.integrity.issueCount,
-          remainingActualChangeRows: result.readiness.scope.actualChangeRows,
-          blockerCount: result.readiness.blockers.length,
-          stateFingerprint: result.readiness.stateFingerprint,
-          reportQueryKeys: result.reportQueryKeys,
-        },
-      });
-      logger.info("Post-offload Phase 6 repair applied and verified", {
-        companyId: context.companyId,
-        userId: context.userId,
-        undoLogId: result.undoLogId,
-        status: result.status,
-        applied: result.applied,
-      });
-      return res.json(result);
-    } catch (error: unknown) {
-      const status = phase6ErrorStatus(error);
-      const errorState = error as {
-        code?: string;
-        repairCommitted?: boolean;
-        undoLogId?: number;
-        applied?: unknown;
-      };
-      const repairWasCommitted = repairCommitted || errorState.repairCommitted === true;
-      const undoLogId = committedUndoLogId ?? errorState.undoLogId ?? null;
-      await auditFailure({
-        context,
-        error,
-        httpStatus: status,
-        dryRun: isDryRun,
-        repairCommitted: repairWasCommitted,
-        undoLogId,
-      });
-      logger.error("Post-offload Phase 6 repair rejected or failed", {
-        error,
-        companyId: context.companyId,
-        userId: context.userId,
-        status,
-        dryRun: isDryRun,
-        repairCommitted: repairWasCommitted,
-        undoLogId,
-      });
-      return res.status(status).json({
-        success: false,
-        repairCommitted: repairWasCommitted,
-        transactionRolledBack: !repairWasCommitted,
-        partialChanges: false,
-        undoLogId,
-        applied: errorState.applied ?? null,
-        message: getErrorMessage(error) || "Post-offload Phase 6 repair failed.",
-        code: errorState.code || "POST_OFFLOAD_PHASE6_REPAIR_FAILED",
-      });
+        });
+        return res.json(result);
+      } catch (error: unknown) {
+        const status = phase6ErrorStatus(error);
+        const errorState = error as {
+          code?: string;
+          repairCommitted?: boolean;
+          undoLogId?: number;
+          applied?: unknown;
+        };
+        const repairWasCommitted = repairCommitted || errorState.repairCommitted === true;
+        const undoLogId = committedUndoLogId ?? errorState.undoLogId ?? null;
+        await auditFailure({
+          context,
+          error,
+          httpStatus: status,
+          dryRun: isDryRun,
+          repairCommitted: repairWasCommitted,
+          undoLogId,
+        });
+        logger.error("Post-offload Phase 6 repair rejected or failed", {
+          error,
+          companyId: context.companyId,
+          userId: context.userId,
+          status,
+          dryRun: isDryRun,
+          repairCommitted: repairWasCommitted,
+          undoLogId,
+        });
+        return res.status(status).json({
+          success: false,
+          repairCommitted: repairWasCommitted,
+          transactionRolledBack: !repairWasCommitted,
+          partialChanges: false,
+          undoLogId,
+          applied: errorState.applied ?? null,
+          message: getErrorMessage(error) || "Post-offload Phase 6 repair failed.",
+          code: errorState.code || "POST_OFFLOAD_PHASE6_REPAIR_FAILED",
+        });
+      }
     }
-  });
+  );
 }

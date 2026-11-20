@@ -1,5 +1,6 @@
 // Extracted from ./baleRoutes.ts to keep that module under the source-size cap.
 import type { Express } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { storage } from "../storage";
@@ -7,6 +8,69 @@ import { requireAuth } from "../auth";
 import { insertBaleSchema } from "@shared/schema";
 import { registerBaleProductRoutes } from "./baleProductRoutes";
 import { parseMoneyInput, toMoney } from "../lib/money";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../lib/validateRequest";
+
+const baleIdParams = z.strictObject({ id: stringParam });
+const numberOrString = z.union([z.number(), z.string()]);
+// The handlers still run insertBaleSchema.parse with the session's companyId.
+const baleCreateBody = insertBaleSchema.omit({ companyId: true }).strict();
+
+const createBaleInput = { query: emptyQuery, body: baleCreateBody } satisfies RequestSchemas;
+
+// The PATCH writes whatever columns it is given (no enum checks), so the types
+// follow the bale columns rather than insertBaleSchema.
+const updateBaleInput = {
+  params: baleIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    // Stripped by the handler; the body company-scope middleware checks it first.
+    companyId: z.unknown().optional(),
+    containerId: z.number().nullable().optional(),
+    barcode: z.string().optional(),
+    category: z.string().optional(),
+    grade: z.string().optional(),
+    origin: z.string().optional(),
+    weight: numberOrString.optional(),
+    datePressed: z.string().optional(),
+    price: numberOrString.nullable().optional(),
+    currency: z.string().nullable().optional(),
+    customerId: z.number().nullable().optional(),
+    soldDate: z.null().optional(),
+    status: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteBaleInput = { params: baleIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+const importBalesInput = {
+  query: emptyQuery,
+  body: z.strictObject({ bales: z.array(baleCreateBody).optional() }),
+} satisfies RequestSchemas;
+
+const priceImportPreviewInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    rows: z
+      .array(
+        z.strictObject({ barcode: numberOrString.nullable().optional(), price: numberOrString.nullable().optional() })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
+const priceImportApplyInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    rows: z.array(z.strictObject({ id: numberOrString, price: numberOrString })).optional(),
+  }),
+} satisfies RequestSchemas;
 
 // Module-level bwip-js cache — loaded once on first barcode request, then reused.
 // This avoids the cold-start latency of re-importing the library on every request.
@@ -89,7 +153,7 @@ export function registerBaleRoutesPart1(app: Express) {
     }
   });
 
-  app.post("/api/bales", requireAuth, async (req, res) => {
+  app.post("/api/bales", requireAuth, validateRequest(createBaleInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -111,14 +175,14 @@ export function registerBaleRoutesPart1(app: Express) {
     }
   });
 
-  app.patch("/api/bales/:id", requireAuth, async (req, res) => {
+  app.patch("/api/bales/:id", requireAuth, validateRequest(updateBaleInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      const id = parseInt(req.params.id, 10);
+      const id = parseInt(validatedInput(req, updateBaleInput).params.id, 10);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid bale ID" });
       const existing = await storage.getBaleById(id);
 
@@ -141,14 +205,14 @@ export function registerBaleRoutesPart1(app: Express) {
     }
   });
 
-  app.delete("/api/bales/:id", requireAuth, async (req, res) => {
+  app.delete("/api/bales/:id", requireAuth, validateRequest(deleteBaleInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      const id = parseInt(req.params.id, 10);
+      const id = parseInt(validatedInput(req, deleteBaleInput).params.id, 10);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid bale ID" });
       const existing = await storage.getBaleById(id);
 
@@ -169,7 +233,7 @@ export function registerBaleRoutesPart1(app: Express) {
     }
   });
 
-  app.post("/api/bales/import", requireAuth, async (req, res) => {
+  app.post("/api/bales/import", requireAuth, validateRequest(importBalesInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -192,47 +256,52 @@ export function registerBaleRoutesPart1(app: Express) {
   });
 
   // Price import from Excel: preview + apply
-  app.post("/api/bales/price-import/preview", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/bales/price-import/preview",
+    requireAuth,
+    validateRequest(priceImportPreviewInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const rows: { barcode: string; price: string }[] = req.body.rows || [];
-      if (!Array.isArray(rows) || rows.length === 0) {
-        return res.status(400).json({ message: "No rows provided" });
+        const rows: { barcode: string; price: string }[] = req.body.rows || [];
+        if (!Array.isArray(rows) || rows.length === 0) {
+          return res.status(400).json({ message: "No rows provided" });
+        }
+
+        const preview = await Promise.all(
+          rows.map(async (row) => {
+            const barcode = String(row.barcode || "").trim();
+            const newPrice = parseMoneyInput(String(row.price || ""))?.toNumber() ?? NaN;
+            if (!barcode) return { barcode, status: "invalid", currentPrice: null, newPrice: null };
+            if (isNaN(newPrice) || newPrice < 0)
+              return { barcode, status: "invalid_price", currentPrice: null, newPrice: null };
+            const bale = await storage.getBaleByBarcode(barcode, companyId);
+            if (!bale) return { barcode, status: "not_found", currentPrice: null, newPrice };
+            const currentPrice = bale.price ? toMoney(bale.price).toNumber() : null;
+            const noChange = currentPrice !== null && Math.abs(currentPrice - newPrice) < 0.001;
+            return {
+              id: bale.id,
+              barcode,
+              category: bale.category,
+              grade: bale.grade,
+              status: noChange ? "no_change" : "will_update",
+              currentPrice,
+              newPrice,
+            };
+          })
+        );
+
+        res.json({ preview });
+      } catch (error: unknown) {
+        logger.error("Error in price-import preview:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const preview = await Promise.all(
-        rows.map(async (row) => {
-          const barcode = String(row.barcode || "").trim();
-          const newPrice = parseMoneyInput(String(row.price || ""))?.toNumber() ?? NaN;
-          if (!barcode) return { barcode, status: "invalid", currentPrice: null, newPrice: null };
-          if (isNaN(newPrice) || newPrice < 0)
-            return { barcode, status: "invalid_price", currentPrice: null, newPrice: null };
-          const bale = await storage.getBaleByBarcode(barcode, companyId);
-          if (!bale) return { barcode, status: "not_found", currentPrice: null, newPrice };
-          const currentPrice = bale.price ? toMoney(bale.price).toNumber() : null;
-          const noChange = currentPrice !== null && Math.abs(currentPrice - newPrice) < 0.001;
-          return {
-            id: bale.id,
-            barcode,
-            category: bale.category,
-            grade: bale.grade,
-            status: noChange ? "no_change" : "will_update",
-            currentPrice,
-            newPrice,
-          };
-        })
-      );
-
-      res.json({ preview });
-    } catch (error: unknown) {
-      logger.error("Error in price-import preview:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
-  app.post("/api/bales/price-import/apply", requireAuth, async (req, res) => {
+  app.post("/api/bales/price-import/apply", requireAuth, validateRequest(priceImportApplyInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

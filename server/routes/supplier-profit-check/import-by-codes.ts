@@ -12,49 +12,71 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { buildSupplierProfitRows, type ProfitSourceItem } from "./analysis-core";
 import { getProfitCheckSupplierScope } from "./supplier-scope";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const numberish = z.union([z.number(), z.string()]);
+
+// Sent by client/src/pages/supplierprofitcheck/useSupplierProfitCheckModelPart2.ts.
+// Codes go through String(); the handler keeps its count and supplier checks.
+const importByCodesInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    codes: z.array(z.union([z.string(), z.number(), z.null()])).optional(),
+    supplierId: numberish.nullable().optional(),
+    fromDate: z.string().nullable().optional(),
+    toDate: z.string().nullable().optional(),
+    sellPriceSource: z.string().nullable().optional(),
+    locationId: numberish.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerSupplierProfitImportRoutes(app: Express, requireAuth: RequestHandler) {
-  app.post("/api/supplier-profit-check/import-by-codes", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/supplier-profit-check/import-by-codes",
+    requireAuth,
+    validateRequest(importByCodesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const {
-        codes,
-        supplierId: rawSupplierId,
-        fromDate,
-        toDate,
-        sellPriceSource,
-        locationId: rawLocationId,
-      } = req.body;
-      if (!Array.isArray(codes) || codes.length === 0) {
-        return res.status(400).json({ message: "codes array is required" });
-      }
-      if (codes.length > 5000) {
-        return res.status(400).json({ message: "Too many item codes in one import" });
-      }
-
-      const normalizedCodes = codes.map((value: unknown) =>
-        String(value ?? "")
-          .trim()
-          .toLowerCase()
-      );
-      const validCodes = normalizedCodes.filter(Boolean);
-      if (validCodes.length === 0) return res.status(400).json({ message: "No valid codes provided" });
-
-      let supplierId: number | null = null;
-      if (rawSupplierId !== undefined && rawSupplierId !== null && rawSupplierId !== "") {
-        supplierId = Number(rawSupplierId);
-        if (!Number.isInteger(supplierId) || supplierId <= 0) {
-          return res.status(400).json({ message: "Invalid supplierId" });
+        const {
+          codes,
+          supplierId: rawSupplierId,
+          fromDate,
+          toDate,
+          sellPriceSource,
+          locationId: rawLocationId,
+        } = req.body;
+        if (!Array.isArray(codes) || codes.length === 0) {
+          return res.status(400).json({ message: "codes array is required" });
         }
-        if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
-          return res.status(404).json({ message: "Supplier not found" });
+        if (codes.length > 5000) {
+          return res.status(400).json({ message: "Too many item codes in one import" });
         }
-      }
 
-      const resolvedResult = await pool.query(
-        `
+        const normalizedCodes = codes.map((value: unknown) =>
+          String(value ?? "")
+            .trim()
+            .toLowerCase()
+        );
+        const validCodes = normalizedCodes.filter(Boolean);
+        if (validCodes.length === 0) return res.status(400).json({ message: "No valid codes provided" });
+
+        let supplierId: number | null = null;
+        if (rawSupplierId !== undefined && rawSupplierId !== null && rawSupplierId !== "") {
+          supplierId = Number(rawSupplierId);
+          if (!Number.isInteger(supplierId) || supplierId <= 0) {
+            return res.status(400).json({ message: "Invalid supplierId" });
+          }
+          if (!(await getProfitCheckSupplierScope(supplierId, companyId))) {
+            return res.status(404).json({ message: "Supplier not found" });
+          }
+        }
+
+        const resolvedResult = await pool.query(
+          `
         WITH input AS (
           SELECT code, ord
           FROM unnest($2::text[]) WITH ORDINALITY AS incoming(code, ord)
@@ -92,50 +114,51 @@ export function registerSupplierProfitImportRoutes(app: Express, requireAuth: Re
         LEFT JOIN stock_groups sg ON sg.id = si.stock_group_id
         ORDER BY input.ord
       `,
-        [companyId, validCodes]
-      );
+          [companyId, validCodes]
+        );
 
-      const foundInputCodes = new Set(resolvedResult.rows.map((row) => String(row.input_code).toLowerCase()));
-      const notFound = codes.filter((value: unknown) => {
-        const normalized = String(value ?? "")
-          .trim()
-          .toLowerCase();
-        return normalized.length > 0 && !foundInputCodes.has(normalized);
-      });
-      const matches = resolvedResult.rows.map((row) => ({
-        inputIndex: Number(row.ord) - 1,
-        inputCode: String(row.input_code),
-        stockItemId: Number(row.id),
-        code: String(row.code),
-      }));
+        const foundInputCodes = new Set(resolvedResult.rows.map((row) => String(row.input_code).toLowerCase()));
+        const notFound = codes.filter((value: unknown) => {
+          const normalized = String(value ?? "")
+            .trim()
+            .toLowerCase();
+          return normalized.length > 0 && !foundInputCodes.has(normalized);
+        });
+        const matches = resolvedResult.rows.map((row) => ({
+          inputIndex: Number(row.ord) - 1,
+          inputCode: String(row.input_code),
+          stockItemId: Number(row.id),
+          code: String(row.code),
+        }));
 
-      const items = resolvedResult.rows.map((row): ProfitSourceItem => ({
-        id: row.id,
-        code: row.code,
-        name: row.name,
-        stock_group_id: row.stock_group_id,
-        stock_group_name: row.stock_group_name,
-        proforma_qty: null,
-        proforma_price: null,
-        proforma_barcode: row.proforma_barcode,
-      }));
+        const items = resolvedResult.rows.map((row): ProfitSourceItem => ({
+          id: row.id,
+          code: row.code,
+          name: row.name,
+          stock_group_id: row.stock_group_id,
+          stock_group_name: row.stock_group_name,
+          proforma_qty: null,
+          proforma_price: null,
+          proforma_barcode: row.proforma_barcode,
+        }));
 
-      if (items.length === 0) return res.json({ rows: [], notFound, matches });
+        if (items.length === 0) return res.json({ rows: [], notFound, matches });
 
-      const rows = await buildSupplierProfitRows({
-        companyId,
-        supplierId,
-        items,
-        fromDate,
-        toDate,
-        sellPriceSource,
-        locationId: rawLocationId ? Number(rawLocationId) : null,
-      });
+        const rows = await buildSupplierProfitRows({
+          companyId,
+          supplierId,
+          items,
+          fromDate,
+          toDate,
+          sellPriceSource,
+          locationId: rawLocationId ? Number(rawLocationId) : null,
+        });
 
-      res.json({ rows, notFound, matches });
-    } catch (err: unknown) {
-      logger.error("[supplier-profit-check/import-by-codes]", { error: getErrorMessage(err) });
-      res.status(500).json({ message: getErrorMessage(err) });
+        res.json({ rows, notFound, matches });
+      } catch (err: unknown) {
+        logger.error("[supplier-profit-check/import-by-codes]", { error: getErrorMessage(err) });
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }

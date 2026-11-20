@@ -5,6 +5,8 @@ import { requireAuth, requireRole } from "../../auth";
 import { validateMigrationPair, pn } from "./spMigrationPhase2Common";
 import { installCutoverWriteGuard } from "./spMigrationCutoverState";
 import { firstRow } from "../../lib/queryResult";
+import { validateRequest } from "../../lib/validateRequest";
+import { mapContainerChargeInput, mapSuspenseEntryInput } from "./spMigrationRequestSchemas";
 
 async function mapSuspenseEntry(req: Request, res: Response): Promise<Response | void> {
   const pair = await validateMigrationPair(req, res, false);
@@ -75,6 +77,16 @@ export function registerSpMigrationCutoverRoutes(app: Express): void {
   // Preserve this registrar's write guard and unique review mapping
   // endpoints, but do not re-register unreachable older cutover handlers.
 
-  app.post("/api/sp/migration/gc-suspense-review/:targetEntryId/map", ...developer, mapSuspenseEntry);
-  app.post("/api/sp/migration/gc-container-charge-review/:chargeId/map", ...developer, mapContainerCharge);
+  app.post(
+    "/api/sp/migration/gc-suspense-review/:targetEntryId/map",
+    ...developer,
+    validateRequest(mapSuspenseEntryInput),
+    mapSuspenseEntry
+  );
+  app.post(
+    "/api/sp/migration/gc-container-charge-review/:chargeId/map",
+    ...developer,
+    validateRequest(mapContainerChargeInput),
+    mapContainerCharge
+  );
 }

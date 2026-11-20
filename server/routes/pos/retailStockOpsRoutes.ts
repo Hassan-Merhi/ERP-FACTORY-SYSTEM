@@ -1,7 +1,6 @@
 import type Decimal from "decimal.js";
 import type { Express } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { z } from "zod";
 import {
   locations,
   retailBrands,
@@ -16,6 +15,8 @@ import {
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import { retailExchangeInput, retailReceiptInput } from "./retailStockOpsRoutesSchemas";
 import { lineAmount, MoneyDecimal, moneyString, toMoney } from "../../lib/money";
 import { RETAIL_GRNI_ACCOUNT, trackRetailStockValueTx } from "../../services/retail/retailInventoryJournal";
 import { isRetailManagerRole } from "./retailCheckoutPolicy";
@@ -43,53 +44,6 @@ const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-
-const idempotencyKeySchema = z.string().trim().min(8).max(191);
-
-const paymentSchema = z.object({
-  method: z.enum(["cash", "card", "bank", "mobile", "other", "credit"]),
-  amount: z.coerce.number().finite().positive(),
-  tenderedAmount: z.coerce.number().finite().positive().nullable().optional(),
-  reference: z.string().trim().max(191).optional(),
-  ledgerAccountId: z.number().int().positive().nullable().optional(),
-  bankAccountId: z.number().int().positive().nullable().optional(),
-});
-
-const receiveSchema = z.object({
-  idempotencyKey: idempotencyKeySchema,
-  variantId: z.coerce.number().int().positive(),
-  locationId: z.coerce.number().int().positive(),
-  quantity: z.coerce.number().finite().positive().max(100000),
-  unitCost: z.coerce.number().finite().nonnegative().optional(),
-  reference: z.string().trim().max(191).optional(),
-  notes: z.string().trim().max(1000).optional(),
-});
-
-export const retailExchangeSchema = z.object({
-  idempotencyKey: idempotencyKeySchema,
-  saleId: z.coerce.number().int().positive(),
-  locationId: z.coerce.number().int().positive(),
-  shiftId: z.coerce.number().int().positive().optional(),
-  payments: z.array(paymentSchema).min(1).max(8).optional(),
-  refundDestination: z.enum(["original", "account"]).default("original"),
-  refundLedgerAccountId: z.number().int().positive().nullable().optional(),
-  refundBankAccountId: z.number().int().positive().nullable().optional(),
-  notes: z.string().trim().max(2000).optional(),
-  returnItems: z
-    .array(
-      z.object({
-        saleItemId: z.coerce.number().int().positive(),
-        quantity: z.coerce.number().finite().positive(),
-        restock: z.boolean().default(true),
-      })
-    )
-    .min(1)
-    .max(100),
-  newItems: z
-    .array(z.object({ variantId: z.coerce.number().int().positive(), quantity: z.coerce.number().finite().positive() }))
-    .min(1)
-    .max(100),
-});
 
 /** Variant identity + stock at every location, used by barcode stock operations. */
 async function loadVariantStock(companyId: number, match: ReturnType<typeof eq>) {
@@ -170,88 +124,97 @@ export function registerRetailStockOpsRoutes(app: Express): void {
   });
 
   /** Receive / restock: increases the exact variant at one location and updates its average cost. */
-  app.post("/api/pos/retail/receipts", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const body = receiveSchema.parse(req.body);
-      const userId = currentUserId(req);
-      await ensureCompanyLocation(companyId, body.locationId);
-      const variant = await ensureRetailVariant(db, companyId, body.variantId);
-      const unitCost = body.unitCost ?? toNumber(variant.cost);
+  app.post(
+    "/api/pos/retail/receipts",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(retailReceiptInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const body = validatedInput(req, retailReceiptInput).body;
+        const userId = currentUserId(req);
+        await ensureCompanyLocation(companyId, body.locationId);
+        const variant = await ensureRetailVariant(db, companyId, body.variantId);
+        const unitCost = body.unitCost ?? toNumber(variant.cost);
 
-      const result = await db.transaction(async (tx) => {
-        const [operation] = await tx
-          .insert(retailStockOperations)
-          .values({
+        const result = await db.transaction(async (tx) => {
+          const [operation] = await tx
+            .insert(retailStockOperations)
+            .values({
+              companyId,
+              operationType: "receive",
+              idempotencyKey: body.idempotencyKey,
+              referenceId: body.reference ?? null,
+              createdBy: userId,
+              metadata: { locationId: body.locationId, variantId: body.variantId, unitCost, notes: body.notes ?? null },
+            })
+            .onConflictDoNothing({ target: [retailStockOperations.companyId, retailStockOperations.idempotencyKey] })
+            .returning({ id: retailStockOperations.id });
+          if (!operation) return { replayed: true };
+          const stock = await lockInventoryRow(tx, companyId, body.variantId, body.locationId);
+          // Wave 17 (D): the value received is journalled once the Retail inventory opening is applied.
+          const stockValue = await trackRetailStockValueTx(tx, companyId, [
+            { variantId: body.variantId, locationId: body.locationId },
+          ]);
+          const after = stock.quantity + body.quantity;
+          const averageCost = nextAverageCost(stock.quantity, stock.averageCost, body.quantity, unitCost);
+          await setInventoryQuantity(tx, companyId, body.variantId, body.locationId, after, averageCost);
+          await addMovement(tx, {
             companyId,
-            operationType: "receive",
-            idempotencyKey: body.idempotencyKey,
-            referenceId: body.reference ?? null,
+            variantId: body.variantId,
+            locationId: body.locationId,
+            movementType: "receive",
+            quantityDelta: body.quantity,
+            before: stock.quantity,
+            after,
+            eventKey: `receive:${operation.id}`,
+            referenceType: "retail_receive",
+            referenceId: operation.id,
             createdBy: userId,
-            metadata: { locationId: body.locationId, variantId: body.variantId, unitCost, notes: body.notes ?? null },
-          })
-          .onConflictDoNothing({ target: [retailStockOperations.companyId, retailStockOperations.idempotencyKey] })
-          .returning({ id: retailStockOperations.id });
-        if (!operation) return { replayed: true };
-        const stock = await lockInventoryRow(tx, companyId, body.variantId, body.locationId);
-        // Wave 17 (D): the value received is journalled once the Retail inventory opening is applied.
-        const stockValue = await trackRetailStockValueTx(tx, companyId, [
-          { variantId: body.variantId, locationId: body.locationId },
-        ]);
-        const after = stock.quantity + body.quantity;
-        const averageCost = nextAverageCost(stock.quantity, stock.averageCost, body.quantity, unitCost);
-        await setInventoryQuantity(tx, companyId, body.variantId, body.locationId, after, averageCost);
-        await addMovement(tx, {
-          companyId,
-          variantId: body.variantId,
-          locationId: body.locationId,
-          movementType: "receive",
-          quantityDelta: body.quantity,
-          before: stock.quantity,
-          after,
-          eventKey: `receive:${operation.id}`,
-          referenceType: "retail_receive",
-          referenceId: operation.id,
-          createdBy: userId,
-          metadata: { reason: body.notes || "Stock received", reference: body.reference ?? null, unitCost },
+            metadata: { reason: body.notes || "Stock received", reference: body.reference ?? null, unitCost },
+          });
+          const receivedValue = lineAmount(body.quantity, unitCost);
+          await stockValue.post({
+            kind: "receipt",
+            sourceId: operation.id,
+            description: `Retail stock receipt #${operation.id}`,
+            actor: { userId, username: req.user?.username ?? null },
+            contra: [
+              {
+                accountCode: RETAIL_GRNI_ACCOUNT,
+                amount: receivedValue.negated(),
+                narration: `Retail stock receipt #${operation.id} · received not invoiced`,
+              },
+            ],
+          });
+          return { replayed: false, operationId: operation.id, quantity: after };
         });
-        const receivedValue = lineAmount(body.quantity, unitCost);
-        await stockValue.post({
-          kind: "receipt",
-          sourceId: operation.id,
-          description: `Retail stock receipt #${operation.id}`,
-          actor: { userId, username: req.user?.username ?? null },
-          contra: [
-            {
-              accountCode: RETAIL_GRNI_ACCOUNT,
-              amount: receivedValue.negated(),
-              narration: `Retail stock receipt #${operation.id} · received not invoiced`,
-            },
-          ],
-        });
-        return { replayed: false, operationId: operation.id, quantity: after };
-      });
-      res.status(result.replayed ? 200 : 201).json(result);
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
+        res.status(result.replayed ? 200 : 201).json(result);
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   /**
    * Exchange: return items from an earlier sale and sell replacement items in one
    * transaction. Both sides stay separate, traceable records (a return on the
    * original sale and a new sale); nothing historical is rewritten.
    */
-  app.post("/api/pos/retail/exchanges", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/exchanges", requireAuth, validateRequest(retailExchangeInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const body = retailExchangeSchema.parse(req.body);
+      const body = validatedInput(req, retailExchangeInput).body;
       const userId = currentUserId(req);
       // A shift is optional, as for sales: a refund made without one stays off every
       // drawer (see validateRetailShiftTx) rather than landing on a closed shift.
-      if (!isRetailManagerRole(req.user?.role) && (body.refundDestination === "account" || body.returnItems.some((item) => !item.restock))) {
+      if (
+        !isRetailManagerRole(req.user?.role) &&
+        (body.refundDestination === "account" || body.returnItems.some((item) => !item.restock))
+      ) {
         return res
           .status(403)
           .json({ message: "Manager approval is required to exchange damaged items without restocking" });

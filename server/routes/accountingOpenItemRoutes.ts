@@ -8,6 +8,7 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
 import {
   OpenItemError,
@@ -39,6 +40,25 @@ const matchInput = z.object({
   idempotencyKey: z.string().min(1).max(191),
   reason: z.string().nullable().optional(),
 });
+// Shapes only: the handlers still parse with matchInput and keep their OPEN_ITEM_* errors.
+const idValue = z.union([z.number(), z.string()]);
+const matchRequestInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    domain: z.string(),
+    partyId: idValue,
+    chargeEntryId: idValue,
+    settlementEntryId: idValue,
+    amount: z.union([z.string(), z.number()]),
+    idempotencyKey: z.string(),
+    reason: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const voidMatchInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string() }),
+} satisfies RequestSchemas;
 function company(req: Request): number {
   const id = Number(req.session.currentCompanyId);
   if (!Number.isSafeInteger(id) || id <= 0) throw new OpenItemError("COMPANY_REQUIRED", "Select a company first", 400);
@@ -102,6 +122,7 @@ export function registerAccountingOpenItemRoutes(app: Express): void {
     "/api/accounting/open-items/matches",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(matchRequestInput),
     async (req: Request, res: Response) => {
       try {
         const c = company(req),
@@ -123,6 +144,7 @@ export function registerAccountingOpenItemRoutes(app: Express): void {
     "/api/accounting/open-items/matches/:id/void",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(voidMatchInput),
     async (req: Request, res: Response) => {
       try {
         const c = company(req),

@@ -12,7 +12,7 @@ const at = (pathName: string) => readModuleFamily(path.join(process.cwd(), pathN
 const compact = (text: string) => text.replace(/\s+/g, "");
 describe("Phase 8: one combined Factory invoice without double customer billing", () => {
   const service = compact(at("server/routes/factory/customer-orders/loadingDispatchCombinedInvoiceService.ts"));
-  const route = at("server/routes/factory/customer-orders/loadingDispatchCombinedInvoiceRoutes.ts");
+  const route = compact(at("server/routes/factory/customer-orders/loadingDispatchCombinedInvoiceRoutes.ts"));
   const docSource = at("server/services/factoryInvoiceDocumentSource.ts");
   const docPrint = at("server/services/factoryInvoiceDocumentService.ts");
   const sql = at("docs/sql/manual/2026-11-10-factory-dispatch-phase8-one-invoice.sql");

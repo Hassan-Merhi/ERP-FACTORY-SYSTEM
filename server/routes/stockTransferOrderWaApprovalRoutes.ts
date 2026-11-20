@@ -14,6 +14,30 @@ import { createStockTransferOrderApprovalDraft, assertStockTransferOrderApproval
 import { getWaSettings, getStrictGreenMainInstanceState, fetchStrictGreenMainChats, sendStockTransferOrderApprovalRequest } from "../services/whatsappService";
 import { BATCH_STATE_CHANGED, actor, admins, errorResponse, groupPattern, idOf, makeMessage, phonePattern, registerStockTransferOrderWaApprovalRoutesPart1, senders, setBatchStatus, stockTransferApprovalSqlFailure } from "./registerStockTransferOrderWaApprovalRoutesPart1";
 import { registerStockTransferOrderWaApprovalRoutesPart2 } from "./registerStockTransferOrderWaApprovalRoutesPart2";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, validatedInput, type RequestSchemas } from "../lib/validateRequest";
+
+// The handlers keep their own value checks and messages.
+const settingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    enabled: z.boolean().optional(),
+    approvalGroupChatId: z.string().nullable().optional(),
+    authorizedPhoneE164: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const approvalRequestInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    destinationLocationId: z.union([z.number(), z.string()]).nullable().optional(),
+    transferIds: z.array(z.number()).optional(),
+  }),
+} satisfies RequestSchemas;
+const cancelRequestInput = {
+  params: z.strictObject({ batchId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerStockTransferOrderWaApprovalRoutes(app: Express) {
   app.get("/api/stock-transfer-order/wa-approval/settings", requireAuth, senders, async (req, res) => {
@@ -35,7 +59,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express) {
   });
   registerStockTransferOrderWaApprovalRoutesPart1(app);
 
-  app.put("/api/stock-transfer-order/wa-approval/settings", requireAuth, admins, async(req,res) => {
+  app.put("/api/stock-transfer-order/wa-approval/settings", requireAuth, admins, validateRequest(settingsInput), async(req,res) => {
     try {
       const a=await actor(req), enabled=req.body?.enabled;
       const groupId=String(req.body?.approvalGroupChatId ?? "").trim();
@@ -62,7 +86,7 @@ export function registerStockTransferOrderWaApprovalRoutes(app: Express) {
 }
 
 function registerStockTransferOrderWaApprovalRoutesPart3(app: Express) {
-  app.post("/api/stock-transfer-order/wa-approval/requests",requireAuth,senders,async(req,res)=>{
+  app.post("/api/stock-transfer-order/wa-approval/requests",requireAuth,senders,validateRequest(approvalRequestInput),async(req,res)=>{
     let draftId:number|null=null,accepted=false,sendUncertain=false;
     let stage = "request_validation";
     try {
@@ -207,9 +231,9 @@ function registerStockTransferOrderWaApprovalRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/stock-transfer-order/wa-approval/requests/:batchId/cancel",requireAuth,admins,async(req,res)=>{
+  app.post("/api/stock-transfer-order/wa-approval/requests/:batchId/cancel",requireAuth,admins,validateRequest(cancelRequestInput),async(req,res)=>{
     try {
-      const a=await actor(req),batchId=idOf(req.params.batchId);
+      const a=await actor(req),batchId=idOf(validatedInput(req,cancelRequestInput).params.batchId);
       if(!batchId)return res.status(400).json({message:"Invalid batch."});
       await setBatchStatus(a.companyId,batchId,"cancelled");
       return res.json({ok:true});

@@ -16,7 +16,8 @@ import { trackRetailStockValueTx } from "../../services/retail/retailInventoryJo
 import { ensureRetailVariant } from "../../services/retail/retailSaleService";
 import { nextRetailTransferQuantities } from "../../services/retail/retailStockMath";
 import { registerRetailPosCancellationRoute } from "./retailPosCancellationRoutes";
-import { adjustmentSchema, registerRetailPosRoutesPart1, transferSchema } from "./registerRetailPosRoutesPart1";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import { adjustmentInput, registerRetailPosRoutesPart1, transferInput } from "./registerRetailPosRoutesPart1";
 import { registerRetailPosRoutesPart2 } from "./registerRetailPosRoutesPart2";
 
 export function registerRetailPosRoutes(app: Express): void {
@@ -26,11 +27,11 @@ export function registerRetailPosRoutes(app: Express): void {
 }
 
 function registerRetailPosRoutesPart3(app: Express) {
-  app.post("/api/pos/retail/transfers", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/transfers", requireAuth, validateRequest(transferInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const body = transferSchema.parse(req.body);
+      const body = validatedInput(req, transferInput).body;
       if (req.user?.role === "POS") return res.status(403).json({ message: "POS users cannot transfer retail stock" });
       if (body.fromLocationId === body.toLocationId)
         return res.status(400).json({ message: "Transfer locations must be different" });
@@ -142,12 +143,12 @@ function registerRetailPosRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/pos/retail/adjustments", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/adjustments", requireAuth, validateRequest(adjustmentInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       if (req.user?.role === "POS") return res.status(403).json({ message: "POS users cannot make stock adjustments" });
-      const body = adjustmentSchema.parse(req.body);
+      const body = validatedInput(req, adjustmentInput).body;
       await Promise.all([
         ensureCompanyLocation(companyId, body.locationId),
         ensureRetailVariant(db, companyId, body.variantId),

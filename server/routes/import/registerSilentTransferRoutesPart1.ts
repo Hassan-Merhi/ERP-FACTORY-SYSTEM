@@ -12,6 +12,17 @@ import { inventory } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { ownLocationIds } from "../helpers/companyOwnership";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../../excelHelper";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const silentTransferParseInput = {
+  query: emptyQuery,
+  // multipart form fields (strings); the file is checked by the handler.
+  body: z.strictObject({
+    sourceLocationId: z.string().optional(),
+    destinationLocationId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerSilentTransferRoutesPart1(app: Express) {
   // Template download
@@ -39,6 +50,7 @@ export function registerSilentTransferRoutesPart1(app: Express) {
     requireAuth,
     requireNonPOS,
     spreadsheetUpload.single("file"),
+    validateRequest(silentTransferParseInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;

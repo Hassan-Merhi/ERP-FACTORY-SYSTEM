@@ -7,6 +7,8 @@ import { requireAuth, requireLogin } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireSessionUserId } from "../../lib/sessionUser";
+import { emptyBody, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { z } from "zod";
 import { logger } from "../../lib/logger";
 import { SESSION_COOKIE_NAME } from "../../services/security/sessionCookiePolicy";
 import { storage } from "../../storage";
@@ -57,8 +59,28 @@ const loginRateLimiter = rateLimit({
   handler: (_req, res) => res.status(429).json({ message: "Too many login attempts. Please try again later." }),
 });
 
+// Missing or empty credentials still reach the handler's own messages.
+const loginInput = {
+  body: z.strictObject({ username: z.string().optional(), password: z.string().optional() }),
+} satisfies RequestSchemas;
+
+// Logout is public and must always succeed, so only the body shape is checked.
+const logoutInput = { body: emptyBody } satisfies RequestSchemas;
+
+const changeOwnPasswordInput = {
+  body: z.strictObject({
+    currentPassword: z.string().optional(),
+    newPassword: z.string().optional(),
+    confirmPassword: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const confirmPasswordInput = {
+  body: z.strictObject({ password: z.string().optional() }),
+} satisfies RequestSchemas;
+
 export function registerCoreAuthRoutes(app: Express) {
-  app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
+  app.post("/api/auth/login", loginRateLimiter, validateRequest(loginInput), async (req, res) => {
     try {
       const { username, password } = req.body;
       if (!username || !password) return res.status(400).json({ message: "Username and password are required" });
@@ -183,7 +205,7 @@ export function registerCoreAuthRoutes(app: Express) {
     }
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", validateRequest(logoutInput), (req, res) => {
     const sessionId = req.sessionID;
     res.setHeader("Cache-Control", "no-store");
 
@@ -244,38 +266,43 @@ export function registerCoreAuthRoutes(app: Express) {
     });
   });
 
-  app.patch("/api/me/password", requireLogin, async (req: Request, res: Response) => {
-    try {
-      const userId = requireSessionUserId(req);
-      const { currentPassword, newPassword, confirmPassword } = req.body;
-      if (!currentPassword || !newPassword || !confirmPassword)
-        return res.status(400).json({ message: "All password fields are required." });
-      if (newPassword.trim().length < 6)
-        return res.status(400).json({ message: "New password must be at least 6 characters." });
-      if (newPassword !== confirmPassword)
-        return res.status(400).json({ message: "New password and confirmation do not match." });
+  app.patch(
+    "/api/me/password",
+    requireLogin,
+    validateRequest(changeOwnPasswordInput),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = requireSessionUserId(req);
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+        if (!currentPassword || !newPassword || !confirmPassword)
+          return res.status(400).json({ message: "All password fields are required." });
+        if (newPassword.trim().length < 6)
+          return res.status(400).json({ message: "New password must be at least 6 characters." });
+        if (newPassword !== confirmPassword)
+          return res.status(400).json({ message: "New password and confirmation do not match." });
 
-      const [user] = await db.select().from(users).where(eq(users.id, userId));
-      if (!user) return res.status(404).json({ message: "User not found." });
-      const { valid } = await verifyPassword(currentPassword, user.password);
-      if (!valid) return res.status(400).json({ message: "Current password is incorrect." });
+        const [user] = await db.select().from(users).where(eq(users.id, userId));
+        if (!user) return res.status(404).json({ message: "User not found." });
+        const { valid } = await verifyPassword(currentPassword, user.password);
+        if (!valid) return res.status(400).json({ message: "Current password is incorrect." });
 
-      const credentialVersion = await replacePasswordAndRevokeSessions(userId, await hashPassword(newPassword), {
-        exceptSid: req.sessionID,
-      });
-      advanceCurrentSessionAfterPasswordChange(req.session, credentialVersion);
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((error: unknown) => (error ? reject(error) : resolve()));
-      });
+        const credentialVersion = await replacePasswordAndRevokeSessions(userId, await hashPassword(newPassword), {
+          exceptSid: req.sessionID,
+        });
+        advanceCurrentSessionAfterPasswordChange(req.session, credentialVersion);
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((error: unknown) => (error ? reject(error) : resolve()));
+        });
 
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      logger.error("Error changing password:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ ok: true });
+      } catch (error: unknown) {
+        logger.error("Error changing password:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.post("/api/auth/confirm-password", requireAuth, async (req, res) => {
+  app.post("/api/auth/confirm-password", requireAuth, validateRequest(confirmPasswordInput), async (req, res) => {
     try {
       const { password } = req.body;
       if (!password || typeof password !== "string") return res.status(400).json({ message: "Password is required" });

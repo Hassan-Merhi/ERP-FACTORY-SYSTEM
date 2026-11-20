@@ -14,10 +14,54 @@ import {
   wasteDispatches,
   wasteDispatchItems,
   updateStockAdjustmentSchema,
+  updateStockAdjustmentItemSchema,
 } from "@shared/schema";
 import { stockAdjustmentCreateHandler } from "./stockAdjustmentCreateHandler";
 import { requireActionAccess } from "../lib/permissionMiddleware";
 import { allStockItemsOwned, ownLocationIds } from "./helpers/companyOwnership";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, validatedInput, type RequestSchemas } from "../lib/validateRequest";
+
+const numberOrString = z.union([z.number(), z.string()]);
+
+// stockAdjustmentCreateHandler keeps its own presence/value checks and messages;
+// this only fixes the shape. `voucher` is the new-voucher header (form and chat
+// widget); `voucherId` is the legacy path for an existing stock voucher.
+const createStockAdjustmentInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    voucherId: numberOrString.nullable().optional(),
+    voucher: z
+      .strictObject({
+        voucherNumber: z.string().optional(),
+        voucherDate: z.string().optional(),
+        description: z.string().nullable().optional(),
+        optional: z.boolean().optional(),
+      })
+      .nullable()
+      .optional(),
+    locationId: numberOrString.optional(),
+    adjustmentType: z.string().optional(),
+    notes: z.string().nullable().optional(),
+    items: z
+      .array(
+        z.strictObject({
+          stockItemId: numberOrString,
+          quantity: numberOrString,
+          rate: numberOrString.nullable().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
+const updateStockAdjustmentInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: updateStockAdjustmentSchema
+    .extend({ items: z.array(updateStockAdjustmentItemSchema.strict()).min(1, "At least one item is required") })
+    .strict(),
+} satisfies RequestSchemas;
 
 export function registerStockAdjustmentWasteRoutesPart1(app: Express) {
   // Stock Adjustments - GET endpoint
@@ -49,66 +93,71 @@ export function registerStockAdjustmentWasteRoutesPart1(app: Express) {
     requireAuth,
     requireNonPOS,
     requireActionAccess("act_create_voucher"),
+    validateRequest(createStockAdjustmentInput),
     stockAdjustmentCreateHandler
   );
 
   // Stock Adjustments - PUT endpoint (update)
-  app.put("/api/stock-adjustments/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseInt(req.params.id);
-      if (!id) {
-        return res.status(400).json({ message: "Adjustment ID is required" });
+  app.put(
+    "/api/stock-adjustments/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateStockAdjustmentInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { params, body } = validatedInput(req, updateStockAdjustmentInput);
+        const id = parseInt(params.id);
+        if (!id) {
+          return res.status(400).json({ message: "Adjustment ID is required" });
+        }
+
+        const { locationId, adjustmentType, notes, items } = body;
+
+        // The adjustment is reached by id and its location and items come from
+        // the body; none of them is under the path-based company scope.
+        const [owned] = await db
+          .select({ id: stockAdjustmentVouchers.id })
+          .from(stockAdjustmentVouchers)
+          .innerJoin(vouchers, eq(vouchers.id, stockAdjustmentVouchers.voucherId))
+          .where(and(eq(stockAdjustmentVouchers.id, id), eq(vouchers.companyId, companyId)));
+        if (!owned) return res.status(404).json({ message: "Adjustment not found" });
+        if (!(await ownLocationIds(companyId, [locationId])).has(locationId)) {
+          return res.status(400).json({ message: "Location not found" });
+        }
+        if (
+          !(await allStockItemsOwned(
+            companyId,
+            items.map((item) => item.stockItemId)
+          ))
+        ) {
+          return res.status(400).json({ message: "Stock item not found" });
+        }
+
+        // Convert numbers back to strings with fixed precision for storage layer
+        const itemsForStorage = items.map((item) => ({
+          stockItemId: item.stockItemId,
+          quantity: item.quantity.toFixed(3),
+          rate: item.rate.toFixed(2),
+        }));
+
+        // Update the stock adjustment using the storage method
+        const updated = await storage.updateStockAdjustment(
+          id,
+          locationId,
+          adjustmentType,
+          notes || "",
+          itemsForStorage
+        );
+
+        res.json(updated);
+      } catch (error: unknown) {
+        logger.error("[Stock Adjustment PUT] Error:", { error: getErrorMessage(error) });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      // Validate request body using Zod
-      const parseResult = updateStockAdjustmentSchema.safeParse(req.body);
-      if (!parseResult.success) {
-        return res.status(400).json({
-          message: "Invalid request data",
-          errors: parseResult.error.issues,
-        });
-      }
-
-      const { locationId, adjustmentType, notes, items } = parseResult.data;
-
-      // The adjustment is reached by id and its location and items come from
-      // the body; none of them is under the path-based company scope.
-      const [owned] = await db
-        .select({ id: stockAdjustmentVouchers.id })
-        .from(stockAdjustmentVouchers)
-        .innerJoin(vouchers, eq(vouchers.id, stockAdjustmentVouchers.voucherId))
-        .where(and(eq(stockAdjustmentVouchers.id, id), eq(vouchers.companyId, companyId)));
-      if (!owned) return res.status(404).json({ message: "Adjustment not found" });
-      if (!(await ownLocationIds(companyId, [locationId])).has(locationId)) {
-        return res.status(400).json({ message: "Location not found" });
-      }
-      if (
-        !(await allStockItemsOwned(
-          companyId,
-          items.map((item) => item.stockItemId)
-        ))
-      ) {
-        return res.status(400).json({ message: "Stock item not found" });
-      }
-
-      // Convert numbers back to strings with fixed precision for storage layer
-      const itemsForStorage = items.map((item) => ({
-        stockItemId: item.stockItemId,
-        quantity: item.quantity.toFixed(3),
-        rate: item.rate.toFixed(2),
-      }));
-
-      // Update the stock adjustment using the storage method
-      const updated = await storage.updateStockAdjustment(id, locationId, adjustmentType, notes || "", itemsForStorage);
-
-      res.json(updated);
-    } catch (error: unknown) {
-      logger.error("[Stock Adjustment PUT] Error:", { error: getErrorMessage(error) });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ===== WASTE DISPATCHES =====
 

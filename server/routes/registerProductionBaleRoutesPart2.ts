@@ -9,9 +9,11 @@ import { requireAuth } from "../auth";
 import { sumMoney, toMoney } from "../lib/money";
 import { mixBatches, pressingBatches, productionBales } from "@shared/schema";
 import { registerProductionBaleRoutesPart3 } from "./registerProductionBaleRoutesPart3";
+import { validateRequest } from "../lib/validateRequest";
+import { finalizeInput, statusInput } from "./registerProductionBaleRoutesSchemas";
 
 export function registerProductionBaleRoutesPart2(app: Express) {
-  app.post("/api/production-bales/finalize", requireAuth, async (req, res) => {
+  app.post("/api/production-bales/finalize", requireAuth, validateRequest(finalizeInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -137,7 +139,7 @@ export function registerProductionBaleRoutesPart2(app: Express) {
 
   registerProductionBaleRoutesPart3(app);
 
-  app.patch("/api/production-bales/:id/status", requireAuth, async (req, res) => {
+  app.patch("/api/production-bales/:id/status", requireAuth, validateRequest(statusInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {

@@ -9,6 +9,8 @@ import { requireSessionUserId } from "../../../../lib/sessionUser";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { supplierRateRecomputeInput } from "../rawStockWriteRouteSchemas";
 import { logAudit } from "../../../helpers/auditHelpers";
 import { getStableSupplierCost } from "../../../../services/factory/rawStockStableCost";
 import { db } from "../../../../db";
@@ -43,6 +45,7 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
     "/api/factory/raw-stock/supplier-rate/recompute",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(supplierRateRecomputeInput),
     async (req: Request, res: Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

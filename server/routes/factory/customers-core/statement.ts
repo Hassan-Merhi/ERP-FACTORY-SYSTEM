@@ -14,6 +14,27 @@ import { NOT_IN_LEDGER_LABEL } from "../../../services/accounting/balances/custo
 import { customerOrders, customerBalances, customers } from "@shared/schema";
 import { buildFactoryCustomerStatement, withRunningBalances } from "./statementRows";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { z } from "zod";
+import {
+  emptyQuery,
+  stringIdParams,
+  stringParam,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// Ids are read with parseInt, so the params stay strings.
+const statementNoteInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ statementNote: z.string() }),
+} satisfies RequestSchemas;
+
+const balanceRowNoteInput = {
+  params: z.strictObject({ customerId: stringParam, entryId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ rowNote: z.string() }),
+} satisfies RequestSchemas;
 
 export function registerFactoryCustomerStatementRoutes(app: Express) {
   // CUSTOMER STATEMENT
@@ -62,14 +83,14 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         .orderBy(desc(customerOrders.createdAt));
 
       // Build orderId → field maps for the finalized statement rows.
-      const orderContainers = await db.select({
-        id: customerOrders.id,
-        containerNumber: customerOrders.containerNumber,
-        destination: customerOrders.destination,
-      }).from(customerOrders).where(and(
-        eq(customerOrders.companyId, companyId),
-        eq(customerOrders.customerId, customerId)
-      ));
+      const orderContainers = await db
+        .select({
+          id: customerOrders.id,
+          containerNumber: customerOrders.containerNumber,
+          destination: customerOrders.destination,
+        })
+        .from(customerOrders)
+        .where(and(eq(customerOrders.companyId, companyId), eq(customerOrders.customerId, customerId)));
       const containerByOrderId = new Map<number, string | null>(
         orderContainers.map((order) => [order.id, order.containerNumber ?? null])
       );
@@ -142,33 +163,40 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
   });
 
   // ── Save Statement Note ─────────────────────────────────────────────────
-  app.patch("/api/factory/customers/:id/statement-note", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const customerId = parseInt(req.params.id);
-      if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
-      const { statementNote } = req.body;
-      if (typeof statementNote !== "string") return res.status(400).json({ message: "statementNote must be a string" });
-      const [customer] = await db
-        .select()
-        .from(customers)
-        .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
-      if (!customer) return res.status(404).json({ message: "Customer not found" });
-      await db
-        .update(customers)
-        .set({ statementNote: statementNote || null })
-        .where(eq(customers.id, customerId));
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.patch(
+    "/api/factory/customers/:id/statement-note",
+    requireAuth,
+    validateRequest(statementNoteInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const customerId = parseInt(req.params.id);
+        if (isNaN(customerId)) return res.status(400).json({ message: "Invalid customer ID" });
+        const { statementNote } = req.body;
+        if (typeof statementNote !== "string")
+          return res.status(400).json({ message: "statementNote must be a string" });
+        const [customer] = await db
+          .select()
+          .from(customers)
+          .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
+        if (!customer) return res.status(404).json({ message: "Customer not found" });
+        await db
+          .update(customers)
+          .set({ statementNote: statementNote || null })
+          .where(eq(customers.id, customerId));
+        res.json({ ok: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ── Save Row Note on a balance entry ────────────────────────────────────
   app.patch(
     "/api/factory/customers/:customerId/balance/:entryId/note",
     requireAuth,
+    validateRequest(balanceRowNoteInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

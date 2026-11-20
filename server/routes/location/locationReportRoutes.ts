@@ -11,6 +11,8 @@ import { deliverLocationStockWhatsApp } from "../../services/locationStockWhatsA
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit } from "../_helpers";
+import { validateRequest } from "../../lib/validateRequest";
+import { sendLocationStockWhatsappInput } from "./locationWriteSchemas";
 
 const LOCATION_WHATSAPP_PERMISSION = "exp_whatsapp_send";
 const requireCostPriceAccess = requireSensitiveAccess("fld_cost_price");
@@ -64,6 +66,7 @@ export function registerLocationReportRoutes(app: Express) {
     requireNonPOS,
     requireExportAccess(LOCATION_WHATSAPP_PERMISSION),
     requireCostReportAccess,
+    validateRequest(sendLocationStockWhatsappInput),
     async (req, res) => {
       try {
         const locationId = Number.parseInt(req.params.locationId, 10);

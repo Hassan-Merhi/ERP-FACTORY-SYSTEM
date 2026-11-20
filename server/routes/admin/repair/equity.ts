@@ -15,55 +15,71 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
 import { requireAuth, requireRole } from "../../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import { computeRawBalance } from "../userManagementRoutes";
 
 const PLUG_DISABLED_MESSAGE =
   "Equity adjustments are no longer written. The difference is reported as it is; investigate it and post a correcting entry.";
 
+/** These maintenance actions take no input. */
+const noInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
 export function registerAdminEquityRepairRoutes(app: Express) {
-  app.post("/api/admin/recalculate-equity-adjustment", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.post(
+    "/api/admin/recalculate-equity-adjustment",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(noInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      const rawBalance = await computeRawBalance(companyId);
-      res.json({
-        success: true,
-        message: PLUG_DISABLED_MESSAGE,
-        written: false,
-        unreconciledDifference: rawBalance.toFixed(2),
-      });
-    } catch (error: unknown) {
-      logger.error("Recalculate equity adjustment error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.post("/api/admin/recalculate-equity-adjustment-all", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const allCompanies = await storage.getAllCompanies();
-      const results: Array<{ companyId: number; companyName: string; rawBalance: number; balanced: boolean }> = [];
-      for (const company of allCompanies) {
-        const rawBalance = await computeRawBalance(company.id);
-        results.push({
-          companyId: company.id,
-          companyName: company.name,
-          rawBalance,
-          balanced: Math.abs(rawBalance) <= 0.01,
+        const rawBalance = await computeRawBalance(companyId);
+        res.json({
+          success: true,
+          message: PLUG_DISABLED_MESSAGE,
+          written: false,
+          unreconciledDifference: rawBalance.toFixed(2),
         });
+      } catch (error: unknown) {
+        logger.error("Recalculate equity adjustment error:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      res.json({
-        success: true,
-        message: PLUG_DISABLED_MESSAGE,
-        written: false,
-        results,
-      });
-    } catch (error: unknown) {
-      logger.error("Recalculate equity adjustment all error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
+
+  app.post(
+    "/api/admin/recalculate-equity-adjustment-all",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(noInput),
+    async (req, res) => {
+      try {
+        const allCompanies = await storage.getAllCompanies();
+        const results: Array<{ companyId: number; companyName: string; rawBalance: number; balanced: boolean }> = [];
+        for (const company of allCompanies) {
+          const rawBalance = await computeRawBalance(company.id);
+          results.push({
+            companyId: company.id,
+            companyName: company.name,
+            rawBalance,
+            balanced: Math.abs(rawBalance) <= 0.01,
+          });
+        }
+
+        res.json({
+          success: true,
+          message: PLUG_DISABLED_MESSAGE,
+          written: false,
+          results,
+        });
+      } catch (error: unknown) {
+        logger.error("Recalculate equity adjustment all error:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 }

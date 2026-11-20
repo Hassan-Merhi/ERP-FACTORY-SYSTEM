@@ -12,6 +12,48 @@ import { triggerDailyWhatsAppSendNow } from "../services/scheduler";
 import { invalidExportDateRange } from "../services/export-excel/workbook";
 import { ZipArchive } from "archiver";
 import { getClientDate } from "../lib/dateUtils";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+/** Integer settings the handlers pass straight to pg, which accepts numbers or numeric strings. */
+const intish = z.union([z.number(), z.string()]).nullable().optional();
+
+// Sent in full by client/src/pages/settings/useStockReportSectionState.ts.
+const stockSettingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    companyId: intish,
+    recipientId: intish,
+    autoSend: z.boolean().nullable().optional(),
+    enabled: z.boolean().nullable().optional(),
+    frequency: z.string().nullable().optional(),
+    sendHour: intish,
+    sendDayOfWeek: intish,
+  }),
+} satisfies RequestSchemas;
+
+const npSettingsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    recipientId: intish,
+    frequency: z.string().nullable().optional(),
+    sendHour: intish,
+    sendDayOfWeek: intish,
+    enabled: z.boolean().nullable().optional(),
+    autoSend: z.boolean().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The handler keeps invalidExportDateRange for the YYYY-MM-DD checks.
+const triggerWhatsAppExportInput = {
+  query: emptyQuery,
+  body: z.strictObject({ fromDate: z.string().optional(), toDate: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const sendNpAllNowInput = {
+  query: emptyQuery,
+  body: z.strictObject({ recipientId: intish }),
+} satisfies RequestSchemas;
 
 export function registerWhatsAppRoutesPart2(app: Express) {
   // ── Stock + Net Position Report Settings ────────────────────────────────────
@@ -51,7 +93,7 @@ export function registerWhatsAppRoutesPart2(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/stock-settings", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/stock-settings", requireAuth, validateRequest(stockSettingsInput), async (req, res) => {
     try {
       const { companyId, recipientId, autoSend, enabled, frequency, sendHour, sendDayOfWeek } = req.body as Record<
         string,
@@ -124,7 +166,7 @@ export function registerWhatsAppRoutesPart2(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/np-settings", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/np-settings", requireAuth, validateRequest(npSettingsInput), async (req, res) => {
     try {
       const { recipientId, frequency, sendHour, sendDayOfWeek, enabled, autoSend } = req.body as Record<
         string,
@@ -158,22 +200,28 @@ export function registerWhatsAppRoutesPart2(app: Express) {
 
   // ── Send Net Position (all companies) to group + email NOW ──────────────────
   // Full export of every company: owners/administrators only (Developer is always admitted by requireRole).
-  app.post("/api/daily-export/trigger-whatsapp", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
-    const { fromDate, toDate } = req.body as { fromDate?: string; toDate?: string };
-    const invalidDate = invalidExportDateRange(fromDate, toDate);
-    if (invalidDate) return res.status(400).json({ message: invalidDate });
-    // Respond immediately — building the full ZIP and sending it can take >30 s for large
-    // company sets, which would timeout the browser request.  The result is recorded in
-    // daily_export_runs and is visible in the Backup Status card (auto-refreshes every 15 s).
-    res.json({ started: true, message: "WhatsApp export started. Check Backup Status below for the result." });
+  app.post(
+    "/api/daily-export/trigger-whatsapp",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(triggerWhatsAppExportInput),
+    async (req, res) => {
+      const { fromDate, toDate } = req.body as { fromDate?: string; toDate?: string };
+      const invalidDate = invalidExportDateRange(fromDate, toDate);
+      if (invalidDate) return res.status(400).json({ message: invalidDate });
+      // Respond immediately — building the full ZIP and sending it can take >30 s for large
+      // company sets, which would timeout the browser request.  The result is recorded in
+      // daily_export_runs and is visible in the Backup Status card (auto-refreshes every 15 s).
+      res.json({ started: true, message: "WhatsApp export started. Check Backup Status below for the result." });
 
-    // Run the actual work asynchronously after the response is sent
-    triggerDailyWhatsAppSendNow(fromDate || undefined, toDate || undefined)
-      .then((r) => logger.info(`[ManualWhatsApp] Completed: ${r.message}`))
-      .catch((e) => logger.error(`[ManualWhatsApp] Failed: ${getErrorMessage(e)}`));
-  });
+      // Run the actual work asynchronously after the response is sent
+      triggerDailyWhatsAppSendNow(fromDate || undefined, toDate || undefined)
+        .then((r) => logger.info(`[ManualWhatsApp] Completed: ${r.message}`))
+        .catch((e) => logger.error(`[ManualWhatsApp] Failed: ${getErrorMessage(e)}`));
+    }
+  );
 
-  app.post("/api/whatsapp/send-np-all-now", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp/send-np-all-now", requireAuth, validateRequest(sendNpAllNowInput), async (req, res) => {
     const _t = Date.now();
     const _uid = req.session.userId;
     const _cid = req.session.currentCompanyId;

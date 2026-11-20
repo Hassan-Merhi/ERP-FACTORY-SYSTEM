@@ -12,6 +12,27 @@ import { logger } from "../../lib/logger";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 import { factoryWasteEntries, factoryWorkers, customerOrders } from "@shared/schema";
 import { toMoney } from "../../lib/money";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const optionalId = z.union([z.number(), z.string()]).nullable().optional();
+
+// client/src/pages/factory/FactoryWaste.tsx (also replayed from the legacy offline queue).
+const createWasteInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    companyId: z.union([z.number(), z.string()]).nullable().optional(),
+    date: z.string().nullable().optional(),
+    kgWaste: z.union([z.number(), z.string()]).nullable().optional(),
+    wasteType: z.string().nullable().optional(),
+    reason: z.string().nullable().optional(),
+    mixBatchId: optionalId,
+    supplierId: optionalId,
+    containerId: optionalId,
+  }),
+} satisfies RequestSchemas;
+
+const deleteWasteInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   app.get("/api/factory/dashboard", requireAuth, async (req: Request, res: Response) => {
@@ -107,69 +128,79 @@ export function registerFactoryDashboardWasteRoutes(app: Express, requireAuth: A
     }
   });
 
-  app.post("/api/factory/waste", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.body.companyId || req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/waste",
+    requireAuth,
+    validateRequest(createWasteInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.body.companyId || req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { date, mixBatchId, supplierId, containerId, wasteType, kgWaste, reason } = req.body;
+        const { date, mixBatchId, supplierId, containerId, wasteType, kgWaste, reason } = req.body;
 
-      // date and kg_waste are both NOT NULL, and neither was validated: a
-      // blank date reached the date column and String("") reached the numeric
-      // column, so the insert failed as a 500 rather than a 400.
-      if (typeof date !== "string" || date.trim() === "" || Number.isNaN(Date.parse(date))) {
-        return res.status(400).json({ message: "Date is required", field: "date" });
+        // date and kg_waste are both NOT NULL, and neither was validated: a
+        // blank date reached the date column and String("") reached the numeric
+        // column, so the insert failed as a 500 rather than a 400.
+        if (typeof date !== "string" || date.trim() === "" || Number.isNaN(Date.parse(date))) {
+          return res.status(400).json({ message: "Date is required", field: "date" });
+        }
+        const kgWasteValue = Number(kgWaste);
+        if (kgWaste === undefined || kgWaste === null || kgWaste === "" || !Number.isFinite(kgWasteValue)) {
+          return res.status(400).json({ message: "Invalid quantity", field: "kgWaste" });
+        }
+
+        const [entry] = await db
+          .insert(factoryWasteEntries)
+          .values({
+            companyId,
+            date,
+            mixBatchId: mixBatchId || null,
+            supplierId: supplierId || null,
+            containerId: containerId || null,
+            wasteType: wasteType || null,
+            kgWaste: String(kgWasteValue),
+            reason: reason || null,
+            // factory_waste_entries.created_by is an integer column; session ids are
+            // numeric strings, matching how the POS routes coerce them.
+            // The column is a varchar holding users.id. It used to be narrowed to a
+            // number, which silently dropped attribution for any non-numeric id;
+            // the session value is stored as-is now.
+            createdBy: req.session.userId ?? null,
+          })
+          .returning();
+
+        res.json(entry);
+      } catch (error: unknown) {
+        logger.error("Error creating waste entry:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      const kgWasteValue = Number(kgWaste);
-      if (kgWaste === undefined || kgWaste === null || kgWaste === "" || !Number.isFinite(kgWasteValue)) {
-        return res.status(400).json({ message: "Invalid quantity", field: "kgWaste" });
+    }
+  );
+
+  app.delete(
+    "/api/factory/waste/:id",
+    requireAuth,
+    validateRequest(deleteWasteInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+        const id = parseInt(req.params.id);
+        const [deleted] = await db
+          .delete(factoryWasteEntries)
+          .where(and(eq(factoryWasteEntries.id, id), eq(factoryWasteEntries.companyId, companyId)))
+          .returning();
+
+        if (!deleted) return res.status(404).json({ message: "Waste entry not found" });
+        res.json({ success: true });
+      } catch (error: unknown) {
+        logger.error("Error deleting waste entry:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const [entry] = await db
-        .insert(factoryWasteEntries)
-        .values({
-          companyId,
-          date,
-          mixBatchId: mixBatchId || null,
-          supplierId: supplierId || null,
-          containerId: containerId || null,
-          wasteType: wasteType || null,
-          kgWaste: String(kgWasteValue),
-          reason: reason || null,
-          // factory_waste_entries.created_by is an integer column; session ids are
-          // numeric strings, matching how the POS routes coerce them.
-          // The column is a varchar holding users.id. It used to be narrowed to a
-          // number, which silently dropped attribution for any non-numeric id;
-          // the session value is stored as-is now.
-          createdBy: req.session.userId ?? null,
-        })
-        .returning();
-
-      res.json(entry);
-    } catch (error: unknown) {
-      logger.error("Error creating waste entry:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
-
-  app.delete("/api/factory/waste/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const id = parseInt(req.params.id);
-      const [deleted] = await db
-        .delete(factoryWasteEntries)
-        .where(and(eq(factoryWasteEntries.id, id), eq(factoryWasteEntries.companyId, companyId)))
-        .returning();
-
-      if (!deleted) return res.status(404).json({ message: "Waste entry not found" });
-      res.json({ success: true });
-    } catch (error: unknown) {
-      logger.error("Error deleting waste entry:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  );
 
   // ───────────────────────────────────────────────
   // 4. KPIs

@@ -12,11 +12,20 @@ import { requireAuth } from "../../../auth";
 import { verifySupervisorPassword } from "../_helpers";
 import { users, userCompanyRoles, containerDocumentTypes, containerDocuments } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import path from "path";
 import fs from "fs";
 
 import { safeSendFile } from "./_helpers";
 import { registerFactoryDocsRoutesPart1 } from "./registerFactoryDocsRoutesPart1";
+
+// client/src/components/AdminOverrideDialog.tsx; the handler keeps its own
+// "Username and password are required." answer for empty values.
+const adminVerifyInput = {
+  query: emptyQuery,
+  body: z.strictObject({ username: z.string().optional(), password: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerFactoryDocsRoutes(app: Express) {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -24,67 +33,72 @@ export function registerFactoryDocsRoutes(app: Express) {
   // Validates admin credentials and grants a 10-minute session override token
   // that allows non-admin users to perform admin-only actions after approval.
   // ─────────────────────────────────────────────────────────────────────────────
-  app.post("/api/factory/admin-verify", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const { username, password } = req.body as { username?: string; password?: string };
-      if (!username || !password) {
-        return res.status(400).json({ message: "Username and password are required." });
+  app.post(
+    "/api/factory/admin-verify",
+    requireAuth,
+    validateRequest(adminVerifyInput),
+    async (req: Request, res: Response) => {
+      try {
+        const { username, password } = req.body as { username?: string; password?: string };
+        if (!username || !password) {
+          return res.status(400).json({ message: "Username and password are required." });
+        }
+
+        // Look up the user
+        const [targetUser] = await db.select().from(users).where(eq(users.username, username));
+        if (!targetUser) {
+          return res.status(401).json({ message: "Invalid username or password." });
+        }
+
+        // Confirm the user account is active
+        if (!targetUser.active) {
+          return res.status(403).json({ message: "This account is inactive and cannot authorize actions." });
+        }
+
+        // Privileged step-up requires bcrypt, never a legacy SHA-256 comparison.
+        const valid = await verifySupervisorPassword(password, targetUser.password);
+
+        if (!valid) {
+          return res.status(401).json({ message: "Invalid username or password." });
+        }
+
+        // Confirm the user has an admin-level role (Admin / Owner / Developer)
+        const ADMIN_ROLES = ["Admin", "Owner", "Developer"];
+        const companyId = req.session?.factoryCompanyId || req.session?.currentCompanyId;
+
+        let hasAdminRole = false;
+        if (companyId) {
+          const [roleRow] = await db
+            .select({ role: userCompanyRoles.role })
+            .from(userCompanyRoles)
+            .where(and(eq(userCompanyRoles.userId, targetUser.id), eq(userCompanyRoles.companyId, companyId)));
+          if (roleRow && ADMIN_ROLES.includes(roleRow.role)) hasAdminRole = true;
+        }
+
+        // Fallback: check any company role
+        if (!hasAdminRole) {
+          const anyAdminRole = await db
+            .select({ role: userCompanyRoles.role })
+            .from(userCompanyRoles)
+            .where(and(eq(userCompanyRoles.userId, targetUser.id), inArray(userCompanyRoles.role, ADMIN_ROLES)));
+          if (anyAdminRole.length > 0) hasAdminRole = true;
+        }
+
+        if (!hasAdminRole) {
+          return res.status(403).json({ message: "The provided credentials do not belong to an admin user." });
+        }
+
+        // Grant a 10-minute override window in the session
+        const expiresAt = Date.now() + 10 * 60 * 1000;
+        req.session.factoryAdminOverrideUntil = expiresAt;
+        req.session.factoryAdminOverrideBy = targetUser.username;
+
+        return res.json({ success: true, expiresAt, adminUsername: targetUser.username });
+      } catch (error: unknown) {
+        return res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      // Look up the user
-      const [targetUser] = await db.select().from(users).where(eq(users.username, username));
-      if (!targetUser) {
-        return res.status(401).json({ message: "Invalid username or password." });
-      }
-
-      // Confirm the user account is active
-      if (!targetUser.active) {
-        return res.status(403).json({ message: "This account is inactive and cannot authorize actions." });
-      }
-
-      // Privileged step-up requires bcrypt, never a legacy SHA-256 comparison.
-      const valid = await verifySupervisorPassword(password, targetUser.password);
-
-      if (!valid) {
-        return res.status(401).json({ message: "Invalid username or password." });
-      }
-
-      // Confirm the user has an admin-level role (Admin / Owner / Developer)
-      const ADMIN_ROLES = ["Admin", "Owner", "Developer"];
-      const companyId = req.session?.factoryCompanyId || req.session?.currentCompanyId;
-
-      let hasAdminRole = false;
-      if (companyId) {
-        const [roleRow] = await db
-          .select({ role: userCompanyRoles.role })
-          .from(userCompanyRoles)
-          .where(and(eq(userCompanyRoles.userId, targetUser.id), eq(userCompanyRoles.companyId, companyId)));
-        if (roleRow && ADMIN_ROLES.includes(roleRow.role)) hasAdminRole = true;
-      }
-
-      // Fallback: check any company role
-      if (!hasAdminRole) {
-        const anyAdminRole = await db
-          .select({ role: userCompanyRoles.role })
-          .from(userCompanyRoles)
-          .where(and(eq(userCompanyRoles.userId, targetUser.id), inArray(userCompanyRoles.role, ADMIN_ROLES)));
-        if (anyAdminRole.length > 0) hasAdminRole = true;
-      }
-
-      if (!hasAdminRole) {
-        return res.status(403).json({ message: "The provided credentials do not belong to an admin user." });
-      }
-
-      // Grant a 10-minute override window in the session
-      const expiresAt = Date.now() + 10 * 60 * 1000;
-      req.session.factoryAdminOverrideUntil = expiresAt;
-      req.session.factoryAdminOverrideBy = targetUser.username;
-
-      return res.json({ success: true, expiresAt, adminUsername: targetUser.username });
-    } catch (error: unknown) {
-      return res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/factory/container-doc-types", requireAuth, async (req: Request, res: Response) => {
     try {

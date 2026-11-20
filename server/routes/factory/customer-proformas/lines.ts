@@ -5,7 +5,6 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
-import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { syncProformaReservations, isFactoryV2Company, computeFreeToPromise } from "../_stockReservationHelper";
@@ -13,48 +12,54 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { customerProformaLines, insertCustomerProformaLineSchema } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import { createProformaLineInput, deleteProformaLineInput } from "./customerProformaRouteSchemas";
 import {
   registerFactoryCustomerProformaLineRoutesPart1,
   proformaInCompany,
 } from "./registerFactoryCustomerProformaLineRoutesPart1";
 
 export function registerFactoryCustomerProformaLineRoutes(app: Express) {
-  app.post("/api/factory/customer-proforma-lines", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const parsed = insertCustomerProformaLineSchema.parse(req.body);
-      if (!(await proformaInCompany(parsed.proformaId, companyId))) {
-        return res.status(404).json({ message: "Proforma not found" });
-      }
-
-      const [existingLine] = await db
-        .select()
-        .from(customerProformaLines)
-        .where(
-          and(
-            eq(customerProformaLines.proformaId, parsed.proformaId),
-            sql`LOWER(TRIM(${customerProformaLines.articleCode})) = ${parsed.articleCode.trim().toLowerCase()}`
-          )
-        );
-      if (existingLine) return res.status(400).json({ message: "Article code already exists in this proforma" });
-
-      // factory_v2: warn if requested quantity exceeds free-to-promise (non-blocking)
-      let stockWarning: string | undefined;
-      if (await isFactoryV2Company(companyId)) {
-        const ftp = await computeFreeToPromise(companyId, parsed.articleCode);
-        if ((parsed.quantity ?? 0) > ftp) {
-          stockWarning = `Insufficient free stock for ${parsed.articleCode}: requested ${parsed.quantity}, available ${ftp}`;
+  app.post(
+    "/api/factory/customer-proforma-lines",
+    requireAuth,
+    validateRequest(createProformaLineInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const parsed = insertCustomerProformaLineSchema.parse(req.body);
+        if (!(await proformaInCompany(parsed.proformaId, companyId))) {
+          return res.status(404).json({ message: "Proforma not found" });
         }
-      }
 
-      // New proforma articles must also appear in the expected plan of
-      // unfinished linked loadings. The snapshot previously stayed frozen,
-      // so verification showed a scanned new article as "Not Requested".
-      // Preserve all existing per-loading quantities and finalized history.
-      const [line] = await db.transaction(async (tx) => {
-        const [inserted] = await tx.insert(customerProformaLines).values(parsed).returning();
-        await tx.execute(sql`
+        const [existingLine] = await db
+          .select()
+          .from(customerProformaLines)
+          .where(
+            and(
+              eq(customerProformaLines.proformaId, parsed.proformaId),
+              sql`LOWER(TRIM(${customerProformaLines.articleCode})) = ${parsed.articleCode.trim().toLowerCase()}`
+            )
+          );
+        if (existingLine) return res.status(400).json({ message: "Article code already exists in this proforma" });
+
+        // factory_v2: warn if requested quantity exceeds free-to-promise (non-blocking)
+        let stockWarning: string | undefined;
+        if (await isFactoryV2Company(companyId)) {
+          const ftp = await computeFreeToPromise(companyId, parsed.articleCode);
+          if ((parsed.quantity ?? 0) > ftp) {
+            stockWarning = `Insufficient free stock for ${parsed.articleCode}: requested ${parsed.quantity}, available ${ftp}`;
+          }
+        }
+
+        // New proforma articles must also appear in the expected plan of
+        // unfinished linked loadings. The snapshot previously stayed frozen,
+        // so verification showed a scanned new article as "Not Requested".
+        // Preserve all existing per-loading quantities and finalized history.
+        const [line] = await db.transaction(async (tx) => {
+          const [inserted] = await tx.insert(customerProformaLines).values(parsed).returning();
+          await tx.execute(sql`
           INSERT INTO customer_order_expected_lines
             (company_id, order_id, proforma_id, proforma_line_id, article_code, product_name, expected_qty)
           SELECT
@@ -81,48 +86,53 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
             )
           ON CONFLICT (order_id, article_code) DO NOTHING
         `);
-        return [inserted];
-      });
-      // Sync — new line changes reservedNotYetLoaded for this proforma
-      await syncProformaReservations(db, companyId, parsed.proformaId);
+          return [inserted];
+        });
+        // Sync — new line changes reservedNotYetLoaded for this proforma
+        await syncProformaReservations(db, companyId, parsed.proformaId);
 
-      // Proforma prices are document-specific. The customer agreed-price
-      // list changes only through explicit price-list actions.
+        // Proforma prices are document-specific. The customer agreed-price
+        // list changes only through explicit price-list actions.
 
-      res.json({ ...line, ...(stockWarning ? { stockWarning } : {}) });
-    } catch (error: unknown) {
-      logger.error("Error creating proforma line:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+        res.json({ ...line, ...(stockWarning ? { stockWarning } : {}) });
+      } catch (error: unknown) {
+        logger.error("Error creating proforma line:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   registerFactoryCustomerProformaLineRoutesPart1(app);
 
-  app.delete("/api/factory/customer-proforma-lines/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
+  app.delete(
+    "/api/factory/customer-proforma-lines/:id",
+    requireAuth,
+    validateRequest(deleteProformaLineInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { id } = validatedInput(req, deleteProformaLineInput).params;
 
-      // Fetch the line first to get its proformaId before deletion
-      const [lineToDelete] = await db
-        .select()
-        .from(customerProformaLines)
-        .where(eq(customerProformaLines.id, id))
-        .limit(1);
-      if (!lineToDelete || !(await proformaInCompany(lineToDelete.proformaId, companyId))) {
-        return res.status(404).json({ message: "Proforma line not found" });
+        // Fetch the line first to get its proformaId before deletion
+        const [lineToDelete] = await db
+          .select()
+          .from(customerProformaLines)
+          .where(eq(customerProformaLines.id, id))
+          .limit(1);
+        if (!lineToDelete || !(await proformaInCompany(lineToDelete.proformaId, companyId))) {
+          return res.status(404).json({ message: "Proforma line not found" });
+        }
+
+        const [deleted] = await db.delete(customerProformaLines).where(eq(customerProformaLines.id, id)).returning();
+        if (!deleted) return res.status(404).json({ message: "Proforma line not found" });
+        // Sync — removed line releases its reservation
+        await syncProformaReservations(db, companyId, lineToDelete.proformaId);
+        res.json({ message: "Proforma line deleted" });
+      } catch (error: unknown) {
+        logger.error("Error deleting proforma line:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const [deleted] = await db.delete(customerProformaLines).where(eq(customerProformaLines.id, id)).returning();
-      if (!deleted) return res.status(404).json({ message: "Proforma line not found" });
-      // Sync — removed line releases its reservation
-      await syncProformaReservations(db, companyId, lineToDelete.proformaId);
-      res.json({ message: "Proforma line deleted" });
-    } catch (error: unknown) {
-      logger.error("Error deleting proforma line:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

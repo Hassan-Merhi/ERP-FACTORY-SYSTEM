@@ -11,6 +11,8 @@ import {
 } from "../../services/locationStockWhatsAppDelivery";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
+import { validateRequest } from "../../lib/validateRequest";
+import { retryLocationStockDeliveryInput } from "./locationWriteSchemas";
 import {
   LOCATION_WHATSAPP_PERMISSION,
   retryIdempotencyKey,
@@ -211,6 +213,7 @@ export function registerLocationWhatsappDeliveryRoutes(app: Express) {
     requireExportAccess(LOCATION_WHATSAPP_PERMISSION),
     loadRetryDelivery,
     requireRetryCostAccess,
+    validateRequest(retryLocationStockDeliveryInput),
     async (req, res) => {
       const original = req._locationStockRetryDelivery!;
       try {

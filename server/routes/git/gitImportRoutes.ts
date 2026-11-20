@@ -9,6 +9,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { containers } from "../../../shared/schema";
 import { eq } from "drizzle-orm";
 import { importUndoStore, pruneImportUndoStore } from "./_helpers";
@@ -21,12 +23,19 @@ export function registerGitImportRoutes(app: Express) {
   registerGitImportRoutesPart3(app);
 }
 
+// The handler keeps its "importId required" check.
+const importUndoInput = {
+  query: emptyQuery,
+  body: z.strictObject({ importId: z.string().optional() }),
+} satisfies RequestSchemas;
+
 function registerGitImportRoutesPart3(app: Express) {
   // ─── Undo last Excel import ───────────────────────────────────────────────
   app.post(
     "/api/git/containers/import-excel/undo",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(importUndoInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const { importId } = req.body ?? {};

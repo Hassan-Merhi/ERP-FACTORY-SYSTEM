@@ -67,7 +67,7 @@ export const MAX_ACCOUNT_FILTERS = 500;
 
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const previewBody = z
+export const previewBody = z
   .object({
     sourceKind: z.enum(["VOUCHER_ENTRY", "FACTORY_DAYBOOK"]),
     fromDate: z.string(),

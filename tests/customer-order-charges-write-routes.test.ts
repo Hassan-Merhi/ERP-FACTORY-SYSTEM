@@ -174,7 +174,7 @@ describe("PATCH /api/factory/customer-orders/:id/charges/:chargeId", () => {
 
     const response = await agent
       .patch(`/api/factory/customer-orders/${orderId}/charges/${chargeId}`)
-      .send({ name: "Freight", amount: "60.00", chargeType: "FREIGHT" });
+      .send({ name: "Freight", amount: "60.00" });
     expect(response.status).toBe(200);
 
     const totals = await expectTotalsConsistent(orderId);
@@ -184,7 +184,7 @@ describe("PATCH /api/factory/customer-orders/:id/charges/:chargeId", () => {
     expect(Number(totals.grand_total)).toBeCloseTo(60, 2);
   });
 
-  it("ignores a charge type in the body, leaving the charge in its original bucket", async () => {
+  it("rejects a charge type in the body, leaving the charge in its original bucket", async () => {
     const orderId = await createOrder();
     await agent
       .post(`/api/factory/customer-orders/${orderId}/charges`)
@@ -196,7 +196,8 @@ describe("PATCH /api/factory/customer-orders/:id/charges/:chargeId", () => {
     const response = await agent
       .patch(`/api/factory/customer-orders/${orderId}/charges/${chargeId}`)
       .send({ name: "Freight", amount: "70.00", chargeType: "OTHER" });
-    expect(response.status).toBe(200);
+    // validateRequest refuses the unknown field before the handler runs.
+    expect(response.status).toBe(400);
 
     // The edit path accepts only name, amount and ledgerAccountId — charge type
     // is fixed at creation, because moving it would need the linked voucher

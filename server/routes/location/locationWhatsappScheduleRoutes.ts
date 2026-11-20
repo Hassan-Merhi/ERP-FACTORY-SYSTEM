@@ -9,6 +9,8 @@ import { logger } from "../../lib/logger";
 import { requireExportAccess, requireSensitiveAccess } from "../../lib/permissionMiddleware";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
+import { validateRequest } from "../../lib/validateRequest";
+import { locationWhatsappScheduleInput } from "./locationWriteSchemas";
 
 const LOCATION_WHATSAPP_PERMISSION = "exp_whatsapp_send";
 const requireCostPriceAccess = requireSensitiveAccess("fld_cost_price");
@@ -278,6 +280,7 @@ export function registerLocationWhatsappScheduleRoutes(app: Express) {
     requireNonPOS,
     requireExportAccess(LOCATION_WHATSAPP_PERMISSION),
     requireCostScheduleAccess,
+    validateRequest(locationWhatsappScheduleInput),
     async (req, res) => {
       try {
         const locationId = Number.parseInt(req.params.locationId, 10);

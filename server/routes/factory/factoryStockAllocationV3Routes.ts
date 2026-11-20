@@ -13,7 +13,9 @@ import {
   getCompanyId,
   getUserInfo,
   registerFactoryStockAllocationV3RoutesPart1,
+  v3LoadActionInput,
 } from "./registerFactoryStockAllocationV3RoutesPart1";
+import { validateRequest } from "../../lib/validateRequest";
 import { registerFactoryStockAllocationV3RoutesPart3 } from "./registerFactoryStockAllocationV3RoutesPart3";
 
 export function registerFactoryStockAllocationV3Routes(app: Express) {
@@ -33,6 +35,7 @@ function registerFactoryStockAllocationV3RoutesPart2(app: Express) {
     "/api/factory/v3/loads/:id/finalize",
     requireAuth,
     requireFactoryTabAccess("factory/invoicing", "hide_invoicing_invoices_tab"),
+    validateRequest(v3LoadActionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
@@ -60,31 +63,36 @@ function registerFactoryStockAllocationV3RoutesPart2(app: Express) {
   // ──────────────────────────────────────────────────────────────
   // PATCH /api/factory/v3/loads/:id/cancel
   // ──────────────────────────────────────────────────────────────
-  app.patch("/api/factory/v3/loads/:id/cancel", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
+  app.patch(
+    "/api/factory/v3/loads/:id/cancel",
+    requireAuth,
+    validateRequest(v3LoadActionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      const [load] = await db
-        .select()
-        .from(factoryV3Loads)
-        .where(and(eq(factoryV3Loads.id, id), eq(factoryV3Loads.companyId, companyId)));
-      if (!load) return res.status(404).json({ message: "Load not found" });
-      if (load.status === "finalized") return res.status(400).json({ message: "Cannot cancel a finalized load" });
+        const [load] = await db
+          .select()
+          .from(factoryV3Loads)
+          .where(and(eq(factoryV3Loads.id, id), eq(factoryV3Loads.companyId, companyId)));
+        if (!load) return res.status(404).json({ message: "Load not found" });
+        if (load.status === "finalized") return res.status(400).json({ message: "Cannot cancel a finalized load" });
 
-      const [updated] = await db
-        .update(factoryV3Loads)
-        .set({ status: "cancelled", cancelledAt: new Date() })
-        .where(eq(factoryV3Loads.id, id))
-        .returning();
+        const [updated] = await db
+          .update(factoryV3Loads)
+          .set({ status: "cancelled", cancelledAt: new Date() })
+          .where(eq(factoryV3Loads.id, id))
+          .returning();
 
-      res.json(updated);
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json(updated);
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ──────────────────────────────────────────────────────────────
   // GET /api/factory/v3/proformas

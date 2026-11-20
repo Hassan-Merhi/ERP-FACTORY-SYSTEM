@@ -12,6 +12,8 @@ import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import { postableAdjustments } from "./postableAdjustments";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { bulkDepositInput, singleEmployeeAdjustmentInput } from "./payrollWriteSchemas";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
 import { employeeGroupMembers, employeeGroups, employees } from "@shared/schema";
 import {
@@ -24,259 +26,271 @@ import {
 
 export function registerPayrollEmployeeDepositRoutes(app: Express) {
   // Payroll - Employee Balance Deposit
-  app.post("/api/payroll/deposit-employee", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const { employeeId, amount, date, notes } = req.body;
-
-      if (!employeeId || !amount || !date) {
-        return res.status(400).json({ message: "Employee, amount, and date are required" });
-      }
-
-      const depositAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
-      if (!depositAmount || depositAmount.lte(0)) {
-        return res.status(400).json({ message: "Amount must be a positive number" });
-      }
-
-      // Get employee
-      const [employee] = await db
-        .select()
-        .from(employees)
-        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
-      if (!employee) {
-        return res.status(404).json({ message: "Employee not found" });
-      }
-
-      // Look up the employee's group for per-group salary expense splitting
-      const depGroupRows = await db
-        .select({ groupName: employeeGroups.name })
-        .from(employeeGroupMembers)
-        .innerJoin(employeeGroups, eq(employeeGroupMembers.employeeGroupId, employeeGroups.id))
-        .where(
-          and(
-            eq(employeeGroupMembers.employeeId, employee.id),
-            eq(employeeGroups.companyId, req.session.currentCompanyId!),
-            eq(employeeGroups.active, true)
-          )
-        )
-        .limit(1);
-      const depGrp = depGroupRows[0]?.groupName?.trim() || "__default__";
-      const depIsDefault = depGrp === "__default__";
-      const depExpCode = depIsDefault
-        ? "SALARY_EXPENSE"
-        : `SAL_EXP_${depGrp
-            .toUpperCase()
-            .replace(/[^A-Z0-9]/g, "_")
-            .substring(0, 25)}`;
-      const depExpName = depIsDefault ? "Salary Expense" : `Salary Expense - ${depGrp}`;
-
-      const allDepAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
-      let depSalaryAccount = allDepAccounts.find((a) => a.code === depExpCode);
-      if (!depSalaryAccount) {
-        depSalaryAccount = await storage.createLedgerAccount({
-          companyId: req.session.currentCompanyId!,
-          code: depExpCode,
-          name: depExpName,
-          accountType: "Expense",
-          openingBalance: "0",
-          active: true,
-        });
-      }
-
-      // Phase 22 (B): Dr salary expense / Cr employee through the central engine.
-      const requestSourceId = erpRequestSourceId(req);
-      const voucher = await db.transaction(async (tx) => {
-        const posted = await postErpVoucherTx(tx, {
-          companyId: req.session.currentCompanyId!,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: notes || `Salary deposit for ${employee.firstName} ${employee.lastName}`,
-          lines: pairLines(
-            { ledgerAccountId: depSalaryAccount.id },
-            { employeeId: employee.id },
-            depositAmount,
-            "Salary deposit"
-          ),
-          source: { type: "employee-salary-deposit", id: `${employee.id}:${requestSourceId}` },
-          actor: sessionPostingActor(req, "Salary deposit"),
-        });
-        const { voucher } = posted;
-        if (posted.replayed) return voucher;
-        // Wave 12: the balance moves in the voucher's transaction.
-        await syncEmployeeBalancesFromEntries(
-          [
-            {
-              ledgerAccountId: null,
-              employeeId: employee.id,
-              debitAmount: "0",
-              creditAmount: depositAmount.toFixed(2),
-            },
-          ],
-          req.session.currentCompanyId!,
-          false,
-          tx
-        );
-        return voucher;
-      });
-
-      // Get updated employee balance after sync
-      const [updatedDepositEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
-
-      res.json({
-        voucher,
-        employee: updatedDepositEmployee || employee,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  // Payroll - Bulk Employee Salary Deposit
-  app.post("/api/payroll/bulk-deposit-employees", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const { deposits, date, notes } = req.body;
-
-      if (!deposits || !Array.isArray(deposits) || deposits.length === 0) {
-        return res.status(400).json({ message: "No deposits provided" });
-      }
-
-      if (!date) {
-        return res.status(400).json({ message: "Date is required" });
-      }
-
-      // Validate all deposit amounts
-      for (const deposit of deposits) {
-        const amount = parseMoneyInput(deposit.amount);
-        if (!amount || amount.lte(0)) {
-          return res.status(400).json({
-            message: "All deposit amounts must be positive numbers",
-          });
+  app.post(
+    "/api/payroll/deposit-employee",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(singleEmployeeAdjustmentInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
         }
-      }
-      // Only employees of this company post, each amount at cents.
-      const postable = await postableAdjustments(deposits, req.session.currentCompanyId);
-      if (postable.length === 0) {
-        return res.status(400).json({ message: "No deposits provided" });
-      }
 
-      // Build group-membership lookup: employeeId → groupName
-      const bulkDepGroupMemberships = await db
-        .select({ employeeId: employeeGroupMembers.employeeId, groupName: employeeGroups.name })
-        .from(employeeGroupMembers)
-        .innerJoin(employeeGroups, eq(employeeGroupMembers.employeeGroupId, employeeGroups.id))
-        .where(and(eq(employeeGroups.companyId, req.session.currentCompanyId!), eq(employeeGroups.active, true)));
-      const bulkDepEmpGroupMap = new Map<number, string>();
-      for (const row of bulkDepGroupMemberships) {
-        if (!bulkDepEmpGroupMap.has(row.employeeId)) bulkDepEmpGroupMap.set(row.employeeId, row.groupName);
-      }
+        const { employeeId, amount, date, notes } = req.body;
 
-      // Calculate total amount
-      const totalAmount = sumMoney(postable.map((d) => d.amount)).toNumber();
+        if (!employeeId || !amount || !date) {
+          return res.status(400).json({ message: "Employee, amount, and date are required" });
+        }
 
-      // One voucher for all deposits (number allocated by the central engine).
-      const requestSourceId = erpRequestSourceId(req);
+        const depositAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
+        if (!depositAmount || depositAmount.lte(0)) {
+          return res.status(400).json({ message: "Amount must be a positive number" });
+        }
 
-      // Group deposits by employee group and create one debit per group
-      const bulkDepByGroup = new Map<string, ReturnType<typeof toMoney>>();
-      for (const d of postable) {
-        const grp = (bulkDepEmpGroupMap.get(d.employee.id) || "").trim() || "__default__";
-        bulkDepByGroup.set(grp, (bulkDepByGroup.get(grp) ?? toMoney(0)).plus(d.amount));
-      }
-      const bulkDepFreshAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
-      const bulkDepGroupDebits: ErpVoucherLine[] = [];
-      for (const [grp, grpTotal] of bulkDepByGroup) {
-        const isDefault = grp === "__default__";
-        const expCode = isDefault
+        // Get employee
+        const [employee] = await db
+          .select()
+          .from(employees)
+          .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
+        if (!employee) {
+          return res.status(404).json({ message: "Employee not found" });
+        }
+
+        // Look up the employee's group for per-group salary expense splitting
+        const depGroupRows = await db
+          .select({ groupName: employeeGroups.name })
+          .from(employeeGroupMembers)
+          .innerJoin(employeeGroups, eq(employeeGroupMembers.employeeGroupId, employeeGroups.id))
+          .where(
+            and(
+              eq(employeeGroupMembers.employeeId, employee.id),
+              eq(employeeGroups.companyId, req.session.currentCompanyId!),
+              eq(employeeGroups.active, true)
+            )
+          )
+          .limit(1);
+        const depGrp = depGroupRows[0]?.groupName?.trim() || "__default__";
+        const depIsDefault = depGrp === "__default__";
+        const depExpCode = depIsDefault
           ? "SALARY_EXPENSE"
-          : `SAL_EXP_${grp
+          : `SAL_EXP_${depGrp
               .toUpperCase()
               .replace(/[^A-Z0-9]/g, "_")
               .substring(0, 25)}`;
-        const expName = isDefault ? "Salary Expense" : `Salary Expense - ${grp}`;
-        let expAccount = bulkDepFreshAccounts.find((a) => a.code === expCode);
-        if (!expAccount) {
-          expAccount = await storage.createLedgerAccount({
+        const depExpName = depIsDefault ? "Salary Expense" : `Salary Expense - ${depGrp}`;
+
+        const allDepAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
+        let depSalaryAccount = allDepAccounts.find((a) => a.code === depExpCode);
+        if (!depSalaryAccount) {
+          depSalaryAccount = await storage.createLedgerAccount({
             companyId: req.session.currentCompanyId!,
-            code: expCode,
-            name: expName,
+            code: depExpCode,
+            name: depExpName,
             accountType: "Expense",
             openingBalance: "0",
             active: true,
           });
         }
-        bulkDepGroupDebits.push({
-          ledgerAccountId: expAccount.id,
-          debit: grpTotal,
-          narration: isDefault ? `Bulk salary deposit - ${postable.length} employees` : `Salary expense - ${grp}`,
-        });
-      }
 
-      // Voucher header and every entry commit together (balanced-voucher trigger).
-      const { voucher, results } = await db.transaction(async (tx) => {
-        // Credit each employee (employeeId on the line, no separate ledger account).
-        const results = postable.map((deposit) => ({
-          employeeId: deposit.employee.id,
-          name: `${deposit.employee.firstName} ${deposit.employee.lastName}`,
-          amount: deposit.amount.toNumber(),
-        }));
-        const posted = await postErpVoucherTx(tx, {
-          companyId: req.session.currentCompanyId!,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: notes || `Bulk salary deposit for ${postable.length} employees`,
-          lines: [
-            ...bulkDepGroupDebits,
-            ...postable.map((deposit) => ({
-              employeeId: deposit.employee.id,
-              credit: deposit.amount,
-              narration: `Salary deposit for ${deposit.employee.firstName} ${deposit.employee.lastName}`,
-            })),
-          ],
-          source: { type: "employee-salary-deposit-bulk", id: requestSourceId },
-          actor: sessionPostingActor(req, "Bulk salary deposit"),
-        });
-        const { voucher } = posted;
-        // Sync all employee balances from voucher entries, in the voucher's transaction (wave 12).
-        if (!posted.replayed) {
+        // Phase 22 (B): Dr salary expense / Cr employee through the central engine.
+        const requestSourceId = erpRequestSourceId(req);
+        const voucher = await db.transaction(async (tx) => {
+          const posted = await postErpVoucherTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            voucherType: "Journal",
+            voucherDate: date,
+            description: notes || `Salary deposit for ${employee.firstName} ${employee.lastName}`,
+            lines: pairLines(
+              { ledgerAccountId: depSalaryAccount.id },
+              { employeeId: employee.id },
+              depositAmount,
+              "Salary deposit"
+            ),
+            source: { type: "employee-salary-deposit", id: `${employee.id}:${requestSourceId}` },
+            actor: sessionPostingActor(req, "Salary deposit"),
+          });
+          const { voucher } = posted;
+          if (posted.replayed) return voucher;
+          // Wave 12: the balance moves in the voucher's transaction.
           await syncEmployeeBalancesFromEntries(
-            posted.entries.map((e) => ({
-              ledgerAccountId: e.ledgerAccountId,
-              employeeId: e.employeeId,
-              debitAmount: e.debitAmount,
-              creditAmount: e.creditAmount,
-            })),
+            [
+              {
+                ledgerAccountId: null,
+                employeeId: employee.id,
+                debitAmount: "0",
+                creditAmount: depositAmount.toFixed(2),
+              },
+            ],
             req.session.currentCompanyId!,
             false,
             tx
           );
-        }
-        return { voucher, results };
-      });
-
-      // Get updated balances for all employees
-      const updatedResults = [];
-      for (const result of results) {
-        const [updatedEmp] = await db.select().from(employees).where(eq(employees.id, result.employeeId));
-        updatedResults.push({
-          ...result,
-          newBalance: updatedEmp ? toMoney(updatedEmp.currentBalance).toNumber() : 0,
+          return voucher;
         });
-      }
 
-      res.json({
-        voucher,
-        deposits: updatedResults,
-        totalAmount,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        // Get updated employee balance after sync
+        const [updatedDepositEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
+
+        res.json({
+          voucher,
+          employee: updatedDepositEmployee || employee,
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
+
+  // Payroll - Bulk Employee Salary Deposit
+  app.post(
+    "/api/payroll/bulk-deposit-employees",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(bulkDepositInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+
+        const { deposits, date, notes } = req.body;
+
+        if (!deposits || !Array.isArray(deposits) || deposits.length === 0) {
+          return res.status(400).json({ message: "No deposits provided" });
+        }
+
+        if (!date) {
+          return res.status(400).json({ message: "Date is required" });
+        }
+
+        // Validate all deposit amounts
+        for (const deposit of deposits) {
+          const amount = parseMoneyInput(deposit.amount);
+          if (!amount || amount.lte(0)) {
+            return res.status(400).json({
+              message: "All deposit amounts must be positive numbers",
+            });
+          }
+        }
+        // Only employees of this company post, each amount at cents.
+        const postable = await postableAdjustments(deposits, req.session.currentCompanyId);
+        if (postable.length === 0) {
+          return res.status(400).json({ message: "No deposits provided" });
+        }
+
+        // Build group-membership lookup: employeeId → groupName
+        const bulkDepGroupMemberships = await db
+          .select({ employeeId: employeeGroupMembers.employeeId, groupName: employeeGroups.name })
+          .from(employeeGroupMembers)
+          .innerJoin(employeeGroups, eq(employeeGroupMembers.employeeGroupId, employeeGroups.id))
+          .where(and(eq(employeeGroups.companyId, req.session.currentCompanyId!), eq(employeeGroups.active, true)));
+        const bulkDepEmpGroupMap = new Map<number, string>();
+        for (const row of bulkDepGroupMemberships) {
+          if (!bulkDepEmpGroupMap.has(row.employeeId)) bulkDepEmpGroupMap.set(row.employeeId, row.groupName);
+        }
+
+        // Calculate total amount
+        const totalAmount = sumMoney(postable.map((d) => d.amount)).toNumber();
+
+        // One voucher for all deposits (number allocated by the central engine).
+        const requestSourceId = erpRequestSourceId(req);
+
+        // Group deposits by employee group and create one debit per group
+        const bulkDepByGroup = new Map<string, ReturnType<typeof toMoney>>();
+        for (const d of postable) {
+          const grp = (bulkDepEmpGroupMap.get(d.employee.id) || "").trim() || "__default__";
+          bulkDepByGroup.set(grp, (bulkDepByGroup.get(grp) ?? toMoney(0)).plus(d.amount));
+        }
+        const bulkDepFreshAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
+        const bulkDepGroupDebits: ErpVoucherLine[] = [];
+        for (const [grp, grpTotal] of bulkDepByGroup) {
+          const isDefault = grp === "__default__";
+          const expCode = isDefault
+            ? "SALARY_EXPENSE"
+            : `SAL_EXP_${grp
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, "_")
+                .substring(0, 25)}`;
+          const expName = isDefault ? "Salary Expense" : `Salary Expense - ${grp}`;
+          let expAccount = bulkDepFreshAccounts.find((a) => a.code === expCode);
+          if (!expAccount) {
+            expAccount = await storage.createLedgerAccount({
+              companyId: req.session.currentCompanyId!,
+              code: expCode,
+              name: expName,
+              accountType: "Expense",
+              openingBalance: "0",
+              active: true,
+            });
+          }
+          bulkDepGroupDebits.push({
+            ledgerAccountId: expAccount.id,
+            debit: grpTotal,
+            narration: isDefault ? `Bulk salary deposit - ${postable.length} employees` : `Salary expense - ${grp}`,
+          });
+        }
+
+        // Voucher header and every entry commit together (balanced-voucher trigger).
+        const { voucher, results } = await db.transaction(async (tx) => {
+          // Credit each employee (employeeId on the line, no separate ledger account).
+          const results = postable.map((deposit) => ({
+            employeeId: deposit.employee.id,
+            name: `${deposit.employee.firstName} ${deposit.employee.lastName}`,
+            amount: deposit.amount.toNumber(),
+          }));
+          const posted = await postErpVoucherTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            voucherType: "Journal",
+            voucherDate: date,
+            description: notes || `Bulk salary deposit for ${postable.length} employees`,
+            lines: [
+              ...bulkDepGroupDebits,
+              ...postable.map((deposit) => ({
+                employeeId: deposit.employee.id,
+                credit: deposit.amount,
+                narration: `Salary deposit for ${deposit.employee.firstName} ${deposit.employee.lastName}`,
+              })),
+            ],
+            source: { type: "employee-salary-deposit-bulk", id: requestSourceId },
+            actor: sessionPostingActor(req, "Bulk salary deposit"),
+          });
+          const { voucher } = posted;
+          // Sync all employee balances from voucher entries, in the voucher's transaction (wave 12).
+          if (!posted.replayed) {
+            await syncEmployeeBalancesFromEntries(
+              posted.entries.map((e) => ({
+                ledgerAccountId: e.ledgerAccountId,
+                employeeId: e.employeeId,
+                debitAmount: e.debitAmount,
+                creditAmount: e.creditAmount,
+              })),
+              req.session.currentCompanyId!,
+              false,
+              tx
+            );
+          }
+          return { voucher, results };
+        });
+
+        // Get updated balances for all employees
+        const updatedResults = [];
+        for (const result of results) {
+          const [updatedEmp] = await db.select().from(employees).where(eq(employees.id, result.employeeId));
+          updatedResults.push({
+            ...result,
+            newBalance: updatedEmp ? toMoney(updatedEmp.currentBalance).toNumber() : 0,
+          });
+        }
+
+        res.json({
+          voucher,
+          deposits: updatedResults,
+          totalAmount,
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 }

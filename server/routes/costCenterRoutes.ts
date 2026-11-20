@@ -5,6 +5,8 @@
 import type { Express } from "express";
 import { pool } from "../db";
 import { requireAuth } from "../auth";
+import { validateRequest } from "../lib/validateRequest";
+import { archiveCenterInput, replaceAllocationsInput, updateCenterInput } from "./costCenterRouteSchemas";
 import { toMoney, sumMoney } from "../lib/money";
 import { sourceCte } from "./costCenterReportingRoutes";
 import {
@@ -42,119 +44,124 @@ export function registerCostCenterRoutes(app: Express): void {
 function registerCostCenterPrefixPart2(app: Express, prefix: string) {
   // A single atomic replace is the supported edit, split and remove operation.
   // It never modifies the original journal, voucher or factory daybook amount.
-  app.put(prefix + "/allocations/:sourceType/:sourceId", requireAuth, async (req, res) => {
-    try {
-      const actor = await identity(req, true);
-      const kind = parse(sourceKinds, req.params.sourceType);
-      const sourceId = queryId(req.params.sourceId);
-      const input = parse(replaceBody, req.body);
-      assertPrefixScope(
-        prefix,
-        kind,
-        input.splits.map((s) => s.costTreatment)
-      );
-      if (new Set(input.splits.map((s) => s.costCenterId)).size !== input.splits.length) {
-        throw new ApiError(400, "Duplicate cost center in split");
-      }
-      const changed = await transaction(async (client) => {
-        // Matches the DB trigger advisory key, blocking interleaved replacements.
-        await client.query("SELECT pg_advisory_xact_lock(721031,$1)", [actor.companyId]);
-        const source = await sourceInCompany(client, actor.companyId, kind, sourceId);
-        const treatment = sourceTreatment(source, kind);
-        if (input.splits.some((s) => s.costTreatment !== treatment)) {
-          throw new ApiError(409, "Expense vs inventory classification must match the posted source");
+  app.put(
+    prefix + "/allocations/:sourceType/:sourceId",
+    requireAuth,
+    validateRequest(replaceAllocationsInput),
+    async (req, res) => {
+      try {
+        const actor = await identity(req, true);
+        const kind = parse(sourceKinds, req.params.sourceType);
+        const sourceId = queryId(req.params.sourceId);
+        const input = parse(replaceBody, req.body);
+        assertPrefixScope(
+          prefix,
+          kind,
+          input.splits.map((s) => s.costTreatment)
+        );
+        if (new Set(input.splits.map((s) => s.costCenterId)).size !== input.splits.length) {
+          throw new ApiError(400, "Duplicate cost center in split");
         }
-        const native = sumMoney(input.splits.map((s) => s.amountNative));
-        const base = sumMoney(input.splits.map((s) => s.amountBase));
-        const totalNative = toMoney(source.amountNative);
-        const totalBase = toMoney(source.amountBase);
-        if (native.gt(totalNative) || base.gt(totalBase)) throw new ApiError(409, "Split exceeds source amount");
-        // Require proportional historical currency valuation, except for
-        // permitted 6dp rounding. Prevent arbitrary client-submitted USD values.
-        if (totalNative.lte(0) || totalBase.lt(0)) throw new ApiError(409, "Source has no allocatable amount");
-        const tolerance = toMoney("0.000001").times(input.splits.length + 1);
-        for (const s of input.splits) {
-          const expected = toMoney(s.amountNative).times(totalBase).dividedBy(totalNative);
-          if (toMoney(s.amountBase).minus(expected).abs().gt(tolerance)) {
-            throw new ApiError(409, "Historical USD allocation does not match source proportion");
+        const changed = await transaction(async (client) => {
+          // Matches the DB trigger advisory key, blocking interleaved replacements.
+          await client.query("SELECT pg_advisory_xact_lock(721031,$1)", [actor.companyId]);
+          const source = await sourceInCompany(client, actor.companyId, kind, sourceId);
+          const treatment = sourceTreatment(source, kind);
+          if (input.splits.some((s) => s.costTreatment !== treatment)) {
+            throw new ApiError(409, "Expense vs inventory classification must match the posted source");
           }
-        }
-        const ids = input.splits.map((s) => s.costCenterId);
-        if (ids.length) {
-          const selected = await client.query(
-            "SELECT id FROM cost_centers WHERE company_id=$1 AND active=true AND id=ANY($2::int[]) FOR SHARE",
-            [actor.companyId, ids]
-          );
-          if (selected.rows.length !== ids.length)
-            throw new ApiError(409, "A split uses a missing or archived cost center");
-        }
-        // Explicit user changes, including CLEAR ALL, permanently take priority
-        // over the deferred auto-allocation trigger.
-        const overrideCol = sourceColumn(kind);
-        await client.query("DELETE FROM cost_center_source_overrides WHERE company_id=$1 AND " + overrideCol + "=$2", [
-          actor.companyId,
-          sourceId,
-        ]);
-        await client.query(
-          "INSERT INTO cost_center_source_overrides(company_id," +
-            overrideCol +
-            ",reason,overridden_by) VALUES($1,$2,$3,$4)",
-          [actor.companyId, sourceId, input.reason, actor.userId]
-        );
-        const before = await splitList(client, actor.companyId, kind, sourceId);
-        const column = sourceColumn(kind);
-        await client.query("DELETE FROM cost_center_allocations WHERE company_id=$1 AND " + column + "=$2", [
-          actor.companyId,
-          sourceId,
-        ]);
-        for (const s of input.splits) {
+          const native = sumMoney(input.splits.map((s) => s.amountNative));
+          const base = sumMoney(input.splits.map((s) => s.amountBase));
+          const totalNative = toMoney(source.amountNative);
+          const totalBase = toMoney(source.amountBase);
+          if (native.gt(totalNative) || base.gt(totalBase)) throw new ApiError(409, "Split exceeds source amount");
+          // Require proportional historical currency valuation, except for
+          // permitted 6dp rounding. Prevent arbitrary client-submitted USD values.
+          if (totalNative.lte(0) || totalBase.lt(0)) throw new ApiError(409, "Source has no allocatable amount");
+          const tolerance = toMoney("0.000001").times(input.splits.length + 1);
+          for (const s of input.splits) {
+            const expected = toMoney(s.amountNative).times(totalBase).dividedBy(totalNative);
+            if (toMoney(s.amountBase).minus(expected).abs().gt(tolerance)) {
+              throw new ApiError(409, "Historical USD allocation does not match source proportion");
+            }
+          }
+          const ids = input.splits.map((s) => s.costCenterId);
+          if (ids.length) {
+            const selected = await client.query(
+              "SELECT id FROM cost_centers WHERE company_id=$1 AND active=true AND id=ANY($2::int[]) FOR SHARE",
+              [actor.companyId, ids]
+            );
+            if (selected.rows.length !== ids.length)
+              throw new ApiError(409, "A split uses a missing or archived cost center");
+          }
+          // Explicit user changes, including CLEAR ALL, permanently take priority
+          // over the deferred auto-allocation trigger.
+          const overrideCol = sourceColumn(kind);
           await client.query(
-            "INSERT INTO cost_center_allocations " +
-              "(company_id,cost_center_id," +
-              column +
-              ",amount_native,currency,amount_base,base_currency," +
-              "historical_rate,rate_convention,cost_treatment,created_by,updated_by)" +
-              " VALUES ($1,$2,$3,$4,$5,$6,'USD',$7,$8,$9,$10,$10)",
-            [
-              actor.companyId,
-              s.costCenterId,
-              sourceId,
-              s.amountNative,
-              source.currency,
-              s.amountBase,
-              source.historicalRate || null,
-              source.rateConvention || null,
-              s.costTreatment,
-              actor.userId,
-            ]
+            "DELETE FROM cost_center_source_overrides WHERE company_id=$1 AND " + overrideCol + "=$2",
+            [actor.companyId, sourceId]
           );
-        }
-        const after = await splitList(client, actor.companyId, kind, sourceId);
-        await audit(
-          client,
-          actor,
-          after.length === 0 ? "delete" : before.length ? "update" : "create",
-          "cost_center_allocations",
-          null,
-          kind + ":" + sourceId,
-          { splits: before, reason: input.reason },
-          { splits: after, reason: input.reason }
-        );
-        return {
-          sourceType: kind,
-          sourceId,
-          splits: after,
-          allocatedNative: native.toFixed(6),
-          allocatedBase: base.toFixed(6),
-          unallocatedNative: totalNative.minus(native).toFixed(6),
-          unallocatedBase: totalBase.minus(base).toFixed(6),
-        };
-      });
-      res.json(changed);
-    } catch (e) {
-      sendError(res, e);
+          await client.query(
+            "INSERT INTO cost_center_source_overrides(company_id," +
+              overrideCol +
+              ",reason,overridden_by) VALUES($1,$2,$3,$4)",
+            [actor.companyId, sourceId, input.reason, actor.userId]
+          );
+          const before = await splitList(client, actor.companyId, kind, sourceId);
+          const column = sourceColumn(kind);
+          await client.query("DELETE FROM cost_center_allocations WHERE company_id=$1 AND " + column + "=$2", [
+            actor.companyId,
+            sourceId,
+          ]);
+          for (const s of input.splits) {
+            await client.query(
+              "INSERT INTO cost_center_allocations " +
+                "(company_id,cost_center_id," +
+                column +
+                ",amount_native,currency,amount_base,base_currency," +
+                "historical_rate,rate_convention,cost_treatment,created_by,updated_by)" +
+                " VALUES ($1,$2,$3,$4,$5,$6,'USD',$7,$8,$9,$10,$10)",
+              [
+                actor.companyId,
+                s.costCenterId,
+                sourceId,
+                s.amountNative,
+                source.currency,
+                s.amountBase,
+                source.historicalRate || null,
+                source.rateConvention || null,
+                s.costTreatment,
+                actor.userId,
+              ]
+            );
+          }
+          const after = await splitList(client, actor.companyId, kind, sourceId);
+          await audit(
+            client,
+            actor,
+            after.length === 0 ? "delete" : before.length ? "update" : "create",
+            "cost_center_allocations",
+            null,
+            kind + ":" + sourceId,
+            { splits: before, reason: input.reason },
+            { splits: after, reason: input.reason }
+          );
+          return {
+            sourceType: kind,
+            sourceId,
+            splits: after,
+            allocatedNative: native.toFixed(6),
+            allocatedBase: base.toFixed(6),
+            unallocatedNative: totalNative.minus(native).toFixed(6),
+            unallocatedBase: totalBase.minus(base).toFixed(6),
+          };
+        });
+        res.json(changed);
+      } catch (e) {
+        sendError(res, e);
+      }
     }
-  });
+  );
   app.get(prefix + "/allocations/:sourceType/:sourceId/history", requireAuth, async (req, res) => {
     try {
       const { companyId } = await identity(req, false);
@@ -173,7 +180,7 @@ function registerCostCenterPrefixPart2(app: Express, prefix: string) {
       sendError(res, e);
     }
   });
-  app.patch(prefix + "/:id", requireAuth, async (req, res) => {
+  app.patch(prefix + "/:id", requireAuth, validateRequest(updateCenterInput), async (req, res) => {
     try {
       const actor = await identity(req, true);
       const id = queryId(req.params.id);
@@ -200,7 +207,7 @@ function registerCostCenterPrefixPart2(app: Express, prefix: string) {
       sendError(res, e);
     }
   });
-  app.post(prefix + "/:id/archive", requireAuth, async (req, res) => {
+  app.post(prefix + "/:id/archive", requireAuth, validateRequest(archiveCenterInput), async (req, res) => {
     try {
       const actor = await identity(req, true);
       const id = queryId(req.params.id);

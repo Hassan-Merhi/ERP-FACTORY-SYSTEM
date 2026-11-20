@@ -24,6 +24,48 @@ import {
 import { sendBufferFast, serveFastAttachment } from "./whatsappFastSendRoutesSendBufferFast";
 import { sendPosStockFast } from "./whatsappFastSendRoutesSendPosStockFast";
 import { sendUploadedPdfFast } from "./whatsappFastSendRoutesSendUploadedPdfFast";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Callers send { month: "yyyy-MM" }; without it the current month is sent.
+const sendAccountStatementInput = {
+  params: z.strictObject({ accountId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ month: z.string().nullable().optional() }).optional(),
+} satisfies RequestSchemas;
+
+// Ids are read with Number(...); the handlers keep their own id checks.
+const numberLike = z.union([z.number(), z.string()]);
+
+// client/src/pages/pos/utils/posPrintHelpers.ts sends { locationId }.
+const sendPosStockInput = {
+  query: emptyQuery,
+  body: z.strictObject({ locationId: numberLike.nullable().optional() }).optional(),
+} satisfies RequestSchemas;
+
+// posPrintHelpers.ts sends { voucherId, locationId }; tests/pdf-invoice.test.ts adds dryRun.
+const sendPosInvoiceInput = {
+  query: emptyQuery,
+  body: z
+    .strictObject({
+      voucherId: numberLike.nullable().optional(),
+      locationId: numberLike.nullable().optional(),
+      dryRun: z.boolean().optional(),
+    })
+    .optional(),
+} satisfies RequestSchemas;
+
+const sendUploadedPdfInput = {
+  query: emptyQuery,
+  body: z
+    .strictObject({
+      pdfBase64: z.string().nullable().optional(),
+      locationId: numberLike.nullable().optional(),
+      filename: z.string().nullable().optional(),
+      caption: z.string().nullable().optional(),
+    })
+    .optional(),
+} satisfies RequestSchemas;
 
 async function sendPosInvoiceFast(req: Request, res: Response): Promise<void> {
   const startedAt = Date.now();
@@ -260,19 +302,44 @@ export function registerWhatsAppFastSendRoutes(app: Express): void {
   // upload is now the reliable primary path; sendFileByUrl remains a fallback
   // for provider failures and keeps a longer-lived capability URL.
   for (const route of ["/api/pos/send-stock-pdf-backend", "/api/pos/send-stock-pdf"]) {
-    app.post(route, requireAuth, enforcePosOperationalPermissionScope, enforcePosCapabilityScope, sendPosStockFast);
+    app.post(
+      route,
+      requireAuth,
+      enforcePosOperationalPermissionScope,
+      enforcePosCapabilityScope,
+      validateRequest(sendPosStockInput),
+      sendPosStockFast
+    );
   }
   for (const route of ["/api/pos/send-invoice-pdf-backend", "/api/pos/send-invoice-whatsapp"]) {
-    app.post(route, requireAuth, enforcePosOperationalPermissionScope, enforcePosCapabilityScope, sendPosInvoiceFast);
+    app.post(
+      route,
+      requireAuth,
+      enforcePosOperationalPermissionScope,
+      enforcePosCapabilityScope,
+      validateRequest(sendPosInvoiceInput),
+      sendPosInvoiceFast
+    );
   }
   app.post(
     "/api/pos/send-whatsapp-pdf-upload",
     requireAuth,
     enforcePosOperationalPermissionScope,
     enforcePosCapabilityScope,
+    validateRequest(sendUploadedPdfInput),
     sendUploadedPdfFast
   );
 
-  app.post("/api/accounts/:accountId/send-statement-whatsapp", requireAuth, sendAccountStatementFast);
-  app.post("/api/factory/accounts/:accountId/send-statement-whatsapp", requireAuth, sendAccountStatementFast);
+  app.post(
+    "/api/accounts/:accountId/send-statement-whatsapp",
+    requireAuth,
+    validateRequest(sendAccountStatementInput),
+    sendAccountStatementFast
+  );
+  app.post(
+    "/api/factory/accounts/:accountId/send-statement-whatsapp",
+    requireAuth,
+    validateRequest(sendAccountStatementInput),
+    sendAccountStatementFast
+  );
 }

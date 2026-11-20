@@ -8,6 +8,8 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { recalcUndoInput } from "../rawStockWriteRouteSchemas";
 import { pool } from "../../../../db";
 
 import { ADMIN_ROLES } from "./_helpers";
@@ -49,6 +51,7 @@ export function registerRawStockRecalcUndoRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/undo",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(recalcUndoInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

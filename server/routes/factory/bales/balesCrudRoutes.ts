@@ -14,6 +14,16 @@ import { registerBalesMaintenanceRoutes } from "./balesMaintenanceRoutes";
 import { registerBalesCrudRoutesPart1 } from "./registerBalesCrudRoutesPart1";
 import { registerBalesCrudRoutesPart2 } from "./registerBalesCrudRoutesPart2";
 import { registerBalesCrudRoutesPart4 } from "./registerBalesCrudRoutesPart4";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// The handler parses the id with parseId and keeps its own 400.
+const deleteBaleInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerBalesCrudRoutes(app: Express) {
   registerBalesCrudRoutesPart1(app);
@@ -33,6 +43,7 @@ function registerBalesCrudRoutesPart3(app: Express) {
     "/api/factory/bales/:id",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(deleteBaleInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

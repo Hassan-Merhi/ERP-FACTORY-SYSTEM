@@ -14,45 +14,92 @@ import { poLineItems, purchaseOrders, stockItems, supplierContainerLoadedItems }
 
 import { verifyContainerOwnership } from "./_helpers";
 import { toMoney } from "../../lib/money";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  positiveIntParam,
+  validateRequest,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
+
+const containerParams = z.strictObject({ containerId: positiveIntParam });
+const importValue = z.union([z.string(), z.number()]).nullable().optional();
+
+/** Each row may use the camelCase keys or the spreadsheet header spelling. */
+const importLoadedItemsInput = {
+  params: containerParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    items: z
+      .array(
+        z.strictObject({
+          barcode: importValue,
+          Barcode: importValue,
+          itemName: importValue,
+          "Item Name": importValue,
+          qty: importValue,
+          Qty: importValue,
+          weightPerBale: importValue,
+          "Weight per Bale": importValue,
+          pricePerBale: importValue,
+          "Price per Bale": importValue,
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
+const autoPopulateInput = {
+  params: containerParams,
+  query: z.strictObject({ replace: z.string().optional() }),
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerContainerLoadedItemImportRoutes(app: Express, requireAuth: RequestHandler) {
-  app.post("/api/containers/:containerId/import-loaded-items", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const containerId = parseId(req.params.containerId);
-      if (containerId === null) return res.status(400).json({ message: "Invalid id" });
-      if (!(await verifyContainerOwnership(containerId, companyId)))
-        return res.status(403).json({ message: "Access denied" });
-      const { items } = req.body;
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "No items to import" });
+  app.post(
+    "/api/containers/:containerId/import-loaded-items",
+    requireAuth,
+    validateRequest(importLoadedItemsInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const containerId = parseId(req.params.containerId);
+        if (containerId === null) return res.status(400).json({ message: "Invalid id" });
+        if (!(await verifyContainerOwnership(containerId, companyId)))
+          return res.status(403).json({ message: "Access denied" });
+        const { items } = req.body;
+        if (!items || !Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ message: "No items to import" });
+        }
+        // Resolve alias codes → primary stock-item codes before saving so that
+        // items imported with different (supplier) codes match the proforma.
+        const { map: aliasMap } = await buildAliasMap(companyId);
+        const values = items.map((l) => ({
+          containerId,
+          barcode: resolveBarcode(String(l.barcode || l.Barcode || "").trim(), aliasMap),
+          itemName: String(l.itemName || l["Item Name"] || "").trim() || null,
+          qty: parseInt(l.qty || l.Qty || 0) || 0,
+          weightPerBale: l.weightPerBale || l["Weight per Bale"] || null,
+          pricePerBale: l.pricePerBale || l["Price per Bale"] || null,
+        }));
+        await db.insert(supplierContainerLoadedItems).values(values);
+        const allItems = await db
+          .select()
+          .from(supplierContainerLoadedItems)
+          .where(eq(supplierContainerLoadedItems.containerId, containerId));
+        res.json({ imported: values.length, items: allItems });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      // Resolve alias codes → primary stock-item codes before saving so that
-      // items imported with different (supplier) codes match the proforma.
-      const { map: aliasMap } = await buildAliasMap(companyId);
-      const values = items.map((l) => ({
-        containerId,
-        barcode: resolveBarcode(String(l.barcode || l.Barcode || "").trim(), aliasMap),
-        itemName: String(l.itemName || l["Item Name"] || "").trim() || null,
-        qty: parseInt(l.qty || l.Qty || 0) || 0,
-        weightPerBale: l.weightPerBale || l["Weight per Bale"] || null,
-        pricePerBale: l.pricePerBale || l["Price per Bale"] || null,
-      }));
-      await db.insert(supplierContainerLoadedItems).values(values);
-      const allItems = await db
-        .select()
-        .from(supplierContainerLoadedItems)
-        .where(eq(supplierContainerLoadedItems.containerId, containerId));
-      res.json({ imported: values.length, items: allItems });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.post(
     "/api/containers/:containerId/auto-populate-loaded-items",
     requireAuth,
+    validateRequest(autoPopulateInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;

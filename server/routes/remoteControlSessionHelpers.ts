@@ -102,13 +102,25 @@ export function openEventStream(res: Response): void {
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
+  // The stream echoes request ids (tab, session); never let a browser sniff it as HTML.
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.flushHeaders();
   res.write("retry: 3000\n\n");
 }
 
+/**
+ * JSON for an SSE data line. JSON.stringify already escapes newlines, so a value
+ * cannot start a new event; <, > and & are escaped too (\u003c, \u003e, \u0026),
+ * which clients parse back to the same characters, so no request-supplied string
+ * reaches the response as raw markup.
+ */
+export function eventData(payload: unknown): string {
+  return JSON.stringify(payload).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+}
+
 export function writeEvent(res: Response, event: string, payload: unknown): void {
   if (res.writableEnded || res.destroyed) return;
-  res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+  res.write(`event: ${event}\ndata: ${eventData(payload)}\n\n`);
   (res as FlushableResponse).flush?.();
 }
 

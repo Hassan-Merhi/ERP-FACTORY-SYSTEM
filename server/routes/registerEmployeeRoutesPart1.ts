@@ -4,9 +4,58 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { parseMoneyInput } from "../lib/money";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const employeeIdParams = z.strictObject({ id: stringParam });
+const looseId = z.union([z.string(), z.number(), z.null()]).optional();
+const looseAmount = z.union([z.string(), z.number(), z.null()]).optional();
+
+const updateEmployeeInput = {
+  params: employeeIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    code: z.string().optional(),
+    monthlySalary: z.union([z.string(), z.number()]).optional(),
+    department: z.string().nullable().optional(),
+    active: z.boolean().optional(),
+    joinDate: z.string().optional(),
+    employeeGroupId: looseId,
+    salesBonusPct: looseAmount,
+    salesBonusPctSourceCompanyId: looseId,
+    salesBonusPctLocationId: looseId,
+    balesBonusRate: looseAmount,
+  }),
+} satisfies RequestSchemas;
+
+const rateRowFields = {
+  locationId: z.union([z.string(), z.number()]).nullable().optional(),
+  sourceCompanyId: z.union([z.string(), z.number()]).nullable().optional(),
+};
+const baleRatesInput = {
+  params: employeeIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ rates: z.array(z.strictObject({ ...rateRowFields, rate: looseAmount })) }),
+} satisfies RequestSchemas;
+const balePctRatesInput = {
+  params: employeeIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ rates: z.array(z.strictObject({ ...rateRowFields, pct: looseAmount })) }),
+} satisfies RequestSchemas;
+
+const deleteEmployeeInput = {
+  params: employeeIdParams,
+  query: z.strictObject({
+    forceDelete: z.string().optional(),
+    force: z.unknown().optional(), // sent by client/src/pages/payroll/usePayrollModelPart4.tsx; not used (handler reads forceDelete)
+  }),
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerEmployeeRoutesPart1(app: Express) {
-  app.put("/api/employees/:id/bale-rates", requireAuth, async (req, res) => {
+  app.put("/api/employees/:id/bale-rates", requireAuth, validateRequest(baleRatesInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -39,7 +88,7 @@ export function registerEmployeeRoutesPart1(app: Express) {
     }
   });
 
-  app.put("/api/employees/:id/bale-pct-rates", requireAuth, async (req, res) => {
+  app.put("/api/employees/:id/bale-pct-rates", requireAuth, validateRequest(balePctRatesInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -60,7 +109,7 @@ export function registerEmployeeRoutesPart1(app: Express) {
     }
   });
 
-  app.patch("/api/employees/:id", requireAuth, async (req, res) => {
+  app.patch("/api/employees/:id", requireAuth, validateRequest(updateEmployeeInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -122,7 +171,7 @@ export function registerEmployeeRoutesPart1(app: Express) {
     }
   });
 
-  app.delete("/api/employees/:id", requireAuth, async (req, res) => {
+  app.delete("/api/employees/:id", requireAuth, validateRequest(deleteEmployeeInput), async (req, res) => {
     try {
       // Only Admin can delete employees
       const userRole = req.session.currentRole;

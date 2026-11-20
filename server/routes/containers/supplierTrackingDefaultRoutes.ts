@@ -1,7 +1,15 @@
 import type { Express } from "express";
 import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { parseId } from "../../lib/parseId";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  positiveIntParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { upsertSupplierTrackingDefaultSchema } from "@shared/schema";
 import {
   backfillSupplierTrackingDefaults,
@@ -10,6 +18,14 @@ import {
 } from "../../services/supplierTrackingDefaults";
 
 const MANAGE_ROLES = ["Admin", "Owner", "Developer"] as const;
+
+const saveDefaultInput = {
+  params: z.strictObject({ supplierId: positiveIntParam }),
+  query: emptyQuery,
+  body: upsertSupplierTrackingDefaultSchema.strict(),
+} satisfies RequestSchemas;
+
+const backfillInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerSupplierTrackingDefaultRoutes(app: Express) {
   app.get("/api/tracking-defaults/suppliers", requireAuth, requireNonPOS, async (req, res) => {
@@ -29,21 +45,15 @@ export function registerSupplierTrackingDefaultRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole(...MANAGE_ROLES),
+    validateRequest(saveDefaultInput),
     async (req, res) => {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
-
-      const supplierId = parseId(req.params.supplierId);
-      if (supplierId === null) return res.status(400).json({ message: "Invalid supplier id" });
-
-      const parsed = upsertSupplierTrackingDefaultSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ message: "Invalid tracking default", errors: parsed.error.issues });
-      }
+      const { params, body } = validatedInput(req, saveDefaultInput);
 
       try {
-        const saved = await saveSupplierTrackingDefault(req.session.currentCompanyId, supplierId, parsed.data);
+        const saved = await saveSupplierTrackingDefault(req.session.currentCompanyId, params.supplierId, body);
         return res.json({ success: true, default: saved });
       } catch (error: unknown) {
         const message = getErrorMessage(error);
@@ -58,6 +68,7 @@ export function registerSupplierTrackingDefaultRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole(...MANAGE_ROLES),
+    validateRequest(backfillInput),
     async (req, res) => {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

@@ -15,6 +15,19 @@ import { eq, and, sql } from "drizzle-orm";
 import { getClientDate } from "../../lib/dateUtils";
 import { generateBilingualWorkerBalesPdf } from "../../lib/workerBalesBilingualPdfGenerator";
 import { sendWhatsAppFileByUploadPos } from "../../services/whatsappService";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Both routes read an optional date (falls back to X-Client-Date) and a PDF
+// language from the body or the query string.
+// Callers: client/src/pages/stockentryhistory/useStockEntryHistoryMutations.ts sends { date }.
+const productionDateInput = {
+  query: z.strictObject({ lang: z.string().optional() }),
+  body: z.union([
+    z.undefined(),
+    z.strictObject({ date: z.string().nullable().optional(), lang: z.string().nullable().optional() }),
+  ]),
+} satisfies RequestSchemas;
 
 function requestedLanguage(req: import("express").Request): FactoryCatalogLanguage {
   return parseFactoryCatalogLanguage(req.body?.lang ?? req.query?.lang, "en");
@@ -109,6 +122,7 @@ export function registerEndProductionRoutes(app: Express, requireAuth: RequestHa
   app.post(
     "/api/factory/stock-entry/end-production",
     requireAuth,
+    validateRequest(productionDateInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session?.factoryCompanyId || req.session?.currentCompanyId;
@@ -166,6 +180,7 @@ export function registerEndProductionRoutes(app: Express, requireAuth: RequestHa
   app.post(
     "/api/factory/bales/send-worker-pdf-whatsapp",
     requireAuth,
+    validateRequest(productionDateInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session?.factoryCompanyId || req.session?.currentCompanyId;

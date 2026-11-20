@@ -10,11 +10,56 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { broadcast } from "../../../wsServer";
 import { requireAuth } from "../../../auth";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
 import { users, directMessages, insertDirectMessageSchema, userPresence } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+
+const chatUploadInput = {
+  query: emptyQuery,
+  // multipart/form-data: the only part is the "file" field, which multer consumes.
+  body: emptyBody,
+} satisfies RequestSchemas;
+
+const chatTypingInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    receiverId: z.string().optional(),
+    isTyping: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// Mirrors insertDirectMessageSchema's input fields; the handler still runs that
+// schema for its receiver and message-or-file checks. senderId was accepted and
+// overwritten by the session user, so it stays accepted.
+const chatMessageInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    receiverId: z.string(),
+    senderId: z.unknown().optional(),
+    message: z.string().optional(),
+    fileUrl: z.string().optional(),
+    fileName: z.string().optional(),
+    fileType: z.string().optional(),
+    fileSize: z.number().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const chatUserParams = z.strictObject({ userId: stringParam });
+
+const chatMarkReadInput = { params: chatUserParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+const chatClearInput = { params: chatUserParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerFactoryChatRoutes(app: Express) {
   // ============ DIRECT MESSAGES / CHAT ============
@@ -33,22 +78,28 @@ export function registerFactoryChatRoutes(app: Express) {
 
   const typingStatus = new Map<string, { receiverId: string; until: number }>();
 
-  app.post("/api/chat/upload", requireAuth, chatUpload.single("file"), async (req: Request, res: Response) => {
-    try {
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-      const fileUrl = `/uploads/chat/${req.file.filename}`;
-      res.json({
-        fileUrl,
-        fileName: req.file.originalname,
-        fileType: req.file.mimetype,
-        fileSize: req.file.size,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/chat/upload",
+    requireAuth,
+    chatUpload.single("file"),
+    validateRequest(chatUploadInput),
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+        const fileUrl = `/uploads/chat/${req.file.filename}`;
+        res.json({
+          fileUrl,
+          fileName: req.file.originalname,
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.post("/api/chat/typing", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/chat/typing", requireAuth, validateRequest(chatTypingInput), async (req: Request, res: Response) => {
     try {
       const senderId = requireSessionUserId(req);
       const receiverId = typeof req.body?.receiverId === "string" ? req.body.receiverId : "";
@@ -62,10 +113,7 @@ export function registerFactoryChatRoutes(app: Express) {
         typingStatus.delete(senderId);
       }
 
-      broadcast(
-        { type: "typing:update", senderId, receiverId, isTyping, until },
-        { userIds: [receiverId] }
-      );
+      broadcast({ type: "typing:update", senderId, receiverId, isTyping, until }, { userIds: [receiverId] });
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -170,81 +218,96 @@ export function registerFactoryChatRoutes(app: Express) {
     }
   });
 
-  app.post("/api/chat/messages", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const currentUserId = requireSessionUserId(req);
-      const parsed = insertDirectMessageSchema.parse({
-        ...req.body,
-        senderId: currentUserId,
-      });
-
-      const [msg] = await db
-        .insert(directMessages)
-        .values({
+  app.post(
+    "/api/chat/messages",
+    requireAuth,
+    validateRequest(chatMessageInput),
+    async (req: Request, res: Response) => {
+      try {
+        const currentUserId = requireSessionUserId(req);
+        const parsed = insertDirectMessageSchema.parse({
+          ...req.body,
           senderId: currentUserId,
-          receiverId: parsed.receiverId,
-          message: parsed.message || null,
-          fileUrl: parsed.fileUrl || null,
-          fileName: parsed.fileName || null,
-          fileType: parsed.fileType || null,
-          fileSize: parsed.fileSize || null,
-        })
-        .returning();
+        });
 
-      typingStatus.delete(currentUserId);
-      broadcast({ type: "message:new", message: msg }, { userIds: [currentUserId, parsed.receiverId] });
-      res.json(msg);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+        const [msg] = await db
+          .insert(directMessages)
+          .values({
+            senderId: currentUserId,
+            receiverId: parsed.receiverId,
+            message: parsed.message || null,
+            fileUrl: parsed.fileUrl || null,
+            fileName: parsed.fileName || null,
+            fileType: parsed.fileType || null,
+            fileSize: parsed.fileSize || null,
+          })
+          .returning();
+
+        typingStatus.delete(currentUserId);
+        broadcast({ type: "message:new", message: msg }, { userIds: [currentUserId, parsed.receiverId] });
+        res.json(msg);
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.post("/api/chat/mark-read/:userId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const currentUserId = requireSessionUserId(req);
-      const senderId = req.params.userId;
+  app.post(
+    "/api/chat/mark-read/:userId",
+    requireAuth,
+    validateRequest(chatMarkReadInput),
+    async (req: Request, res: Response) => {
+      try {
+        const currentUserId = requireSessionUserId(req);
+        const senderId = validatedInput(req, chatMarkReadInput).params.userId;
 
-      await db
-        .update(directMessages)
-        .set({ readAt: new Date() })
-        .where(
-          and(
-            eq(directMessages.senderId, senderId),
-            eq(directMessages.receiverId, currentUserId),
-            sql`${directMessages.readAt} IS NULL`
-          )
+        await db
+          .update(directMessages)
+          .set({ readAt: new Date() })
+          .where(
+            and(
+              eq(directMessages.senderId, senderId),
+              eq(directMessages.receiverId, currentUserId),
+              sql`${directMessages.readAt} IS NULL`
+            )
+          );
+
+        broadcast({ type: "message:read", readerId: currentUserId, senderId }, { userIds: [currentUserId, senderId] });
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/chat/messages/:userId",
+    requireAuth,
+    validateRequest(chatClearInput),
+    async (req: Request, res: Response) => {
+      try {
+        const currentUserId = requireSessionUserId(req);
+        const otherUserId = validatedInput(req, chatClearInput).params.userId;
+
+        await db
+          .delete(directMessages)
+          .where(
+            or(
+              and(eq(directMessages.senderId, currentUserId), eq(directMessages.receiverId, otherUserId)),
+              and(eq(directMessages.senderId, otherUserId), eq(directMessages.receiverId, currentUserId))
+            )
+          );
+
+        broadcast(
+          { type: "conversation:cleared", userIds: [currentUserId, otherUserId] },
+          { userIds: [currentUserId, otherUserId] }
         );
-
-      broadcast({ type: "message:read", readerId: currentUserId, senderId }, { userIds: [currentUserId, senderId] });
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
-
-  app.delete("/api/chat/messages/:userId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const currentUserId = requireSessionUserId(req);
-      const otherUserId = req.params.userId;
-
-      await db
-        .delete(directMessages)
-        .where(
-          or(
-            and(eq(directMessages.senderId, currentUserId), eq(directMessages.receiverId, otherUserId)),
-            and(eq(directMessages.senderId, otherUserId), eq(directMessages.receiverId, currentUserId))
-          )
-        );
-
-      broadcast(
-        { type: "conversation:cleared", userIds: [currentUserId, otherUserId] },
-        { userIds: [currentUserId, otherUserId] }
-      );
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  );
 
   app.get("/api/chat/unread-count", requireAuth, async (req: Request, res: Response) => {
     try {

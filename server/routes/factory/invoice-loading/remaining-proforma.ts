@@ -14,6 +14,15 @@ import { customerProformas, customerProformaLines } from "@shared/schema";
 import { syncProformaReservations } from "../_stockReservationHelper";
 
 import { buildLoadingSummary, getCompanyId } from "./_helpers";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// parseId() still checks the id.
+const createRemainingProformaInput = {
+  params: z.strictObject({ invoiceId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerInvoiceRemainingProformaRoutes(app: Express) {
   // POST /api/factory/invoices/:invoiceId/create-remaining-proforma
@@ -21,6 +30,7 @@ export function registerInvoiceRemainingProformaRoutes(app: Express) {
   app.post(
     "/api/factory/invoices/:invoiceId/create-remaining-proforma",
     requireAuth,
+    validateRequest(createRemainingProformaInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);

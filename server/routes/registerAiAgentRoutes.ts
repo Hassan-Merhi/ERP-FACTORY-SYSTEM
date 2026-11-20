@@ -7,6 +7,15 @@ import { and, eq } from "drizzle-orm";
 import { requireAuth, requireNonPOS, requireRole } from "../auth";
 import { assertTaskOwner, executeStep, type TaskPlan } from "./aiAgentRoutesGenerateTaskPlan";
 import { registerAiAgentRoutesPart1 } from "./registerAiAgentRoutesPart1";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The handlers parse the id with parseInt and answer 400 on NaN, so the param stays a string.
+const aiAgentIdActionInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 // ── Route registration ────────────────────────────────────────────────────────
 export function registerAiAgentRoutes(app: Express) {
@@ -18,6 +27,7 @@ export function registerAiAgentRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner", "Manager"),
+    validateRequest(aiAgentIdActionInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -48,6 +58,7 @@ export function registerAiAgentRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner", "Manager"),
+    validateRequest(aiAgentIdActionInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -139,6 +150,7 @@ export function registerAiAgentRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireRole("Admin", "Owner", "Manager"),
+    validateRequest(aiAgentIdActionInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;

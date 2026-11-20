@@ -12,6 +12,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { validateRequest } from "../lib/validateRequest";
+import { noBodyByIdInput, updateTransferInput } from "./baleTransferRoutesSchemas";
 import { strictIds } from "./helpers/companyOwnership";
 import { baleTransfers, baleTransferItems, productionBales } from "@shared/schema";
 import { registerBaleTransferRoutesPart1, allBalesOwned } from "./registerBaleTransferRoutesPart1";
@@ -62,7 +64,7 @@ export function registerBaleTransferRoutes(app: Express) {
 
   registerBaleTransferRoutesPart1(app);
 
-  app.patch("/api/bale-transfers/:id/complete", requireAuth, async (req, res) => {
+  app.patch("/api/bale-transfers/:id/complete", requireAuth, validateRequest(noBodyByIdInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -90,7 +92,7 @@ export function registerBaleTransferRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/bale-transfers/:id", requireAuth, async (req, res) => {
+  app.delete("/api/bale-transfers/:id", requireAuth, validateRequest(noBodyByIdInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -129,7 +131,7 @@ export function registerBaleTransferRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/bale-transfers/:id", requireAuth, async (req, res) => {
+  app.patch("/api/bale-transfers/:id", requireAuth, validateRequest(updateTransferInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

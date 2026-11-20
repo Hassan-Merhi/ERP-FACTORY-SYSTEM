@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
 import { datedMonetaryRateTx, fxDay, MonetaryFxError } from "../services/accounting/monetaryFxRates";
 import { monetaryAccountValuationTx } from "../services/accounting/monetaryFxValuation";
@@ -27,6 +28,12 @@ const realizedFilter = z.object({
   partyId: positive.optional(),
   asOfDate: date,
 });
+// Shape only: the handler still parses the id and the reason and keeps its FX_* errors.
+const recognizeInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string() }),
+} satisfies RequestSchemas;
 function company(req: Request) {
   const id = Number(req.session.currentCompanyId);
   if (!Number.isSafeInteger(id) || id <= 0)
@@ -124,24 +131,29 @@ export function registerMonetaryFxRoutes(app: Express): void {
       return fail(res, e);
     }
   });
-  app.post("/api/accounting/monetary-fx/realized/:id/recognize", ...gate, async (req, res) => {
-    // Defense in depth: never rely on the path-matching middleware alone.
-    if (!UNIFIED_FINANCIAL_POSTING_RELEASED) return res.status(423).json(UNIFIED_FINANCIAL_POSTING_LOCKED);
-    try {
-      const c = company(req),
-        matchId = positive.parse(req.params.id);
-      const input = z.object({ reason: z.string().trim().min(3).max(1000) }).parse(req.body);
-      const recognized = await db.transaction((tx) =>
-        recognizeRealizedFxTx(tx, {
-          companyId: c,
-          matchId,
-          actor: actor(req),
-          reason: input.reason,
-        })
-      );
-      return res.status(recognized.replayed ? 200 : 201).json(recognized);
-    } catch (e) {
-      return fail(res, e);
+  app.post(
+    "/api/accounting/monetary-fx/realized/:id/recognize",
+    ...gate,
+    validateRequest(recognizeInput),
+    async (req, res) => {
+      // Defense in depth: never rely on the path-matching middleware alone.
+      if (!UNIFIED_FINANCIAL_POSTING_RELEASED) return res.status(423).json(UNIFIED_FINANCIAL_POSTING_LOCKED);
+      try {
+        const c = company(req),
+          matchId = positive.parse(req.params.id);
+        const input = z.object({ reason: z.string().trim().min(3).max(1000) }).parse(req.body);
+        const recognized = await db.transaction((tx) =>
+          recognizeRealizedFxTx(tx, {
+            companyId: c,
+            matchId,
+            actor: actor(req),
+            reason: input.reason,
+          })
+        );
+        return res.status(recognized.replayed ? 200 : 201).json(recognized);
+      } catch (e) {
+        return fail(res, e);
+      }
     }
-  });
+  );
 }

@@ -10,6 +10,35 @@ import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting
 import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments, ledgerAccounts } from "@shared/schema";
 import { getFactoryCompanyId, writeDaybookEntry } from "./helpers";
 import { parseMoneyInput } from "../../../lib/money";
+import { z } from "zod";
+import {
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const numeric = z.union([z.number(), z.string()]);
+const text = z.string().nullable().optional();
+
+// The handler parses the amount with parseMoneyInput and the account with
+// parseInt and answers its own 400s.
+const createWorkerAdvanceInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    // Read before the session company (tests send it; no client does).
+    companyId: numeric.optional(),
+    amount: numeric.nullable().optional(),
+    advanceDate: text,
+    cashAccountId: numeric.nullable().optional(),
+    repaymentType: text,
+    notes: text,
+    // Phase 5 request identity: the client fetch guard adds it and the voucher-path boundary claims it.
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerWorkerAdvancesRoutes(app: Express) {
   app.get("/api/factory/advance-repayments", requireAuth, async (req: Request, res: Response) => {
@@ -118,120 +147,124 @@ export function registerWorkerAdvancesRoutes(app: Express) {
   });
 
   // POST /api/factory/workers/:id/advances - Record a new advance
-  app.post("/api/factory/workers/:id/advances", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const workerId = parseId(req.params.id);
-      if (workerId === null) return res.status(400).json({ message: "Invalid id" });
+  app.post(
+    "/api/factory/workers/:id/advances",
+    requireAuth,
+    validateRequest(createWorkerAdvanceInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.body.companyId || getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const workerId = validatedInput(req, createWorkerAdvanceInput).params.id;
 
-      const amount = parseMoneyInput(req.body.amount)?.toDecimalPlaces(2) ?? null;
-      if (!amount || amount.lte(0)) return res.status(400).json({ message: "Amount must be positive" });
+        const amount = parseMoneyInput(req.body.amount)?.toDecimalPlaces(2) ?? null;
+        if (!amount || amount.lte(0)) return res.status(400).json({ message: "Amount must be positive" });
 
-      const [worker] = await db
-        .select({ fullName: factoryWorkers.fullName })
-        .from(factoryWorkers)
-        .where(and(eq(factoryWorkers.id, workerId), eq(factoryWorkers.companyId, companyId)));
-      if (!worker) return res.status(404).json({ message: "Worker not found" });
+        const [worker] = await db
+          .select({ fullName: factoryWorkers.fullName })
+          .from(factoryWorkers)
+          .where(and(eq(factoryWorkers.id, workerId), eq(factoryWorkers.companyId, companyId)));
+        if (!worker) return res.status(404).json({ message: "Worker not found" });
 
-      const advanceDate = req.body.advanceDate || getClientDate(req);
-      const cashAccountId = req.body.cashAccountId ? parseInt(req.body.cashAccountId) : null;
-
-      if (cashAccountId) {
-        const [acct] = await db
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
-        if (!acct) return res.status(400).json({ message: "Cash account not found for this company" });
-      }
-
-      const repaymentType = req.body.repaymentType === "manual_repayment" ? "manual_repayment" : "salary_deduction";
-
-      const result = await db.transaction(async (tx) => {
-        const [advance] = await tx
-          .insert(factoryWorkerAdvances)
-          .values({
-            companyId,
-            workerId,
-            advanceDate,
-            amount: amount.toFixed(2),
-            remainingBalance: amount.toFixed(2),
-            cashAccountId,
-            notes: req.body.notes || null,
-            repaymentType,
-          })
-          .returning();
-
-        let voucherId: number | null = null;
+        const advanceDate = req.body.advanceDate || getClientDate(req);
+        const cashAccountId = req.body.cashAccountId ? parseInt(req.body.cashAccountId) : null;
 
         if (cashAccountId) {
-          let [advancesAccount] = await tx
+          const [acct] = await db
             .select({ id: ledgerAccounts.id })
             .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Worker Advances")));
-
-          if (!advancesAccount) {
-            const maxCodeResult = await tx
-              .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
-              .from(ledgerAccounts)
-              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^[0-9]+$'`));
-            const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
-
-            [advancesAccount] = await tx
-              .insert(ledgerAccounts)
-              .values({
-                companyId,
-                code: nextCode,
-                name: "Factory Worker Advances",
-                accountType: "Asset",
-                active: true,
-                isHidden: false,
-              })
-              .returning();
-          }
-
-          const voucherNumber = `PAYMENT-ADV-${advance.id}-1`;
-          const narration = `Advance to ${worker.fullName}: $${amount.toFixed(2)}`;
-
-          const { voucher: createdVoucher } = await postErpVoucherTx(tx, {
-            companyId,
-            voucherNumber,
-            voucherType: "Payment",
-            voucherDate: advanceDate,
-            description: narration,
-            currency: "USD",
-            sourceModule: "FACTORY",
-            lines: [
-              { ledgerAccountId: advancesAccount.id, debit: amount.toFixed(2), narration: narration },
-              { ledgerAccountId: cashAccountId, credit: amount.toFixed(2), narration: narration },
-            ],
-            source: { type: "worker-advance", id: advance.id },
-          });
-
-          voucherId = createdVoucher.id;
+            .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
+          if (!acct) return res.status(400).json({ message: "Cash account not found for this company" });
         }
 
-        await writeDaybookEntry(tx, {
-          companyId,
-          txDate: advanceDate,
-          txType: "ADVANCE_GIVEN",
-          referenceId: advance.id,
-          referenceTable: "factory_worker_advances",
-          description: `Advance given to ${worker.fullName}: $${amount.toFixed(2)}`,
-          amountCurrency: amount.toNumber(),
-          amountUsd: amount.toNumber(),
-          createdBy: req.session.userId ?? undefined,
+        const repaymentType = req.body.repaymentType === "manual_repayment" ? "manual_repayment" : "salary_deduction";
+
+        const result = await db.transaction(async (tx) => {
+          const [advance] = await tx
+            .insert(factoryWorkerAdvances)
+            .values({
+              companyId,
+              workerId,
+              advanceDate,
+              amount: amount.toFixed(2),
+              remainingBalance: amount.toFixed(2),
+              cashAccountId,
+              notes: req.body.notes || null,
+              repaymentType,
+            })
+            .returning();
+
+          let voucherId: number | null = null;
+
+          if (cashAccountId) {
+            let [advancesAccount] = await tx
+              .select({ id: ledgerAccounts.id })
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Worker Advances")));
+
+            if (!advancesAccount) {
+              const maxCodeResult = await tx
+                .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
+                .from(ledgerAccounts)
+                .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^[0-9]+$'`));
+              const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
+
+              [advancesAccount] = await tx
+                .insert(ledgerAccounts)
+                .values({
+                  companyId,
+                  code: nextCode,
+                  name: "Factory Worker Advances",
+                  accountType: "Asset",
+                  active: true,
+                  isHidden: false,
+                })
+                .returning();
+            }
+
+            const voucherNumber = `PAYMENT-ADV-${advance.id}-1`;
+            const narration = `Advance to ${worker.fullName}: $${amount.toFixed(2)}`;
+
+            const { voucher: createdVoucher } = await postErpVoucherTx(tx, {
+              companyId,
+              voucherNumber,
+              voucherType: "Payment",
+              voucherDate: advanceDate,
+              description: narration,
+              currency: "USD",
+              sourceModule: "FACTORY",
+              lines: [
+                { ledgerAccountId: advancesAccount.id, debit: amount.toFixed(2), narration: narration },
+                { ledgerAccountId: cashAccountId, credit: amount.toFixed(2), narration: narration },
+              ],
+              source: { type: "worker-advance", id: advance.id },
+            });
+
+            voucherId = createdVoucher.id;
+          }
+
+          await writeDaybookEntry(tx, {
+            companyId,
+            txDate: advanceDate,
+            txType: "ADVANCE_GIVEN",
+            referenceId: advance.id,
+            referenceTable: "factory_worker_advances",
+            description: `Advance given to ${worker.fullName}: $${amount.toFixed(2)}`,
+            amountCurrency: amount.toNumber(),
+            amountUsd: amount.toNumber(),
+            createdBy: req.session.userId ?? undefined,
+          });
+
+          return { ...advance, voucherId, workerName: worker.fullName };
         });
 
-        return { ...advance, voucherId, workerName: worker.fullName };
-      });
-
-      res.json(result);
-    } catch (error: unknown) {
-      logger.error("Error creating advance:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json(result);
+      } catch (error: unknown) {
+        logger.error("Error creating advance:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ─── Worker Deductions CRUD (ERP mirror — no factory guard) ─────────────────
   // These duplicate the /api/factory/worker-deductions endpoints but live outside

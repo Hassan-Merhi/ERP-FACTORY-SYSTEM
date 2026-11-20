@@ -22,10 +22,17 @@ import {
   applySpSupplierVoucherLinkRepair,
   planSpSupplierVoucherLinkRepair,
 } from "./spSupplierVoucherSync";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { spWriteFields } from "./spRequestSchemas";
 
 const PLAN_HASH = /^[0-9a-f]{64}$/;
 const PLAN_ROUTE = "/api/sp/admin/supplier-voucher-links/plan";
 const APPLY_ROUTE = "/api/sp/admin/supplier-voucher-links/apply";
+
+const applyRepairInput = {
+  body: z.strictObject({ ...spWriteFields, confirm: z.boolean().optional(), planHash: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerSpSupplierVoucherLinkRepairRoutes(app: Express) {
   app.get(PLAN_ROUTE, requireAuth, requireRole("Owner"), async (req: Request, res: Response) => {
@@ -39,31 +46,37 @@ export function registerSpSupplierVoucherLinkRepairRoutes(app: Express) {
     }
   });
 
-  app.post(APPLY_ROUTE, requireAuth, requireRole("Owner"), async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const planHash = req.body?.planHash;
-      if (typeof planHash !== "string" || !PLAN_HASH.test(planHash)) {
-        return res.status(400).json({ message: "The reviewed plan hash is required" });
+  app.post(
+    APPLY_ROUTE,
+    requireAuth,
+    requireRole("Owner"),
+    validateRequest(applyRepairInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+        const planHash = req.body?.planHash;
+        if (typeof planHash !== "string" || !PLAN_HASH.test(planHash)) {
+          return res.status(400).json({ message: "The reviewed plan hash is required" });
+        }
+        const result = await applySpSupplierVoucherLinkRepair(companyId, {
+          planHash,
+          actor: {
+            userId: String(req.session.userId ?? ""),
+            username: req.session.username || String(req.session.userId ?? "unknown"),
+          },
+        });
+        res.json(result);
+      } catch (error: unknown) {
+        if (error instanceof SpSupplierLinkRepairRefusal) {
+          return res.status(409).json({ code: error.code, message: error.message });
+        }
+        const closed = closedPeriodErrorResponse(error);
+        if (closed) return res.status(closed.status).json(closed.body);
+        logger.error("Error applying the SP supplier voucher link repair:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      const result = await applySpSupplierVoucherLinkRepair(companyId, {
-        planHash,
-        actor: {
-          userId: String(req.session.userId ?? ""),
-          username: req.session.username || String(req.session.userId ?? "unknown"),
-        },
-      });
-      res.json(result);
-    } catch (error: unknown) {
-      if (error instanceof SpSupplierLinkRepairRefusal) {
-        return res.status(409).json({ code: error.code, message: error.message });
-      }
-      const closed = closedPeriodErrorResponse(error);
-      if (closed) return res.status(closed.status).json(closed.body);
-      logger.error("Error applying the SP supplier voucher link repair:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

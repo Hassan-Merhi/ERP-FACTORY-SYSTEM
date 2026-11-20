@@ -11,6 +11,35 @@ import type { PoolClient } from "pg";
 import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { getProfitCheckSupplierScope } from "./supplier-scope";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const numberish = z.union([z.number(), z.string()]);
+/** normalizeNullablePrice: null or "" resets, otherwise Number() must be positive. */
+const nullablePrice = numberish.nullable().optional();
+
+// Sent by useSupplierProfitCheckSafeModelPart1.ts. Omitted prices keep their
+// previous value, so poPrice/avgPrice stay optional (absent, not undefined).
+const bulkOverridesInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    supplierId: numberish.optional(),
+    overrides: z
+      .array(z.strictObject({ stockItemId: numberish.optional(), poPrice: nullablePrice, avgPrice: nullablePrice }))
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
+// Sent by useSupplierProfitCheckModelPart1.ts and useSupplierProfitCheckSafeModel.tsx.
+const overrideInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    supplierId: numberish.optional(),
+    stockItemId: numberish.optional(),
+    poPrice: nullablePrice,
+    avgPrice: nullablePrice,
+  }),
+} satisfies RequestSchemas;
 
 function normalizeNullablePrice(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -149,113 +178,122 @@ export function registerSupplierProfitPoOverrideRoutes(app: Express, requireAuth
     }
   });
 
-  app.put("/api/supplier-profit-check/po-overrides/bulk", requireAuth, async (req: Request, res: Response) => {
-    const companyId = req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.put(
+    "/api/supplier-profit-check/po-overrides/bulk",
+    requireAuth,
+    validateRequest(bulkOverridesInput),
+    async (req: Request, res: Response) => {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-    try {
-      const supplierId = Number(req.body?.supplierId);
-      const overrides = req.body?.overrides;
-      if (!Number.isInteger(supplierId) || supplierId <= 0 || !Array.isArray(overrides)) {
-        return res.status(400).json({ message: "supplierId and overrides required" });
-      }
-      if (overrides.length > 5000) return res.status(400).json({ message: "Too many overrides" });
-      if (!(await supplierBelongsToCompany(supplierId, companyId))) {
-        return res.status(404).json({ message: "Supplier not found" });
-      }
-      if (overrides.length === 0) return res.json({ ok: true });
-
-      const normalized = new Map<number, BulkOverrideRow>();
-      for (const row of overrides) {
-        const stockItemId = Number(row?.stockItemId);
-        if (!Number.isInteger(stockItemId) || stockItemId <= 0) {
-          return res.status(400).json({ message: "Invalid stockItemId in overrides" });
+      try {
+        const supplierId = Number(req.body?.supplierId);
+        const overrides = req.body?.overrides;
+        if (!Number.isInteger(supplierId) || supplierId <= 0 || !Array.isArray(overrides)) {
+          return res.status(400).json({ message: "supplierId and overrides required" });
         }
-        const hasPoPrice = Object.prototype.hasOwnProperty.call(row, "poPrice");
-        const hasAvgPrice = Object.prototype.hasOwnProperty.call(row, "avgPrice");
-        if (!hasPoPrice && !hasAvgPrice) {
-          return res.status(400).json({ message: "Each override requires poPrice and/or avgPrice" });
+        if (overrides.length > 5000) return res.status(400).json({ message: "Too many overrides" });
+        if (!(await supplierBelongsToCompany(supplierId, companyId))) {
+          return res.status(404).json({ message: "Supplier not found" });
         }
-        normalized.set(stockItemId, {
-          stockItemId,
-          hasPoPrice,
-          hasAvgPrice,
-          poPrice: hasPoPrice ? normalizeNullablePrice(row.poPrice) : null,
-          avgPrice: hasAvgPrice ? normalizeNullablePrice(row.avgPrice) : null,
-        });
-      }
+        if (overrides.length === 0) return res.json({ ok: true });
 
-      const stockItemIds = [...normalized.keys()];
-      const scopedItems = await pool.query(
-        `
+        const normalized = new Map<number, BulkOverrideRow>();
+        for (const row of overrides) {
+          const stockItemId = Number(row?.stockItemId);
+          if (!Number.isInteger(stockItemId) || stockItemId <= 0) {
+            return res.status(400).json({ message: "Invalid stockItemId in overrides" });
+          }
+          const hasPoPrice = Object.prototype.hasOwnProperty.call(row, "poPrice");
+          const hasAvgPrice = Object.prototype.hasOwnProperty.call(row, "avgPrice");
+          if (!hasPoPrice && !hasAvgPrice) {
+            return res.status(400).json({ message: "Each override requires poPrice and/or avgPrice" });
+          }
+          normalized.set(stockItemId, {
+            stockItemId,
+            hasPoPrice,
+            hasAvgPrice,
+            poPrice: hasPoPrice ? normalizeNullablePrice(row.poPrice) : null,
+            avgPrice: hasAvgPrice ? normalizeNullablePrice(row.avgPrice) : null,
+          });
+        }
+
+        const stockItemIds = [...normalized.keys()];
+        const scopedItems = await pool.query(
+          `
         SELECT id
         FROM stock_items
         WHERE company_id = $1
           AND deleted_at IS NULL
           AND id = ANY($2::int[])
       `,
-        [companyId, stockItemIds]
-      );
-      if (scopedItems.rows.length !== stockItemIds.length) {
-        return res.status(400).json({ message: "One or more stock items are invalid for the active company" });
-      }
+          [companyId, stockItemIds]
+        );
+        if (scopedItems.rows.length !== stockItemIds.length) {
+          return res.status(400).json({ message: "One or more stock items are invalid for the active company" });
+        }
 
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        await upsertBulkRows(client, supplierId, [...normalized.values()]);
-        await client.query(
-          `
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          await upsertBulkRows(client, supplierId, [...normalized.values()]);
+          await client.query(
+            `
           DELETE FROM supplier_profit_po_overrides
           WHERE supplier_id = $1
             AND stock_item_id = ANY($2::int[])
             AND po_price IS NULL
             AND avg_price IS NULL
         `,
-          [supplierId, stockItemIds]
-        );
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK").catch(() => undefined);
-        throw error;
-      } finally {
-        client.release();
+            [supplierId, stockItemIds]
+          );
+          await client.query("COMMIT");
+        } catch (error) {
+          await client.query("ROLLBACK").catch(() => undefined);
+          throw error;
+        } finally {
+          client.release();
+        }
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        const message = getErrorMessage(err);
+        const status = message.includes("Price must") ? 400 : 500;
+        res.status(status).json({ message });
       }
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      const message = getErrorMessage(err);
-      const status = message.includes("Price must") ? 400 : 500;
-      res.status(status).json({ message });
     }
-  });
+  );
 
-  app.put("/api/supplier-profit-check/po-overrides", requireAuth, async (req: Request, res: Response) => {
-    const companyId = req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.put(
+    "/api/supplier-profit-check/po-overrides",
+    requireAuth,
+    validateRequest(overrideInput),
+    async (req: Request, res: Response) => {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-    try {
-      const { supplierId: rawSupplierId, stockItemId: rawStockItemId } = req.body;
-      const supplierId = Number(rawSupplierId);
-      const stockItemId = Number(rawStockItemId);
-      if (!Number.isInteger(supplierId) || supplierId <= 0 || !Number.isInteger(stockItemId) || stockItemId <= 0) {
-        return res.status(400).json({ message: "supplierId and stockItemId required" });
-      }
-      const hasPoPrice = Object.prototype.hasOwnProperty.call(req.body, "poPrice");
-      const hasAvgPrice = Object.prototype.hasOwnProperty.call(req.body, "avgPrice");
-      if (!hasPoPrice && !hasAvgPrice) return res.status(400).json({ message: "No override field supplied" });
+      try {
+        const { supplierId: rawSupplierId, stockItemId: rawStockItemId } = req.body;
+        const supplierId = Number(rawSupplierId);
+        const stockItemId = Number(rawStockItemId);
+        if (!Number.isInteger(supplierId) || supplierId <= 0 || !Number.isInteger(stockItemId) || stockItemId <= 0) {
+          return res.status(400).json({ message: "supplierId and stockItemId required" });
+        }
+        const hasPoPrice = Object.prototype.hasOwnProperty.call(req.body, "poPrice");
+        const hasAvgPrice = Object.prototype.hasOwnProperty.call(req.body, "avgPrice");
+        if (!hasPoPrice && !hasAvgPrice) return res.status(400).json({ message: "No override field supplied" });
 
-      if (!(await supplierBelongsToCompany(supplierId, companyId))) {
-        return res.status(404).json({ message: "Supplier not found" });
-      }
-      if (!(await stockItemBelongsToCompany(stockItemId, companyId))) {
-        return res.status(404).json({ message: "Stock item not found" });
-      }
+        if (!(await supplierBelongsToCompany(supplierId, companyId))) {
+          return res.status(404).json({ message: "Supplier not found" });
+        }
+        if (!(await stockItemBelongsToCompany(stockItemId, companyId))) {
+          return res.status(404).json({ message: "Stock item not found" });
+        }
 
-      const poPrice = hasPoPrice ? normalizeNullablePrice(req.body.poPrice) : null;
-      const avgPrice = hasAvgPrice ? normalizeNullablePrice(req.body.avgPrice) : null;
+        const poPrice = hasPoPrice ? normalizeNullablePrice(req.body.poPrice) : null;
+        const avgPrice = hasAvgPrice ? normalizeNullablePrice(req.body.avgPrice) : null;
 
-      await pool.query(
-        `
+        await pool.query(
+          `
         INSERT INTO supplier_profit_po_overrides
           (supplier_id, stock_item_id, po_price, avg_price, updated_at)
         VALUES ($1, $2, $3, $4, now())
@@ -265,23 +303,24 @@ export function registerSupplierProfitPoOverrideRoutes(app: Express, requireAuth
           avg_price = CASE WHEN $6::boolean THEN EXCLUDED.avg_price ELSE supplier_profit_po_overrides.avg_price END,
           updated_at = now()
       `,
-        [supplierId, stockItemId, poPrice, avgPrice, hasPoPrice, hasAvgPrice]
-      );
-      await pool.query(
-        `
+          [supplierId, stockItemId, poPrice, avgPrice, hasPoPrice, hasAvgPrice]
+        );
+        await pool.query(
+          `
         DELETE FROM supplier_profit_po_overrides
         WHERE supplier_id = $1
           AND stock_item_id = $2
           AND po_price IS NULL
           AND avg_price IS NULL
       `,
-        [supplierId, stockItemId]
-      );
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      const message = getErrorMessage(err);
-      const status = message.includes("Price must") ? 400 : 500;
-      res.status(status).json({ message });
+          [supplierId, stockItemId]
+        );
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        const message = getErrorMessage(err);
+        const status = message.includes("Price must") ? 400 : 500;
+        res.status(status).json({ message });
+      }
     }
-  });
+  );
 }

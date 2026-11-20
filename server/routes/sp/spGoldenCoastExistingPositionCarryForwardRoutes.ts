@@ -32,6 +32,9 @@ import {
   type DatabaseTransaction,
   type PersistedPostingResult,
 } from "./spGoldenCoastExistingPositionCarryForwardRoutesHelpers";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { spWriteFields } from "./spRequestSchemas";
 
 const postingDependencies = createDatabasePostingDependencies();
 const requestBudget = privilegedRequestBudget({ maxBodyBytes: 16 * 1024, maxCollectionItems: 250 });
@@ -260,6 +263,8 @@ async function handleApply(req: Request, res: Response): Promise<void> {
   }
 }
 
+const applyCarryForwardInput = { body: z.strictObject(spWriteFields) } satisfies RequestSchemas;
+
 export function registerSpGoldenCoastExistingPositionCarryForwardRoutes(app: Express): void {
   app.get(
     "/api/sp/golden-coast/cutover/existing-position-carry-forward",
@@ -274,6 +279,7 @@ export function registerSpGoldenCoastExistingPositionCarryForwardRoutes(app: Exp
     requestBudget,
     requireAuth,
     requireRole("Admin"),
+    validateRequest(applyCarryForwardInput),
     (req, res) => void handleApply(req, res)
   );
 }

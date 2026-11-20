@@ -23,6 +23,7 @@ import {
 import { confirmMirroredPayment } from "../../services/intercompany/paymentSync";
 import { getPairPaymentSetup } from "../../services/intercompany/paymentQueries";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 
 const cash = z.object({ type: z.enum(["bank", "cash"]), id: z.number().int().positive() }).strict();
 const allocation = z
@@ -61,6 +62,25 @@ const ordinary = z
       .min(1),
   })
   .passthrough();
+
+// The strict form of `ordinary`: what the voucher form's live match check sends.
+const voucherPreviewInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    voucherType: z.enum(["Payment", "Receipt"]),
+    paymentAccountType: z.string().min(1),
+    paymentAccountId: z.number().int().positive(),
+    entries: z
+      .array(
+        z.strictObject({
+          accountType: z.string().min(1),
+          accountId: z.number().int().positive(),
+          amount: z.union([z.string(), z.number()]).optional(),
+        })
+      )
+      .min(1),
+  }),
+} satisfies RequestSchemas;
 
 function actor(req: Request): EditIdentity {
   const companyId = Number(req.session.currentCompanyId);
@@ -150,9 +170,9 @@ export function registerNormalIntercompanyVoucherRoutes(app: Express): void {
     "/api/intercompany-container-trading/payments/voucher-preview",
     requireAuth,
     requireNonPOS,
+    validateRequest(voucherPreviewInput),
     async (req, res) => {
       try {
-        ordinary.parse(req.body);
         const { identity, match } = await inspect(req);
         if (!match) return res.json({ matched: false });
         const setup = await getPairPaymentSetup(match.relationshipId, identity);

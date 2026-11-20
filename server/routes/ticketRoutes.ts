@@ -29,6 +29,13 @@ import { canAccessTicket, canPerformTicketAction, type TicketStatus } from "../l
 import { storage } from "../storage";
 import { MAX_TICKET_ATTACHMENT_BYTES } from "../lib/ticketEvidenceValidation";
 import { buildPermissionMap, canAccess } from "../lib/permissionHelpers";
+import {
+  emptyBody,
+  stringIdParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../lib/validateRequest";
 
 function respondError(res: Response, error: unknown) {
   const code = error instanceof Error ? error.message : "TICKET_ERROR";
@@ -105,6 +112,23 @@ const contactInput = z
   .refine((x) => !x.emailEnabled || !!x.email, { message: "Email is required when enabled" })
   .refine((x) => !x.whatsappEnabled || !!x.whatsappNumber, { message: "WhatsApp number is required when enabled" });
 
+const notificationSettingsInput = { body: contactInput } satisfies RequestSchemas;
+const createTicketInput = { body: ticketCreateSchema } satisfies RequestSchemas;
+// positiveId (Number()) keeps its own id check, so the id stays a string here.
+const ticketCommentInput = {
+  params: stringIdParams,
+  // postTicketComment keeps its own TICKET_INVALID_COMMENT check (type, trim, length).
+  body: z.strictObject({ body: z.string().optional() }),
+} satisfies RequestSchemas;
+// multer accepts no text fields (fields: 0), so the parsed body is always empty.
+const ticketAttachmentInput = { params: stringIdParams, body: emptyBody } satisfies RequestSchemas;
+// One handler serves seen/start/finalize/reopen and reads both notes for every
+// action (the client sends resolutionNote on finalize, reason on reopen).
+const ticketTransitionInput = {
+  params: stringIdParams,
+  body: z.strictObject({ resolutionNote: z.string().optional(), reason: z.string().optional() }),
+} satisfies RequestSchemas;
+
 export function registerTicketRoutes(app: Express) {
   // Fixed report paths must precede parameterized /:id routes.
   registerTicketReportingRoutes(app);
@@ -155,39 +179,42 @@ export function registerTicketRoutes(app: Express) {
     }
   });
 
-  app.put("/api/tickets/notification-settings", ...page, async (req: Request, res: Response) => {
-    const input = contactInput.safeParse(req.body);
-    if (!input.success)
-      return res.status(400).json({ message: "Invalid contact preferences", errors: input.error.flatten() });
-    try {
-      const ctx = await getActiveCompanyPermissionContext(req);
-      const number = input.data.whatsappNumber.replace(/^\\+/, "");
-      await db
-        .insert(supportTicketNotificationContacts)
-        .values({
-          companyId: ctx.companyId,
-          userId: ctx.userId,
-          email: input.data.email || null,
-          whatsappChatId: number ? `${number}@c.us` : null,
-          emailEnabled: input.data.emailEnabled,
-          whatsappEnabled: input.data.whatsappEnabled,
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [supportTicketNotificationContacts.companyId, supportTicketNotificationContacts.userId],
-          set: {
-            email: input.data.email || null,
+  app.put(
+    "/api/tickets/notification-settings",
+    ...page,
+    validateRequest(notificationSettingsInput),
+    async (req: Request, res: Response) => {
+      const input = validatedInput(req, notificationSettingsInput).body;
+      try {
+        const ctx = await getActiveCompanyPermissionContext(req);
+        const number = input.whatsappNumber.replace(/^\\+/, "");
+        await db
+          .insert(supportTicketNotificationContacts)
+          .values({
+            companyId: ctx.companyId,
+            userId: ctx.userId,
+            email: input.email || null,
             whatsappChatId: number ? `${number}@c.us` : null,
-            emailEnabled: input.data.emailEnabled,
-            whatsappEnabled: input.data.whatsappEnabled,
+            emailEnabled: input.emailEnabled,
+            whatsappEnabled: input.whatsappEnabled,
             updatedAt: new Date(),
-          },
-        });
-      return res.json({ saved: true });
-    } catch (error) {
-      return respondError(res, error);
+          })
+          .onConflictDoUpdate({
+            target: [supportTicketNotificationContacts.companyId, supportTicketNotificationContacts.userId],
+            set: {
+              email: input.email || null,
+              whatsappChatId: number ? `${number}@c.us` : null,
+              emailEnabled: input.emailEnabled,
+              whatsappEnabled: input.whatsappEnabled,
+              updatedAt: new Date(),
+            },
+          });
+        return res.json({ saved: true });
+      } catch (error) {
+        return respondError(res, error);
+      }
     }
-  });
+  );
 
   app.get("/api/tickets/users", ...page, async (req: Request, res: Response) => {
     try {
@@ -322,28 +349,33 @@ export function registerTicketRoutes(app: Express) {
     }
   });
 
-  app.post("/api/tickets", ...page, requireActionAccess("act_ticket_create"), async (req: Request, res: Response) => {
-    const parsed = ticketCreateSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: "Invalid ticket", errors: parsed.error.flatten() });
-    try {
-      const ctx = await getActiveCompanyPermissionContext(req);
-      if (["View Only", "Create Only", "POS"].includes(ctx.role))
-        return res.status(403).json({ message: "Ticket creation disabled for role" });
-      if (
-        parsed.data.voucherId &&
-        (!["Admin", "Developer", "Owner", "Manager"].includes(ctx.role) ||
-          !(await permitted(ctx.companyId, ctx.role, "page_vouchers")))
-      )
-        return res.status(403).json({ message: "Voucher linking requires accounting access" });
-      const ticket = await createSupportTicket(
-        { userId: ctx.userId, companyId: ctx.companyId, role: ctx.role, canAccessPage: true, canCreate: true },
-        parsed.data
-      );
-      return res.status(201).json({ ticket });
-    } catch (error) {
-      return respondError(res, error);
+  app.post(
+    "/api/tickets",
+    ...page,
+    requireActionAccess("act_ticket_create"),
+    validateRequest(createTicketInput),
+    async (req: Request, res: Response) => {
+      const ticketInput = validatedInput(req, createTicketInput).body;
+      try {
+        const ctx = await getActiveCompanyPermissionContext(req);
+        if (["View Only", "Create Only", "POS"].includes(ctx.role))
+          return res.status(403).json({ message: "Ticket creation disabled for role" });
+        if (
+          ticketInput.voucherId &&
+          (!["Admin", "Developer", "Owner", "Manager"].includes(ctx.role) ||
+            !(await permitted(ctx.companyId, ctx.role, "page_vouchers")))
+        )
+          return res.status(403).json({ message: "Voucher linking requires accounting access" });
+        const ticket = await createSupportTicket(
+          { userId: ctx.userId, companyId: ctx.companyId, role: ctx.role, canAccessPage: true, canCreate: true },
+          ticketInput
+        );
+        return res.status(201).json({ ticket });
+      } catch (error) {
+        return respondError(res, error);
+      }
     }
-  });
+  );
   // Phase 3: comments and evidence. Every read/write re-checks the active company and ticket membership.
   app.get("/api/tickets/:id/conversation", ...page, async (req: Request, res: Response) => {
     try {
@@ -359,6 +391,7 @@ export function registerTicketRoutes(app: Express) {
     "/api/tickets/:id/comments",
     ...page,
     requireActionAccess("act_ticket_comment"),
+    validateRequest(ticketCommentInput),
     async (req: Request, res: Response) => {
       try {
         const id = positiveId(req.params.id);
@@ -384,6 +417,7 @@ export function registerTicketRoutes(app: Express) {
         next();
       });
     },
+    validateRequest(ticketAttachmentInput),
     async (req: Request, res: Response) => {
       try {
         const id = positiveId(req.params.id);
@@ -434,18 +468,26 @@ export function registerTicketRoutes(app: Express) {
     ["reopen", "act_ticket_reopen"],
   ] as const) {
     const middleware = permission ? [requireActionAccess(permission)] : [];
-    app.post(`/api/tickets/:id/${action}`, ...page, ...middleware, async (req: Request, res: Response) => {
-      try {
-        const id = positiveId(req.params.id);
-        if (!id) return res.status(400).json({ message: "Invalid ticket ID" });
-        const resolutionNote =
-          typeof req.body?.resolutionNote === "string" ? req.body.resolutionNote.slice(0, 10000) : undefined;
-        const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 10000) : undefined;
-        const ticket = await transitionSupportTicket(await actorForTicket(req), id, action, { resolutionNote, reason });
-        return res.json({ ticket });
-      } catch (error) {
-        return respondError(res, error);
+    app.post(
+      `/api/tickets/:id/${action}`,
+      ...page,
+      ...middleware,
+      validateRequest(ticketTransitionInput),
+      async (req: Request, res: Response) => {
+        try {
+          const id = positiveId(req.params.id);
+          if (!id) return res.status(400).json({ message: "Invalid ticket ID" });
+          const resolutionNote = req.body.resolutionNote?.slice(0, 10000);
+          const reason = req.body.reason?.slice(0, 10000);
+          const ticket = await transitionSupportTicket(await actorForTicket(req), id, action, {
+            resolutionNote,
+            reason,
+          });
+          return res.json({ ticket });
+        } catch (error) {
+          return respondError(res, error);
+        }
       }
-    });
+    );
   }
 }

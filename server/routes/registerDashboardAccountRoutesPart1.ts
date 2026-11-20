@@ -4,6 +4,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth } from "../auth";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import type Decimal from "decimal.js";
 import { signedOpeningBalance, toMoney } from "../lib/money";
 import {
@@ -15,6 +16,12 @@ import {
   vouchers,
 } from "@shared/schema";
 import { registerDashboardAccountRoutesPart2 } from "./registerDashboardAccountRoutesPart2";
+
+// companyId always comes from the session; the handler adds it before the insert parse.
+const addDashboardCashAccountInput = {
+  query: emptyQuery,
+  body: insertDashboardCashAccountSchema.pick({ accountType: true, accountId: true, displayOrder: true }).strict(),
+} satisfies RequestSchemas;
 
 export function registerDashboardAccountRoutesPart1(app: Express) {
   // Dashboard Cash Accounts - user-selected accounts for dashboard display
@@ -133,43 +140,48 @@ export function registerDashboardAccountRoutesPart1(app: Express) {
     }
   });
 
-  app.post("/api/dashboard-cash-accounts", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.post(
+    "/api/dashboard-cash-accounts",
+    requireAuth,
+    validateRequest(addDashboardCashAccountInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      const data = insertDashboardCashAccountSchema.parse({
-        ...req.body,
-        companyId,
-      });
+        const data = insertDashboardCashAccountSchema.parse({
+          ...req.body,
+          companyId,
+        });
 
-      // Check for existing entry to prevent duplicates
-      const existing = await db
-        .select()
-        .from(dashboardCashAccounts)
-        .where(
-          and(
-            eq(dashboardCashAccounts.companyId, companyId),
-            eq(dashboardCashAccounts.accountType, data.accountType),
-            eq(dashboardCashAccounts.accountId, data.accountId)
+        // Check for existing entry to prevent duplicates
+        const existing = await db
+          .select()
+          .from(dashboardCashAccounts)
+          .where(
+            and(
+              eq(dashboardCashAccounts.companyId, companyId),
+              eq(dashboardCashAccounts.accountType, data.accountType),
+              eq(dashboardCashAccounts.accountId, data.accountId)
+            )
           )
-        )
-        .limit(1)
-        .execute();
+          .limit(1)
+          .execute();
 
-      if (existing.length > 0) {
-        return res.json(existing[0]);
+        if (existing.length > 0) {
+          return res.json(existing[0]);
+        }
+
+        const [account] = await db.insert(dashboardCashAccounts).values(data).returning().execute();
+
+        res.json(account);
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-
-      const [account] = await db.insert(dashboardCashAccounts).values(data).returning().execute();
-
-      res.json(account);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   registerDashboardAccountRoutesPart2(app);
 }

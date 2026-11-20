@@ -4,23 +4,33 @@ import { getMonetaryFxValuation } from "../../services/accounting/monetaryFxValu
 import { applyCurrentBalanceSheetFxOverlay } from "../../services/accounting/monetaryFxReportOverlay";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 
 import { getProfitLoss, getBalanceSheet } from "../../services/reports/financialReportsService";
 
-export function registerStatsSalesRoutes(app: Express) {
-  app.post("/api/sales-report/recalculate-costs", requireAuth, requireNonPOS, async (req, res) => {
-    const companyId = req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
+// The route only refuses (409); it takes no input.
+const recalculateCostsInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
-    // Historical sales are immutable. The old implementation rewrote every
-    // posted sale from the location's current inventory average, corrupting
-    // transaction-time COGS after later receipts/offloads.
-    return res.status(409).json({
-      code: "HISTORICAL_SALE_COST_IMMUTABLE",
-      message:
-        "Historical sale costs cannot be recalculated from current inventory. Use the audited historical-cost repair workflow instead.",
-    });
-  });
+export function registerStatsSalesRoutes(app: Express) {
+  app.post(
+    "/api/sales-report/recalculate-costs",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(recalculateCostsInput),
+    async (req, res) => {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      // Historical sales are immutable. The old implementation rewrote every
+      // posted sale from the location's current inventory average, corrupting
+      // transaction-time COGS after later receipts/offloads.
+      return res.status(409).json({
+        code: "HISTORICAL_SALE_COST_IMMUTABLE",
+        message:
+          "Historical sale costs cannot be recalculated from current inventory. Use the audited historical-cost repair workflow instead.",
+      });
+    }
+  );
 
   app.get("/api/reports/profit-loss", requireAuth, requireNonPOS, async (req, res) => {
     try {
@@ -65,7 +75,8 @@ export function registerStatsSalesRoutes(app: Express) {
           });
         } catch (error) {
           logger.error("[reports/balance-sheet] Current monetary FX view unavailable; serving book USD", {
-            companyId, error,
+            companyId,
+            error,
           });
         }
       }

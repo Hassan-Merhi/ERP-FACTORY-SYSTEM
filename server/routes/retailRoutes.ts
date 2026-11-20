@@ -16,6 +16,18 @@ import { trackRetailStockValueTx } from "../services/retail/retailInventoryJourn
 import { requireRetailCompany } from "./retailCompanyGuard";
 import { asNumber, normalize } from "./retailRoutesLoadProducts";
 import { registerRetailRoutesPart1 } from "./registerRetailRoutesPart1";
+import { z } from "zod";
+import { emptyQuery, validateRequest, validatedInput, type RequestSchemas } from "../lib/validateRequest";
+
+// No client posts here today; the handler reads rows (each a retailImportRowSchema
+// row) and an optional batch idempotency key, and keeps its own row-count checks.
+const retailImportInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    rows: z.array(retailImportRowSchema.strict()).optional(),
+    idempotencyKey: z.union([z.string(), z.number()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerRetailRoutes(app: Express) {
   registerRetailRoutesPart1(app);
@@ -23,21 +35,21 @@ export function registerRetailRoutes(app: Express) {
 }
 
 function registerRetailRoutesPart2(app: Express) {
-  app.post("/api/retail/import", requireAuth, requireNonPOS, async (req, res) => {
+  app.post("/api/retail/import", requireAuth, requireNonPOS, validateRequest(retailImportInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
 
-      const rawRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      const body = validatedInput(req, retailImportInput).body;
+      const rows = body.rows ?? [];
       const importBatchKey = String(
-        req.body?.idempotencyKey || `retail-import-${Date.now()}-${req.user?.id ?? req.session.userId ?? "unknown"}`
+        body.idempotencyKey || `retail-import-${Date.now()}-${req.user?.id ?? req.session.userId ?? "unknown"}`
       ).slice(0, 191);
-      if (!rawRows.length) return res.status(400).json({ message: "No import rows supplied" });
-      if (rawRows.length > 5000) {
+      if (!rows.length) return res.status(400).json({ message: "No import rows supplied" });
+      if (rows.length > 5000) {
         return res.status(400).json({ message: "Import is limited to 5,000 rows per file" });
       }
 
-      const rows = rawRows.map((row: unknown) => retailImportRowSchema.parse(row));
       const uploadBarcodes = new Map<string, string>();
       const uploadVariantLocations = new Set<string>();
 

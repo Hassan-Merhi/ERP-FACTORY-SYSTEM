@@ -10,6 +10,19 @@ import { storage } from "../../../storage";
 import { masterDataDbErrorResponse } from "../../../lib/masterDataDbError";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { insertStockGroupSchema } from "@shared/schema";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+const createStockGroupInput = {
+  query: emptyQuery,
+  body: insertStockGroupSchema
+    .omit({ companyId: true })
+    .extend({
+      // sent by client/src/pages/accountingcreate/components/EntityFormWrapper.tsx; not used (the session company is injected)
+      companyId: z.unknown().optional(),
+    })
+    .strict(),
+} satisfies RequestSchemas;
 
 export function registerStockGroupRoutes(app: Express) {
   app.get("/api/stock-groups", requireAuth, async (req, res) => {
@@ -24,36 +37,42 @@ export function registerStockGroupRoutes(app: Express) {
     }
   });
 
-  app.post("/api/stock-groups", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/stock-groups",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(createStockGroupInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+
+        // Inject companyId before schema validation
+        const dataWithCompany = {
+          ...req.body,
+          companyId: req.session.currentCompanyId,
+        };
+
+        const parsed = insertStockGroupSchema.parse(dataWithCompany);
+
+        // Check for duplicate code within the same company
+        const existing = await storage.getStockGroupByCode(parsed.code, req.session.currentCompanyId);
+        if (existing) {
+          return res.status(400).json({
+            message: "Stock group code already exists in this company",
+          });
+        }
+
+        const group = await storage.createStockGroup(parsed);
+        res.status(201).json(group);
+      } catch (error: unknown) {
+        const dbError = masterDataDbErrorResponse(error, "stock-group", req.session.currentCompanyId);
+        if (dbError) return res.status(dbError.status).json(dbError.body);
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-
-      // Inject companyId before schema validation
-      const dataWithCompany = {
-        ...req.body,
-        companyId: req.session.currentCompanyId,
-      };
-
-      const parsed = insertStockGroupSchema.parse(dataWithCompany);
-
-      // Check for duplicate code within the same company
-      const existing = await storage.getStockGroupByCode(parsed.code, req.session.currentCompanyId);
-      if (existing) {
-        return res.status(400).json({
-          message: "Stock group code already exists in this company",
-        });
-      }
-
-      const group = await storage.createStockGroup(parsed);
-      res.status(201).json(group);
-    } catch (error: unknown) {
-      const dbError = masterDataDbErrorResponse(error, "stock-group", req.session.currentCompanyId);
-      if (dbError) return res.status(dbError.status).json(dbError.body);
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ── Stock Grades ────────────────────────────────────────────────────────────
 }

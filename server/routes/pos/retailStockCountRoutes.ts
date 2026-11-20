@@ -13,6 +13,14 @@ import { retailProductVariants, retailProducts } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import {
+  emptyQuery,
+  idParams,
+  positiveIntParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { toCsv } from "../../services/retail/retailVariantReports";
 import {
   cancelRetailStockCount,
@@ -31,7 +39,7 @@ import {
 } from "../../services/retail/retailStockCount";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 
-const createSchema = z.object({
+const createSchema = z.strictObject({
   locationId: z.coerce.number().int().positive(),
   notes: z.string().trim().max(2000).nullable().optional(),
   includeAllVariants: z.boolean().optional(),
@@ -39,7 +47,7 @@ const createSchema = z.object({
 });
 
 const scanSchema = z
-  .object({
+  .strictObject({
     barcode: z.string().trim().min(1).max(191).optional(),
     variantId: z.coerce.number().int().positive().optional(),
     quantity: z.coerce.number().finite().positive().optional(),
@@ -50,17 +58,39 @@ const scanSchema = z
     message: "A barcode or variant is required",
   });
 
-const lineSchema = z.object({
+const lineSchema = z.strictObject({
   countedQuantity: z.coerce.number().finite().nonnegative().optional(),
   recountRequired: z.boolean().optional(),
   notes: z.string().trim().max(1000).nullable().optional(),
 });
 
-const finalizeSchema = z.object({
+const finalizeSchema = z.strictObject({
   allowUncounted: z.boolean().optional(),
   confirmVariance: z.boolean().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
 });
+
+// Transitions with no required field may be posted with no body at all.
+const sessionInput = <T extends z.ZodType>(body: T) =>
+  ({ params: idParams, query: emptyQuery, body: body.optional() }) satisfies RequestSchemas;
+
+const createInput = { query: emptyQuery, body: createSchema } satisfies RequestSchemas;
+const startInput = sessionInput(z.strictObject({ includeAllVariants: z.boolean().optional() }));
+const scanInput = { params: idParams, query: emptyQuery, body: scanSchema } satisfies RequestSchemas;
+const lineInput = {
+  params: z.strictObject({ id: positiveIntParam, lineId: positiveIntParam }),
+  query: emptyQuery,
+  body: lineSchema.optional(),
+} satisfies RequestSchemas;
+const reviewInput = sessionInput(z.strictObject({ notes: z.string().trim().max(2000).nullable().optional() }));
+const recountInput = sessionInput(
+  z.strictObject({
+    lineIds: z.array(z.coerce.number().int().positive()).max(500).optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+  })
+);
+const finalizeInput = sessionInput(finalizeSchema);
+const cancelInput = sessionInput(z.strictObject({ reason: z.string().trim().max(500).nullable().optional() }));
 
 const SESSION_COUNT_COLUMNS = [
   { key: "code", label: "Session" },
@@ -138,11 +168,11 @@ export function registerRetailStockCountRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/stock-counts", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/stock-counts", requireAuth, validateRequest(createInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const body = createSchema.parse(req.body ?? {});
+      const body = validatedInput(req, createInput).body;
       await ensureCompanyLocation(companyId, body.locationId);
       const session = await createRetailStockCountSession({
         companyId,
@@ -186,15 +216,13 @@ export function registerRetailStockCountRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/stock-counts/:id/start", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/stock-counts/:id/start", requireAuth, validateRequest(startInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const sessionId = Number(req.params.id);
-      if (!Number.isInteger(sessionId) || sessionId <= 0) return res.status(400).json({ message: "Invalid session" });
-      const includeAllVariants = z
-        .object({ includeAllVariants: z.boolean().optional() })
-        .parse(req.body ?? {}).includeAllVariants;
+      const { params, body } = validatedInput(req, startInput);
+      const sessionId = params.id;
+      const includeAllVariants = body?.includeAllVariants;
       const result = await startRetailStockCountSession({
         companyId,
         sessionId,
@@ -207,13 +235,12 @@ export function registerRetailStockCountRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/stock-counts/:id/scan", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/stock-counts/:id/scan", requireAuth, validateRequest(scanInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const sessionId = Number(req.params.id);
-      if (!Number.isInteger(sessionId) || sessionId <= 0) return res.status(400).json({ message: "Invalid session" });
-      const body = scanSchema.parse(req.body ?? {});
+      const { params, body } = validatedInput(req, scanInput);
+      const sessionId = params.id;
       let variantId = body.variantId ?? null;
       if (!variantId && body.barcode) {
         const [variant] = await db
@@ -249,63 +276,66 @@ export function registerRetailStockCountRoutes(app: Express): void {
     }
   });
 
-  app.patch("/api/pos/retail/stock-counts/:id/lines/:lineId", requireAuth, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const sessionId = Number(req.params.id);
-      const lineId = Number(req.params.lineId);
-      if (!Number.isInteger(sessionId) || sessionId <= 0 || !Number.isInteger(lineId) || lineId <= 0) {
-        return res.status(400).json({ message: "Invalid stock count line" });
-      }
-      const body = lineSchema.parse(req.body ?? {});
-      if (body.countedQuantity !== undefined) {
-        const session = await loadRetailStockCountSession(companyId, sessionId);
-        if (!session) return res.status(404).json({ message: "Stock count session not found" });
-        const line = session.lines.find((entry) => entry.id === lineId);
-        if (!line) return res.status(404).json({ message: "Stock count line not found" });
-        const entry = await recordRetailStockCountEntry({
-          companyId,
-          sessionId,
-          userId: currentUserId(req),
-          variantId: line.variantId,
-          quantity: body.countedQuantity,
-          mode: "set",
-          note: body.notes ?? null,
-        });
-        if (body.recountRequired !== undefined) {
-          await updateRetailStockCountLine({
+  app.patch(
+    "/api/pos/retail/stock-counts/:id/lines/:lineId",
+    requireAuth,
+    validateRequest(lineInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const { params } = validatedInput(req, lineInput);
+        const sessionId = params.id;
+        const lineId = params.lineId;
+        const body = validatedInput(req, lineInput).body ?? {};
+        if (body.countedQuantity !== undefined) {
+          const session = await loadRetailStockCountSession(companyId, sessionId);
+          if (!session) return res.status(404).json({ message: "Stock count session not found" });
+          const line = session.lines.find((entry) => entry.id === lineId);
+          if (!line) return res.status(404).json({ message: "Stock count line not found" });
+          const entry = await recordRetailStockCountEntry({
             companyId,
             sessionId,
-            lineId,
             userId: currentUserId(req),
-            recountRequired: body.recountRequired,
-            notes: body.notes ?? undefined,
+            variantId: line.variantId,
+            quantity: body.countedQuantity,
+            mode: "set",
+            note: body.notes ?? null,
           });
+          if (body.recountRequired !== undefined) {
+            await updateRetailStockCountLine({
+              companyId,
+              sessionId,
+              lineId,
+              userId: currentUserId(req),
+              recountRequired: body.recountRequired,
+              notes: body.notes ?? undefined,
+            });
+          }
+          return res.json({ ...entry, recountRequired: body.recountRequired ?? line.recountRequired });
         }
-        return res.json({ ...entry, recountRequired: body.recountRequired ?? line.recountRequired });
+        const result = await updateRetailStockCountLine({
+          companyId,
+          sessionId,
+          lineId,
+          userId: currentUserId(req),
+          recountRequired: body.recountRequired,
+          notes: body.notes,
+        });
+        res.json(result);
+      } catch (error) {
+        respondStockCountError(res, error);
       }
-      const result = await updateRetailStockCountLine({
-        companyId,
-        sessionId,
-        lineId,
-        userId: currentUserId(req),
-        recountRequired: body.recountRequired,
-        notes: body.notes,
-      });
-      res.json(result);
-    } catch (error) {
-      respondStockCountError(res, error);
     }
-  });
+  );
 
-  app.post("/api/pos/retail/stock-counts/:id/review", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/stock-counts/:id/review", requireAuth, validateRequest(reviewInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const sessionId = Number(req.params.id);
-      if (!Number.isInteger(sessionId) || sessionId <= 0) return res.status(400).json({ message: "Invalid session" });
-      const notes = z.object({ notes: z.string().trim().max(2000).nullable().optional() }).parse(req.body ?? {}).notes;
+      const { params, body } = validatedInput(req, reviewInput);
+      const sessionId = params.id;
+      const notes = body?.notes;
       const result = await moveRetailStockCountToReview({
         companyId,
         sessionId,
@@ -318,18 +348,13 @@ export function registerRetailStockCountRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/stock-counts/:id/recount", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/stock-counts/:id/recount", requireAuth, validateRequest(recountInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const sessionId = Number(req.params.id);
-      if (!Number.isInteger(sessionId) || sessionId <= 0) return res.status(400).json({ message: "Invalid session" });
-      const body = z
-        .object({
-          lineIds: z.array(z.coerce.number().int().positive()).max(500).optional(),
-          notes: z.string().trim().max(2000).nullable().optional(),
-        })
-        .parse(req.body ?? {});
+      const { params } = validatedInput(req, recountInput);
+      const sessionId = params.id;
+      const body = validatedInput(req, recountInput).body ?? {};
       const result = await recountRetailStockCountLines({
         companyId,
         sessionId,
@@ -343,49 +368,59 @@ export function registerRetailStockCountRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/stock-counts/:id/finalize", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const sessionId = Number(req.params.id);
-      if (!Number.isInteger(sessionId) || sessionId <= 0) return res.status(400).json({ message: "Invalid session" });
-      const body = finalizeSchema.parse(req.body ?? {});
-      const result = await finalizeRetailStockCount({
-        companyId,
-        sessionId,
-        userId: currentUserId(req),
-        allowUncounted: body.allowUncounted,
-        confirmVariance: body.confirmVariance,
-        notes: body.notes ?? null,
-      });
-      res
-        .status(result.replayed ? 200 : 201)
-        .json({ ...result, session: await loadRetailStockCountSession(companyId, sessionId) });
-    } catch (error) {
-      respondStockCountError(res, error);
+  app.post(
+    "/api/pos/retail/stock-counts/:id/finalize",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(finalizeInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const { params } = validatedInput(req, finalizeInput);
+        const sessionId = params.id;
+        const body = validatedInput(req, finalizeInput).body ?? {};
+        const result = await finalizeRetailStockCount({
+          companyId,
+          sessionId,
+          userId: currentUserId(req),
+          allowUncounted: body.allowUncounted,
+          confirmVariance: body.confirmVariance,
+          notes: body.notes ?? null,
+        });
+        res
+          .status(result.replayed ? 200 : 201)
+          .json({ ...result, session: await loadRetailStockCountSession(companyId, sessionId) });
+      } catch (error) {
+        respondStockCountError(res, error);
+      }
     }
-  });
+  );
 
-  app.post("/api/pos/retail/stock-counts/:id/cancel", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const sessionId = Number(req.params.id);
-      if (!Number.isInteger(sessionId) || sessionId <= 0) return res.status(400).json({ message: "Invalid session" });
-      const reason = z
-        .object({ reason: z.string().trim().max(500).nullable().optional() })
-        .parse(req.body ?? {}).reason;
-      const result = await cancelRetailStockCount({
-        companyId,
-        sessionId,
-        userId: currentUserId(req),
-        reason: reason ?? null,
-      });
-      res.json({ ...result, session: await loadRetailStockCountSession(companyId, sessionId) });
-    } catch (error) {
-      respondStockCountError(res, error);
+  app.post(
+    "/api/pos/retail/stock-counts/:id/cancel",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(cancelInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const { params, body } = validatedInput(req, cancelInput);
+        const sessionId = params.id;
+        const reason = body?.reason;
+        const result = await cancelRetailStockCount({
+          companyId,
+          sessionId,
+          userId: currentUserId(req),
+          reason: reason ?? null,
+        });
+        res.json({ ...result, session: await loadRetailStockCountSession(companyId, sessionId) });
+      } catch (error) {
+        respondStockCountError(res, error);
+      }
     }
-  });
+  );
 }
 
 function respondStockCountError(res: Parameters<Parameters<Express["post"]>[1]>[1], error: unknown): void {

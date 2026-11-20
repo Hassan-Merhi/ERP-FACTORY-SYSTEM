@@ -324,11 +324,15 @@ describe("PATCH /api/vouchers/:id/purchase", () => {
   it("requires at least one item", async () => {
     const { voucher, po } = await seedPurchase();
 
-    for (const body of [{}, { items: [] }, { items: "nope" }]) {
+    for (const body of [{}, { items: [] }]) {
       const response = await agent.patch(`/api/vouchers/${voucher.id}/purchase`).send(body);
       expect(response.status).toBe(400);
       expect(response.body.message).toMatch(/At least one item/i);
     }
+    // A non-array items value is refused by the request schema.
+    const malformed = await agent.patch(`/api/vouchers/${voucher.id}/purchase`).send({ items: "nope" });
+    expect(malformed.status).toBe(400);
+    expect(malformed.body.code).toBe("REQUEST_VALIDATION_FAILED");
 
     // Nothing was written: the original line is still the only one.
     expect(await poLines(po.id)).toHaveLength(1);

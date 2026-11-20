@@ -16,6 +16,21 @@ import {
   writeAllocationAudit,
 } from "./container-plan-allocationsLoadCustomerDemand";
 import { registerV5ContainerPlanAllocationRoutesPart1 } from "./registerV5ContainerPlanAllocationRoutesPart1";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const releaseAllocationInput = {
+  params: z.strictObject({ planId: stringParam, containerId: stringParam, customerId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerV5ContainerPlanAllocationRoutes(app: Express): void {
   registerV5ContainerPlanAllocationRoutesPart1(app);
@@ -24,13 +39,15 @@ export function registerV5ContainerPlanAllocationRoutes(app: Express): void {
   app.delete(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/allocations/:customerId",
     requireAuth,
+    validateRequest(releaseAllocationInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
-        const customerId = positiveInt(req.params.customerId);
+        const { params } = validatedInput(req, releaseAllocationInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
+        const customerId = positiveInt(params.customerId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId || !containerId || !customerId) {
           return res.status(400).json({ message: "Invalid plan, container or customer id" });

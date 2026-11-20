@@ -147,8 +147,9 @@ describe("Supplier Partner production closure Phase 7 contract", () => {
     const accessSource = await fs.readFile("server/routes/sp/spAccessControl.ts", "utf8");
 
     expect(routeSource).toContain('app.get("/api/sp/production/closure-status", requireAuth');
-    expect(routeSource).toContain('app.post("/api/sp/production/evidence", requireAuth');
-    expect(routeSource).toContain('app.post("/api/sp/production/close-rollback-window", requireAuth');
+    const compactRouteSource = routeSource.replace(/\s+/g, "");
+    expect(compactRouteSource).toContain('app.post("/api/sp/production/evidence",requireAuth');
+    expect(compactRouteSource).toContain('app.post("/api/sp/production/close-rollback-window",requireAuth');
     expect(routeSource).toContain("target_company_id = ${companyId}");
 
     expect(accessSource).toContain('path.startsWith("/production/")');

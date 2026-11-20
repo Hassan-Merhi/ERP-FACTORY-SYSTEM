@@ -37,6 +37,7 @@ import {
   restoreRemoteSupportBootDefaults,
   updateRemoteSupportFlags,
 } from "../services/remoteSupportRuntime";
+import { screenFeedValidators as validate } from "./screenFeedRoutesSchemas";
 
 const WATCHER_TIMEOUT_MS = 12000;
 const LIVE_STATUS_REFRESH_MS = 4000;
@@ -186,7 +187,7 @@ export function registerScreenFeedRoutes(app: Express) {
     res.json(getRemoteSupportCommandAuditHealth());
   });
 
-  app.patch("/api/screen-feed/admin/runtime", requireAuth, (req, res) => {
+  app.patch("/api/screen-feed/admin/runtime", requireAuth, validate.runtimePatch, (req, res) => {
     if (!requireDeveloper(req, res)) return;
     const patch = req.body?.flags ?? req.body ?? {};
     const snapshot = updateRemoteSupportFlags(patch, runtimeActor(req));
@@ -201,7 +202,7 @@ export function registerScreenFeedRoutes(app: Express) {
     res.json(snapshot);
   });
 
-  app.post("/api/screen-feed/admin/runtime/emergency-stop", requireAuth, (req, res) => {
+  app.post("/api/screen-feed/admin/runtime/emergency-stop", requireAuth, validate.adminAction, (req, res) => {
     if (!requireDeveloper(req, res)) return;
     watcherPollStore.clear();
     screenFeedCursorStore.clear();
@@ -214,7 +215,7 @@ export function registerScreenFeedRoutes(app: Express) {
     res.json(snapshot);
   });
 
-  app.post("/api/screen-feed/admin/runtime/restore-defaults", requireAuth, (req, res) => {
+  app.post("/api/screen-feed/admin/runtime/restore-defaults", requireAuth, validate.adminAction, (req, res) => {
     if (!requireDeveloper(req, res)) return;
     stopAllRemoteControlSessions("runtime-defaults-restored");
     const snapshot = restoreRemoteSupportBootDefaults(runtimeActor(req));
@@ -222,7 +223,7 @@ export function registerScreenFeedRoutes(app: Express) {
     res.json(snapshot);
   });
 
-  app.post("/api/screen-feed/admin/runtime/reset-metrics", requireAuth, (req, res) => {
+  app.post("/api/screen-feed/admin/runtime/reset-metrics", requireAuth, validate.adminAction, (req, res) => {
     if (!requireDeveloper(req, res)) return;
     res.setHeader("Cache-Control", "no-store");
     res.json(resetRemoteSupportMetrics());
@@ -395,7 +396,7 @@ export function registerScreenFeedRoutes(app: Express) {
     res.status(204).end();
   });
 
-  app.post("/api/screen-feed/pointer", requireLogin, (req, res) => {
+  app.post("/api/screen-feed/pointer", requireLogin, validate.pointer, (req, res) => {
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return res.status(204).end();
     const userId = String(getSessionUserId(req));
     const tabId = requestTabId(req);
@@ -414,7 +415,7 @@ export function registerScreenFeedRoutes(app: Express) {
 
   // Legacy JSON/base64 upload is retained only as a recovery endpoint for old
   // clients. Current clients never enter this route; they use binary /ws frames.
-  app.post("/api/screen-feed", requireLogin, (req, res) => {
+  app.post("/api/screen-feed", requireLogin, validate.frame, (req, res) => {
     if (!isRemoteSupportEnabled("screenFeedEnabled")) return res.status(200).end();
     const userId = String(getSessionUserId(req));
     const tabId = requestTabId(req);

@@ -9,6 +9,21 @@ import { requireRole } from "../../auth";
 import { writeAuditEvent } from "../../services/audit";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../factory/customer-orders/priorityScanQueue";
 import { factorySettings } from "@shared/schema";
+import { z } from "zod";
+import { emptyQuery, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
+
+// client/src/pages/factory/factorysettings/AutomaticPriorityPrintingCard.tsx sends { enabled }.
+const automaticPriorityModeInput = {
+  query: emptyQuery,
+  body: z.strictObject({ enabled: z.boolean() }),
+} satisfies RequestSchemas;
+
+// client/src/pages/factory/factorysettings/NonBalePriorityManager.tsx sends { selectedIds }.
+// The handler answers a missing or malformed list with its own message.
+const nonBalePriorityItemsInput = {
+  query: emptyQuery,
+  body: z.strictObject({ selectedIds: z.array(z.number()).optional() }),
+} satisfies RequestSchemas;
 
 export const INITIAL_FACTORY_FEATURES = {
   dashboardEnabled: true,
@@ -56,6 +71,7 @@ export function registerFactorySettingsRoutesPart1(app: Express, requireAuth: Au
     "/api/factory/non-bale-priority-items",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(nonBalePriorityItemsInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -127,20 +143,11 @@ export function registerFactorySettingsRoutesPart1(app: Express, requireAuth: Au
     "/api/factory/automatic-priority-mode",
     requireAuth,
     requireRole("Admin", "Owner"), // Developer is privileged by the shared middleware.
+    validateRequest(automaticPriorityModeInput),
     async (req: Request, res: Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const body = req.body as Record<string, unknown> | undefined;
-      if (
-        !body ||
-        typeof body !== "object" ||
-        Array.isArray(body) ||
-        Object.keys(body).length !== 1 ||
-        typeof body.enabled !== "boolean"
-      ) {
-        return res.status(400).json({ message: "Expected exactly one boolean field: enabled" });
-      }
-      const enabled = body.enabled;
+      const { enabled } = validatedInput(req, automaticPriorityModeInput).body;
       try {
         const { changed } = await db.transaction(async (tx) => {
           // Serialize flag changes with Priority Scan allocations. Once disabled,

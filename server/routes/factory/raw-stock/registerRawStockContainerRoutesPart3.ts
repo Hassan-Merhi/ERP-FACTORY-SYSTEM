@@ -1,5 +1,4 @@
 // Extracted from ./rawStockContainerRoutes.ts to keep that module under the source-size cap.
-import { parseId } from "../../../lib/parseId";
 import { parseMoneyInput } from "../../../lib/money";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -19,6 +18,8 @@ import { factoryContainers, ledgerAccounts } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { ADMIN_ROLES, positiveRequestAmount, resolvePostOffloadChargeFx } from "./registerRawStockContainerRoutesPart1";
 import { registerRawStockContainerRoutesPart4 } from "./registerRawStockContainerRoutesPart4";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import { editPostOffloadChargeInput } from "./containerChargeRouteSchemas";
 
 export function registerRawStockContainerRoutesPart3(app: Express) {
   // ── PATCH /api/factory/containers/:id/post-offload-charges/:chargeId ─────────
@@ -27,13 +28,12 @@ export function registerRawStockContainerRoutesPart3(app: Express) {
     "/api/factory/containers/:id/post-offload-charges/:chargeId",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(editPostOffloadChargeInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const containerId = parseId(req.params.id);
-        const chargeId = parseId(req.params.chargeId);
-        if (containerId === null || chargeId === null) return res.status(400).json({ message: "Invalid id" });
+        const { id: containerId, chargeId } = validatedInput(req, editPostOffloadChargeInput).params;
 
         const {
           description,

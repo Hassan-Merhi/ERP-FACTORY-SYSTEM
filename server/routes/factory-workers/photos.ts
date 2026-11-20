@@ -7,6 +7,8 @@
 import type { Database } from "../../db";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { parseId } from "../../lib/parseId";
+import { validateRequest } from "../../lib/validateRequest";
+import { workerPhotoInput } from "./factoryWorkerWriteSchemas";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
@@ -23,6 +25,7 @@ export function registerFactoryWorkerPhotoRoutes(app: Express, requireAuth: Requ
     "/api/factory/workers/:id/photo",
     requireAuth,
     workerUpload.single("photo"),
+    validateRequest(workerPhotoInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.body.companyId || getFactoryCompanyId(req);

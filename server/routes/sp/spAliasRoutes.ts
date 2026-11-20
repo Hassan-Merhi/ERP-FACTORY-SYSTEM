@@ -6,6 +6,20 @@ import { sql } from "drizzle-orm";
 import { stockItemCodeAliases } from "@shared/schema";
 import { requireSpCompany } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import { stringIdParams, validateRequest, validatedInput, type RequestSchemas } from "../../lib/validateRequest";
+import { numberish, spWriteFields } from "./spRequestSchemas";
+
+const createAliasInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    aliasCode: z.union([z.string(), z.number()]).optional(),
+    stockItemId: numberish.optional(),
+    description: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteAliasInput = { params: stringIdParams } satisfies RequestSchemas;
 
 // ── Aliases (article code → stock item mapping) ───────────────────────────
 
@@ -28,7 +42,7 @@ export function registerSpAliasRoutes(app: Express) {
     }
   });
 
-  app.post("/api/sp/aliases", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/sp/aliases", requireAuth, validateRequest(createAliasInput), async (req: Request, res: Response) => {
     try {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
@@ -38,7 +52,7 @@ export function registerSpAliasRoutes(app: Express) {
         .insert(stockItemCodeAliases)
         .values({
           companyId,
-          stockItemId: parseInt(stockItemId),
+          stockItemId: parseInt(String(stockItemId)),
           aliasCode: String(aliasCode).trim(),
           description: description || null,
         })
@@ -51,16 +65,21 @@ export function registerSpAliasRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/sp/aliases/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = await requireSpCompany(req, res);
-      if (!companyId) return;
-      await db.execute(
-        sql`DELETE FROM stock_item_code_aliases WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
-      );
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.delete(
+    "/api/sp/aliases/:id",
+    requireAuth,
+    validateRequest(deleteAliasInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = await requireSpCompany(req, res);
+        if (!companyId) return;
+        await db.execute(
+          sql`DELETE FROM stock_item_code_aliases WHERE id = ${parseInt(validatedInput(req, deleteAliasInput).params.id)} AND company_id = ${companyId}`
+        );
+        res.json({ ok: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

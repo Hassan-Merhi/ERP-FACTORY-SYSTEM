@@ -14,6 +14,8 @@ import { eq, and, sql } from "drizzle-orm";
 import path from "path";
 import fs from "fs";
 import { getCompanyId, safeDownloadName, scrUpload } from "./_helpers";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import * as schemas from "./shippingContainerRouteSchemas";
 
 export function registerShippingContainerDocumentRoutes(app: Express) {
   // ── GET documents for a row ───────────────────────────────────────────────────
@@ -98,13 +100,13 @@ export function registerShippingContainerDocumentRoutes(app: Express) {
     "/api/factory/shipping-container-rows/:id/documents",
     requireAuth,
     scrUpload,
+    validateRequest(schemas.uploadShippingRowDocumentInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+        const { id } = validatedInput(req, schemas.uploadShippingRowDocumentInput).params;
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
         if (!req.file.buffer || req.file.buffer.length === 0) {
           return res.status(400).json({ message: "Uploaded file is empty" });
@@ -186,14 +188,13 @@ export function registerShippingContainerDocumentRoutes(app: Express) {
   app.delete(
     "/api/factory/shipping-container-rows/:id/documents/:docId",
     requireAuth,
+    validateRequest(schemas.deleteShippingRowDocumentInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const id = parseInt(req.params.id);
-        const docId = parseInt(req.params.docId);
-        if (isNaN(id) || isNaN(docId)) return res.status(400).json({ message: "Invalid id" });
+        const { id, docId } = validatedInput(req, schemas.deleteShippingRowDocumentInput).params;
 
         // Verify ownership through both tables in one query
         const [doc] = await db
@@ -298,12 +299,12 @@ export function registerShippingContainerDocumentRoutes(app: Express) {
     "/api/factory/shipping-container-rows/:id/shipping-invoice",
     requireAuth,
     scrUpload,
+    validateRequest(schemas.uploadShippingInvoiceInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+        const { id } = validatedInput(req, schemas.uploadShippingInvoiceInput).params;
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
         const [row] = await db
@@ -350,12 +351,12 @@ export function registerShippingContainerDocumentRoutes(app: Express) {
   app.delete(
     "/api/factory/shipping-container-rows/:id/shipping-invoice",
     requireAuth,
+    validateRequest(schemas.shippingRowNoBodyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const id = parseInt(req.params.id);
-        if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+        const { id } = validatedInput(req, schemas.shippingRowNoBodyInput).params;
 
         const [row] = await db
           .select({
@@ -449,12 +450,16 @@ export function registerShippingContainerDocumentRoutes(app: Express) {
 
   // ── POST cleanup ghost document records ──────────────────────────────────────
   // Admin/dev utility: removes rows with no real file content.
-  app.post("/api/factory/shipping-container-docs/cleanup-ghosts", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/shipping-container-docs/cleanup-ghosts",
+    requireAuth,
+    validateRequest(schemas.cleanupGhostDocsInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const result = await db.execute(sql`
+        const result = await db.execute(sql`
         DELETE FROM factory_shipping_container_documents
         WHERE company_id = ${companyId}
           AND (file_name IS NULL OR file_name = '' OR file_name = '-')
@@ -462,11 +467,12 @@ export function registerShippingContainerDocumentRoutes(app: Express) {
           AND (file_url IS NULL OR file_url = '' OR file_url = '-')
       `);
 
-      const removed = result.rowCount ?? 0;
-      res.json({ success: true, removed });
-    } catch (error: unknown) {
-      logger.error("Error cleaning up ghost documents:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        const removed = result.rowCount ?? 0;
+        res.json({ success: true, removed });
+      } catch (error: unknown) {
+        logger.error("Error cleaning up ghost documents:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

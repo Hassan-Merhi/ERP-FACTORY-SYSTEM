@@ -7,6 +7,8 @@ import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMes
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { factoryWorkers } from "@shared/schema";
 import { numberOrNull } from "./factoryStaffTrackingValueHelpers";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import {
   canAccessTrackingPage,
   getFactoryCompanyId,
@@ -14,10 +16,30 @@ import {
   loadWorkerGroupNames,
 } from "./factoryStaffTrackingQueries";
 
+// The handler keeps its own date, count and per-record checks and messages;
+// this fixes the shape ProductionTargetDefaultsDialog sends.
+const defaultsNumber = z.union([z.number(), z.string()]);
+const saveTargetDefaultsInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    effectiveFrom: z.string().optional(),
+    records: z
+      .array(
+        z.strictObject({
+          workerId: defaultsNumber,
+          category: z.string().nullable().optional(),
+          targetBales: defaultsNumber.nullable().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerFactoryStaffTrackingRoutesPart2(app: Express) {
   app.post(
     "/api/factory/staff-tracking/production-target-defaults",
     requireAuth,
+    validateRequest(saveTargetDefaultsInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);

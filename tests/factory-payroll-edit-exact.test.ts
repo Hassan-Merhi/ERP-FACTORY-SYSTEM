@@ -64,8 +64,10 @@ describe("factory payroll edit", () => {
   it("stores half-cent edits at the cent Postgres would keep", async () => {
     const handlers = new Map<string, (req: unknown, res: unknown) => Promise<void>>();
     const register =
-      (method: string) => (path: string, _auth: unknown, handler: (req: unknown, res: unknown) => Promise<void>) =>
-        handlers.set(method + path, handler);
+      (method: string) =>
+      (path: string, ...chain: Array<(req: unknown, res: unknown) => Promise<void>>) =>
+        // The handler is the last function in the chain (after requireAuth and validateRequest).
+        handlers.set(method + path, chain[chain.length - 1]);
     registerFactoryPayrollUpdateRoutes(
       { patch: register("PATCH"), post: register("POST") } as never,
       (() => undefined) as never,
@@ -111,8 +113,10 @@ describe("factory payroll edit", () => {
   it("rejects a value that does not parse", async () => {
     const handlers = new Map<string, (req: unknown, res: unknown) => Promise<void>>();
     const register =
-      (method: string) => (path: string, _auth: unknown, handler: (req: unknown, res: unknown) => Promise<void>) =>
-        handlers.set(method + path, handler);
+      (method: string) =>
+      (path: string, ...chain: Array<(req: unknown, res: unknown) => Promise<void>>) =>
+        // The handler is the last function in the chain (after requireAuth and validateRequest).
+        handlers.set(method + path, chain[chain.length - 1]);
     registerFactoryPayrollUpdateRoutes(
       { patch: register("PATCH"), post: register("POST") } as never,
       (() => undefined) as never,

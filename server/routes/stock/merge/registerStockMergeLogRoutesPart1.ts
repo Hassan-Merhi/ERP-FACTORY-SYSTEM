@@ -8,6 +8,15 @@ import { inventory, stockItems, stockItemCodeAliases, stockItemMergeLogs } from 
 import { eq, and, inArray } from "drizzle-orm";
 import { inventoryCutoverRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { restoreRepointedLinesTx } from "./repointDocumentLines";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The handler parseInt-s logId and answers its own 400 for a non-number.
+const unmergeInput = {
+  params: z.strictObject({ logId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerStockMergeLogRoutesPart1(app: Express) {
   // ── Unmerge: POST /api/stock-items/merge-logs/:logId/unmerge ─────────────
@@ -18,6 +27,7 @@ export function registerStockMergeLogRoutesPart1(app: Express) {
     "/api/stock-items/merge-logs/:logId/unmerge",
     requireAuth,
     requireNonPOS,
+    validateRequest(unmergeInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.currentCompanyId;

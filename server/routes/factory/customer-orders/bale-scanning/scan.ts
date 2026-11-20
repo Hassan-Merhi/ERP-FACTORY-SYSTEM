@@ -12,31 +12,38 @@ import { requireAuth } from "../../../../auth";
 import { advanceSatisfiedPriorityScanConfigs } from "../priorityScanQueue";
 import { handlePostFactoryCustomerOrdersIdBalesStep1 } from "./handlePostFactoryCustomerOrdersIdBalesStep1";
 import { handlePostFactoryCustomerOrdersIdBalesStep2 } from "./handlePostFactoryCustomerOrdersIdBalesStep2";
+import { z } from "zod";
+import { emptyQuery, idParams, validateRequest, type RequestSchemas } from "../../../../lib/validateRequest";
+
+// The loading, invoice-create and Priority Scan screens send these. The
+// handler String()s scanCode and parseInts locationId, and keeps its own
+// required-field, location and Priority Scan bypass checks.
+const scanBaleInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    scanCode: z.union([z.string(), z.number()]).optional(),
+    locationId: z.union([z.number(), z.string()]).nullable().optional(),
+    priorityScan: z.boolean().optional(),
+    allowBypassProforma: z.boolean().optional(),
+    allowBypassOverload: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerOrderBaleScanRoutes(app: Express) {
   registerOrderBaleScanRoutesPart1(app);
 }
 
 function registerOrderBaleScanRoutesPart1(app: Express) {
-  app.post("/api/factory/customer-orders/:id/bales", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const step1Result = await handlePostFactoryCustomerOrdersIdBalesStep1(req, res);
-      if (step1Result.done) return step1Result.value;
-      const {
-        availableNameCondition,
-        companyId,
-        isPriorityScan,
-        order,
-        orderId,
-        parsedLocationId,
-        priorityScanBusinessDate,
-        scanCode,
-        scanLower,
-        scannerName,
-        uniqueIdentifierCondition,
-      } = step1Result;
-      const { result } = await handlePostFactoryCustomerOrdersIdBalesStep2(
-        {
+  app.post(
+    "/api/factory/customer-orders/:id/bales",
+    requireAuth,
+    validateRequest(scanBaleInput),
+    async (req: Request, res: Response) => {
+      try {
+        const step1Result = await handlePostFactoryCustomerOrdersIdBalesStep1(req, res);
+        if (step1Result.done) return step1Result.value;
+        const {
           availableNameCondition,
           companyId,
           isPriorityScan,
@@ -48,20 +55,35 @@ function registerOrderBaleScanRoutesPart1(app: Express) {
           scanLower,
           scannerName,
           uniqueIdentifierCondition,
-        },
-        req
-      );
-      const step3Result = await handlePostFactoryCustomerOrdersIdBalesStep3(
-        { companyId, order, orderId, result },
-        req,
-        res
-      );
-      if (step3Result.done) return step3Result.value;
-    } catch (error: unknown) {
-      logger.error("Error adding bale to order:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        } = step1Result;
+        const { result } = await handlePostFactoryCustomerOrdersIdBalesStep2(
+          {
+            availableNameCondition,
+            companyId,
+            isPriorityScan,
+            order,
+            orderId,
+            parsedLocationId,
+            priorityScanBusinessDate,
+            scanCode,
+            scanLower,
+            scannerName,
+            uniqueIdentifierCondition,
+          },
+          req
+        );
+        const step3Result = await handlePostFactoryCustomerOrdersIdBalesStep3(
+          { companyId, order, orderId, result },
+          req,
+          res
+        );
+        if (step3Result.done) return step3Result.value;
+      } catch (error: unknown) {
+        logger.error("Error adding bale to order:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }
 
 async function handlePostFactoryCustomerOrdersIdBalesStep3(

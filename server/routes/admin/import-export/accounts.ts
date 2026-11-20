@@ -5,12 +5,30 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, RequestHandler, Response } from "express";
+import { z } from "zod";
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { requireFactoryPageAccess } from "../../../lib/factoryAccessControl";
 import { agentAccounts, freightAccounts } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+
+// The handlers keep their own "accountId, accountType, and accountName are required" check.
+// The Agent Ledger page sends its numeric account id; the snapshot page sends a string.
+const pinAccountInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    accountId: z.union([z.string(), z.number()]).optional(),
+    accountType: z.string().optional(),
+    accountName: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+const unpinAccountInput = {
+  params: z.strictObject({ accountId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerAgentFreightAccountRoutes(app: Express) {
   const factoryAgentGuard = requireFactoryPageAccess("factory/agents");
@@ -58,8 +76,16 @@ export function registerAgentFreightAccountRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   };
-  app.post("/api/agent-accounts", requireAuth, (req, res) => addPinnedAgent(req, res));
-  app.post("/api/factory/agents/pinned", requireAuth, requireFactoryAgentIfNeeded, addPinnedAgent);
+  app.post("/api/agent-accounts", requireAuth, validateRequest(pinAccountInput), (req, res) =>
+    addPinnedAgent(req, res)
+  );
+  app.post(
+    "/api/factory/agents/pinned",
+    requireAuth,
+    requireFactoryAgentIfNeeded,
+    validateRequest(pinAccountInput),
+    addPinnedAgent
+  );
 
   const removePinnedAgent = async (req: Request, res: Response) => {
     try {
@@ -74,8 +100,16 @@ export function registerAgentFreightAccountRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   };
-  app.delete("/api/agent-accounts/:accountId", requireAuth, (req, res) => removePinnedAgent(req, res));
-  app.delete("/api/factory/agents/pinned/:accountId", requireAuth, requireFactoryAgentIfNeeded, removePinnedAgent);
+  app.delete("/api/agent-accounts/:accountId", requireAuth, validateRequest(unpinAccountInput), (req, res) =>
+    removePinnedAgent(req, res)
+  );
+  app.delete(
+    "/api/factory/agents/pinned/:accountId",
+    requireAuth,
+    requireFactoryAgentIfNeeded,
+    validateRequest(unpinAccountInput),
+    removePinnedAgent
+  );
 
   // ── FREIGHT ACCOUNTS (Financial Snapshot) ─────────────────────────────────
   app.get(
@@ -96,6 +130,7 @@ export function registerAgentFreightAccountRoutes(app: Express) {
   app.post(
     "/api/freight-accounts",
     requireAuth,
+    validateRequest(pinAccountInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
@@ -121,6 +156,7 @@ export function registerAgentFreightAccountRoutes(app: Express) {
   app.delete(
     "/api/freight-accounts/:accountId",
     requireAuth,
+    validateRequest(unpinAccountInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;

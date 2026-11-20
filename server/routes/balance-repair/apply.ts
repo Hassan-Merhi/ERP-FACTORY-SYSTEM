@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import {
   propertyMonthlyLedger,
   propertyContracts,
@@ -24,12 +25,15 @@ import { MoneyDecimal, toMoney } from "../../lib/money";
 import { resultRows } from "../../lib/queryResult";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
+const applyInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
 export function registerBalanceRepairApplyRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/apply ────────────────────────────────
   app.post(
     "/api/admin/repair-balances/apply",
     requireAuth,
     requireRole("Admin"),
+    validateRequest(applyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId: number | undefined = req.session.currentCompanyId;

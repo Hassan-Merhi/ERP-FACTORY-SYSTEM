@@ -33,6 +33,9 @@ import {
   querySchema,
   salePriceQuerySchema,
 } from "./itemMarketAnalysisRoutesParseStockGroupNames";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const exportSalePricesInput = { query: emptyQuery, body: exportSalePricesSchema } satisfies RequestSchemas;
 
 export function registerItemMarketAnalysisRoutes(app: Express) {
   const reportPageAccess = requirePageAccess("page_sales_report");
@@ -162,6 +165,7 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     reportPageAccess,
+    validateRequest(exportSalePricesInput),
     async (req, res) => {
       const activeCompanyId = req.session.currentCompanyId;
       const userId = req.session.userId;

@@ -8,6 +8,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { db, pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import {
   CompanyAccessError,
   getAccessibleCompanyIds,
@@ -22,6 +23,46 @@ import { storage } from "../../storage";
 import { CompanyHasHistoryError } from "../../storage/company-deletion";
 import { companies, erpUserPageAccess, roleFeaturePermissions, userCompanyRoles, users } from "@shared/schema";
 import { disableSessionResponseCaching, prepareCompanyPayload } from "./prepareCompanyPayload";
+
+// The handler's own parse keeps its message for a bad name or tester username.
+const createErpTestCompanyInput = {
+  body: z.union([
+    z.undefined(),
+    z.strictObject({ companyName: z.string().optional(), username: z.string().optional() }),
+  ]),
+} satisfies RequestSchemas;
+
+// The companies columns a caller may write. prepareCompanyPayload normalizes
+// parentCompanyId (number, numeric string, "", "none" or null) and checks the
+// currency pair; the database enforces code/name uniqueness.
+const companyFields = {
+  code: z.string(),
+  name: z.string(),
+  companyType: z.string().optional(),
+  parentCompanyId: z.union([z.number(), z.string()]).nullable().optional(),
+  active: z.boolean().optional(),
+  baseCurrency: z.string().nullable().optional(),
+  displayCurrency: z.string().nullable().optional(),
+  transferWaGroupChatId: z.string().nullable().optional(),
+};
+
+const createCompanyInput = { body: z.strictObject(companyFields) } satisfies RequestSchemas;
+
+const updateCompanyInput = {
+  params: stringIdParams,
+  body: z.strictObject(companyFields).partial(),
+} satisfies RequestSchemas;
+
+const deleteCompanyInput = {
+  params: stringIdParams,
+  body: z.union([
+    z.undefined(),
+    z.strictObject({
+      forceDeleteWithHistory: z.boolean().optional(),
+      confirmedCompanyCode: z.string().optional(),
+    }),
+  ]),
+} satisfies RequestSchemas;
 
 export function registerCompanyAccessRoutesPart1(app: Express) {
   app.get("/api/companies", requireAuth, async (req, res) => {
@@ -98,122 +139,134 @@ export function registerCompanyAccessRoutesPart1(app: Express) {
 
   // Provision a fresh standalone ERP company and a non-admin tester atomically.
   // No fixtures, ledger entries, stock, or production records are created.
-  app.post("/api/companies/erp-test", requireAuth, requireRole("Admin"), async (req, res) => {
-    const inputSchema = z
-      .object({
-        companyName: z.string().trim().min(2).max(120).default("ERP Test Company"),
-        username: z
-          .string()
-          .trim()
-          .regex(/^[a-zA-Z0-9._-]{3,48}$/)
-          .optional(),
-      })
-      .strict();
+  app.post(
+    "/api/companies/erp-test",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(createErpTestCompanyInput),
+    async (req, res) => {
+      const inputSchema = z
+        .object({
+          companyName: z.string().trim().min(2).max(120).default("ERP Test Company"),
+          username: z
+            .string()
+            .trim()
+            .regex(/^[a-zA-Z0-9._-]{3,48}$/)
+            .optional(),
+        })
+        .strict();
 
-    const parsed = inputSchema.safeParse(req.body ?? {});
-    if (!parsed.success) {
-      return res.status(400).json({
-        message:
-          "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes).",
-      });
-    }
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
-    const suffix = randomBytes(5).toString("hex");
-    const code = `ERPTEST-${suffix.toUpperCase()}`;
-    const username = parsed.data.username || `erp_tester_${suffix}`;
-    // No default or checked-in password. Show this value once to the administrator.
-    const password = randomBytes(24).toString("base64url");
-
-    try {
-      const passwordHash = await hashPassword(password);
-      const created = await db.transaction(async (tx) => {
-        const [company] = await tx
-          .insert(companies)
-          .values({
-            code,
-            name: parsed.data.companyName,
-            companyType: "erp",
-            parentCompanyId: null,
-            baseCurrency: "USD",
-            active: true,
-          })
-          .returning({ id: companies.id, name: companies.name, code: companies.code });
-
-        const [tester] = await tx
-          .insert(users)
-          .values({
-            username,
-            password: passwordHash,
-            active: true,
-          })
-          .returning({ id: users.id, username: users.username });
-
-        await tx.insert(userCompanyRoles).values({
-          userId: tester.id,
-          companyId: company.id,
-          role: ERP_TESTER_ROLE,
-          canAccessCustomers: true,
-          canDeleteRecords: true,
-          daybookEditDays: 3650,
+      const parsed = inputSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({
+          message:
+            "Enter a valid company name and tester username (3–48 letters, numbers, dots, underscores, or dashes).",
         });
+      }
+      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-        // An Admin provisioning the sandbox must be able to switch into it to
-        // administer the tester. Developer already has global company access.
-        if (req.user!.role !== "Developer") {
+      const suffix = randomBytes(5).toString("hex");
+      const code = `ERPTEST-${suffix.toUpperCase()}`;
+      const username = parsed.data.username || `erp_tester_${suffix}`;
+      // No default or checked-in password. Show this value once to the administrator.
+      const password = randomBytes(24).toString("base64url");
+
+      try {
+        const passwordHash = await hashPassword(password);
+        const created = await db.transaction(async (tx) => {
+          const [company] = await tx
+            .insert(companies)
+            .values({
+              code,
+              name: parsed.data.companyName,
+              companyType: "erp",
+              parentCompanyId: null,
+              baseCurrency: "USD",
+              active: true,
+            })
+            .returning({ id: companies.id, name: companies.name, code: companies.code });
+
+          const [tester] = await tx
+            .insert(users)
+            .values({
+              username,
+              password: passwordHash,
+              active: true,
+            })
+            .returning({ id: users.id, username: users.username });
+
           await tx.insert(userCompanyRoles).values({
-            userId: req.user!.id,
-            companyId: company.id,
-            role: "Admin",
-          });
-        }
-
-        await tx.insert(erpUserPageAccess).values(
-          ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
-            companyId: company.id,
             userId: tester.id,
-            pageKey,
-          }))
-        );
-
-        await tx.insert(roleFeaturePermissions).values(
-          ERP_TESTER_ROLE_PERMISSIONS.map(({ featureKey, enabled }) => ({
             companyId: company.id,
             role: ERP_TESTER_ROLE,
-            featureKey,
-            enabled,
-          }))
-        );
+            canAccessCustomers: true,
+            canDeleteRecords: true,
+            daybookEditDays: 3650,
+          });
 
-        return { company, tester };
-      });
+          // An Admin provisioning the sandbox must be able to switch into it to
+          // administer the tester. Developer already has global company access.
+          if (req.user!.role !== "Developer") {
+            await tx.insert(userCompanyRoles).values({
+              userId: req.user!.id,
+              companyId: company.id,
+              role: "Admin",
+            });
+          }
 
-      res.setHeader("Cache-Control", "no-store");
-      res.status(201).json({
-        company: created.company,
-        tester: { username: created.tester.username, role: ERP_TESTER_ROLE },
-        password,
-        settingsAccess: false,
-      });
-    } catch (error: unknown) {
-      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
-        return res
-          .status(409)
-          .json({ message: "Company code or tester username already exists. Try again with a different username." });
+          await tx.insert(erpUserPageAccess).values(
+            ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
+              companyId: company.id,
+              userId: tester.id,
+              pageKey,
+            }))
+          );
+
+          await tx.insert(roleFeaturePermissions).values(
+            ERP_TESTER_ROLE_PERMISSIONS.map(({ featureKey, enabled }) => ({
+              companyId: company.id,
+              role: ERP_TESTER_ROLE,
+              featureKey,
+              enabled,
+            }))
+          );
+
+          return { company, tester };
+        });
+
+        res.setHeader("Cache-Control", "no-store");
+        res.status(201).json({
+          company: created.company,
+          tester: { username: created.tester.username, role: ERP_TESTER_ROLE },
+          password,
+          settingsAccess: false,
+        });
+      } catch (error: unknown) {
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+          return res
+            .status(409)
+            .json({ message: "Company code or tester username already exists. Try again with a different username." });
+        }
+        logger.error("Failed to provision ERP test company", { error });
+        res.status(500).json({ message: "Failed to provision ERP test company; no partial data was saved." });
       }
-      logger.error("Failed to provision ERP test company", { error });
-      res.status(500).json({ message: "Failed to provision ERP test company; no partial data was saved." });
     }
-  });
+  );
 
-  app.post("/api/companies", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const payload = await prepareCompanyPayload(req.body, undefined, true);
-      res.status(201).json(await storage.createCompany(payload as Parameters<typeof storage.createCompany>[0]));
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/companies",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(createCompanyInput),
+    async (req, res) => {
+      try {
+        const payload = await prepareCompanyPayload(req.body, undefined, true);
+        res.status(201).json(await storage.createCompany(payload as Parameters<typeof storage.createCompany>[0]));
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get("/api/companies/:id", requireAuth, async (req, res) => {
     try {
@@ -227,69 +280,81 @@ export function registerCompanyAccessRoutesPart1(app: Express) {
     }
   });
 
-  app.patch("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
-      const payload = await prepareCompanyPayload(req.body, companyId);
-      res.json(await storage.updateCompany(companyId, payload as Parameters<typeof storage.updateCompany>[1]));
-    } catch (error: unknown) {
-      if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
-      res.status(400).json({ message: getErrorMessage(error) });
+  app.patch(
+    "/api/companies/:id",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(updateCompanyInput),
+    async (req, res) => {
+      try {
+        const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
+        const payload = await prepareCompanyPayload(req.body, companyId);
+        res.json(await storage.updateCompany(companyId, payload as Parameters<typeof storage.updateCompany>[1]));
+      } catch (error: unknown) {
+        if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // Only inactive companies are eligible for deletion. Admins and Developers
   // may manage companies, but the storage layer still refuses protected history.
-  app.delete("/api/companies/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
-      const targetCompany = await storage.getCompanyById(companyId);
-      if (!targetCompany) return res.status(404).json({ message: "Company not found" });
-      if (targetCompany.active) {
-        return res
-          .status(409)
-          .json({ message: "Deactivate this company before deleting it.", code: "COMPANY_MUST_BE_INACTIVE" });
-      }
-      if (Number(req.session.currentCompanyId) === companyId) {
-        return res.status(409).json({
-          message: "Switch to a different company before deleting the company that is currently active.",
-          code: "ACTIVE_COMPANY_DELETE_FORBIDDEN",
-        });
-      }
-      if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-      // Company Management is intentionally cross-company for Admin/Developer.
-      // The request's normal DB scope is still pinned to the active company, so
-      // run this one operation under the already-authorized target scope. This is
-      // required for forced RLS tables such as vouchers, customers and inventory.
-      const forceDeleteWithHistory = req.body?.forceDeleteWithHistory === true;
-      const confirmedCompanyCode =
-        typeof req.body?.confirmedCompanyCode === "string" ? req.body.confirmedCompanyCode : undefined;
-      if (forceDeleteWithHistory && confirmedCompanyCode !== targetCompany.code) {
-        return res
-          .status(400)
-          .json({ message: "Enter the exact company code to permanently delete its accounting history." });
-      }
-      const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
-      await runWithDatabaseScopeRuntimeContext(
-        createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
-        () =>
-          storage.deleteCompany(companyId, {
-            userId: req.user?.id,
-            username: req.user?.username,
-            forceDeleteWithHistory,
-            confirmedCompanyCode,
-          })
-      );
+  app.delete(
+    "/api/companies/:id",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(deleteCompanyInput),
+    async (req, res) => {
+      try {
+        const companyId = await resolveAuthorizedCompanyId(req, req.params.id);
+        const targetCompany = await storage.getCompanyById(companyId);
+        if (!targetCompany) return res.status(404).json({ message: "Company not found" });
+        if (targetCompany.active) {
+          return res
+            .status(409)
+            .json({ message: "Deactivate this company before deleting it.", code: "COMPANY_MUST_BE_INACTIVE" });
+        }
+        if (Number(req.session.currentCompanyId) === companyId) {
+          return res.status(409).json({
+            message: "Switch to a different company before deleting the company that is currently active.",
+            code: "ACTIVE_COMPANY_DELETE_FORBIDDEN",
+          });
+        }
+        if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+        // Company Management is intentionally cross-company for Admin/Developer.
+        // The request's normal DB scope is still pinned to the active company, so
+        // run this one operation under the already-authorized target scope. This is
+        // required for forced RLS tables such as vouchers, customers and inventory.
+        const forceDeleteWithHistory = req.body?.forceDeleteWithHistory === true;
+        const confirmedCompanyCode =
+          typeof req.body?.confirmedCompanyCode === "string" ? req.body.confirmedCompanyCode : undefined;
+        if (forceDeleteWithHistory && confirmedCompanyCode !== targetCompany.code) {
+          return res
+            .status(400)
+            .json({ message: "Enter the exact company code to permanently delete its accounting history." });
+        }
+        const accessibleCompanyIds = await getAccessibleCompanyIds(req.user.id);
+        await runWithDatabaseScopeRuntimeContext(
+          createTenantDatabaseScope(companyId, [...accessibleCompanyIds], "authorized-companies"),
+          () =>
+            storage.deleteCompany(companyId, {
+              userId: req.user?.id,
+              username: req.user?.username,
+              forceDeleteWithHistory,
+              confirmedCompanyCode,
+            })
+        );
 
-      res.json({ message: "Company deleted successfully" });
-    } catch (error: unknown) {
-      if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
-      if (error instanceof CompanyHasHistoryError) {
-        return res.status(409).json({ message: error.message, code: error.code, blockers: error.blockers });
+        res.json({ message: "Company deleted successfully" });
+      } catch (error: unknown) {
+        if (error instanceof CompanyAccessError) return sendCompanyAccessError(res, error);
+        if (error instanceof CompanyHasHistoryError) {
+          return res.status(409).json({ message: error.message, code: error.code, blockers: error.blockers });
+        }
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/auth/session-company", requireAuth, (req, res) => {
     disableSessionResponseCaching(res);

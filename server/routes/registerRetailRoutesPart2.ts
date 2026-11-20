@@ -5,6 +5,8 @@ import { retailProducts, retailProductVariants, retailProductWriteSchema } from 
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { validateRequest } from "../lib/validateRequest";
+import { createRetailBrandInput, createRetailProductInput } from "./retailProductRouteSchemas";
 import { validateRetailVariantPayload } from "../services/retail/retailProductValidation";
 import { allocateRetailBarcodes } from "../services/retail/retailBarcodeService";
 import { getOrCreateBrand } from "../services/retail/retailBrands";
@@ -21,20 +23,26 @@ import {
 } from "./retailRoutesLoadProducts";
 
 export function registerRetailRoutesPart2(app: Express) {
-  app.post("/api/retail/brands", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
+  app.post(
+    "/api/retail/brands",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(createRetailBrandInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
 
-      const name = String(req.body?.name ?? "").trim();
-      if (!name) return res.status(400).json({ message: "Brand name is required" });
+        const name = String(req.body?.name ?? "").trim();
+        if (!name) return res.status(400).json({ message: "Brand name is required" });
 
-      const brand = await getOrCreateBrand(db, companyId, name);
-      res.status(201).json(brand);
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
+        const brand = await getOrCreateBrand(db, companyId, name);
+        res.status(201).json(brand);
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get("/api/retail/products", requireAuth, async (req, res) => {
     try {
@@ -101,6 +109,7 @@ export function registerRetailRoutesPart2(app: Express) {
     requireAuth,
     requireNonPOS,
     requireCreateOnlyVerifiedCreate("retailProducts"),
+    validateRequest(createRetailProductInput),
     async (req, res) => {
       try {
         const companyId = await requireRetailCompany(req, res);

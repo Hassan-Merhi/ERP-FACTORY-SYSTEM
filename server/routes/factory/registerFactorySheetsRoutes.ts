@@ -15,7 +15,28 @@ import {
   xlsxUtils,
   type SRow,
 } from "./factorySheetsRoutesBuildStatusSheet";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { registerFactorySheetsRoutesPart1 } from "./registerFactorySheetsRoutesPart1";
+
+// No client page calls these routes today.
+const createSheetInput = {
+  query: emptyQuery,
+  body: z.strictObject({ name: z.string().nullable().optional() }),
+} satisfies RequestSchemas;
+
+// columns/rows are the spreadsheet grid, stored verbatim as JSON; both the
+// legacy (plain string/primitive) and current ({ id, label } / { value, link })
+// cell formats are read back by getColLabel/getCellRawValue.
+const updateSheetInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    name: z.string().optional(),
+    columns: z.array(z.unknown()).optional(),
+    rows: z.array(z.unknown()).optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerFactorySheetsRoutes(app: Express) {
   // ── List all sheets for current company ───────────────────────────────────
@@ -34,7 +55,7 @@ export function registerFactorySheetsRoutes(app: Express) {
   });
 
   // ── Create a new blank sheet ───────────────────────────────────────────────
-  app.post("/api/factory/sheets", requireAuth, async (req, res) => {
+  app.post("/api/factory/sheets", requireAuth, validateRequest(createSheetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId!;
       const { name } = req.body;
@@ -66,7 +87,7 @@ export function registerFactorySheetsRoutes(app: Express) {
   });
 
   // ── Update a sheet (rename or save grid) ──────────────────────────────────
-  app.put("/api/factory/sheets/:id", requireAuth, async (req, res) => {
+  app.put("/api/factory/sheets/:id", requireAuth, validateRequest(updateSheetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId!;
       const id = parseId(req.params.id);

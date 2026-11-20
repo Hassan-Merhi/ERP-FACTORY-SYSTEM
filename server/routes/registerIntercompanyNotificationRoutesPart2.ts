@@ -14,6 +14,14 @@ import {
 } from "@shared/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { registerIntercompanyNotificationRoutesPart3 } from "./registerIntercompanyNotificationRoutesPart3";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const dismissRequestInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ note: z.string().nullable().optional() }).optional(),
+} satisfies RequestSchemas;
 
 export function registerIntercompanyNotificationRoutesPart2(app: Express) {
   // ── GET /api/intercompany-requests ──────────────────────────────────────────
@@ -98,64 +106,69 @@ export function registerIntercompanyNotificationRoutesPart2(app: Express) {
   registerIntercompanyNotificationRoutesPart3(app);
 
   // ── POST /api/intercompany-requests/:id/dismiss ─────────────────────────────
-  app.post("/api/intercompany-requests/:id/dismiss", requireAuth, async (req, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      if (isNaN(requestId)) return res.status(400).json({ message: "Invalid ID" });
+  app.post(
+    "/api/intercompany-requests/:id/dismiss",
+    requireAuth,
+    validateRequest(dismissRequestInput),
+    async (req, res) => {
+      try {
+        const requestId = parseInt(req.params.id);
+        if (isNaN(requestId)) return res.status(400).json({ message: "Invalid ID" });
 
-      const userId = req.session.userId!;
-      const { note } = req.body;
+        const userId = req.session.userId!;
+        const { note } = req.body ?? {};
 
-      const [request] = await db
-        .select()
-        .from(intercompanyPaymentRequests)
-        .where(eq(intercompanyPaymentRequests.id, requestId));
-      if (!request) return res.status(404).json({ message: "Request not found" });
-      if (request.status !== "pending")
-        return res.status(400).json({ message: "Request is already " + request.status });
+        const [request] = await db
+          .select()
+          .from(intercompanyPaymentRequests)
+          .where(eq(intercompanyPaymentRequests.id, requestId));
+        if (!request) return res.status(404).json({ message: "Request not found" });
+        if (request.status !== "pending")
+          return res.status(400).json({ message: "Request is already " + request.status });
 
-      const [recipient] = await db
-        .select()
-        .from(intercompanyLinkRecipients)
-        .where(
-          and(eq(intercompanyLinkRecipients.linkId, request.linkId), eq(intercompanyLinkRecipients.userId, userId))
-        );
-      if (!recipient) return res.status(403).json({ message: "You are not authorised to dismiss this request" });
+        const [recipient] = await db
+          .select()
+          .from(intercompanyLinkRecipients)
+          .where(
+            and(eq(intercompanyLinkRecipients.linkId, request.linkId), eq(intercompanyLinkRecipients.userId, userId))
+          );
+        if (!recipient) return res.status(403).json({ message: "You are not authorised to dismiss this request" });
 
-      // Verify the dismisser has a role in the destination company
-      const [dimLink] = await db
-        .select({ destCompanyId: intercompanyAccountLinks.destCompanyId })
-        .from(intercompanyAccountLinks)
-        .where(eq(intercompanyAccountLinks.id, request.linkId));
-      if (dimLink) {
-        const [dimMembership] = await db
-          .select({ id: userCompanyRoles.id })
-          .from(userCompanyRoles)
-          .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, dimLink.destCompanyId)));
-        if (!dimMembership) {
-          return res.status(403).json({ message: "You do not have a role in the destination company" });
+        // Verify the dismisser has a role in the destination company
+        const [dimLink] = await db
+          .select({ destCompanyId: intercompanyAccountLinks.destCompanyId })
+          .from(intercompanyAccountLinks)
+          .where(eq(intercompanyAccountLinks.id, request.linkId));
+        if (dimLink) {
+          const [dimMembership] = await db
+            .select({ id: userCompanyRoles.id })
+            .from(userCompanyRoles)
+            .where(and(eq(userCompanyRoles.userId, userId), eq(userCompanyRoles.companyId, dimLink.destCompanyId)));
+          if (!dimMembership) {
+            return res.status(403).json({ message: "You do not have a role in the destination company" });
+          }
         }
+
+        // Atomic conditional claim — same pattern as approve to prevent TOCTOU race
+        const claimed = await db
+          .update(intercompanyPaymentRequests)
+          .set({
+            status: "dismissed",
+            approvedByUserId: userId,
+            approvedAt: new Date(),
+            dismissNote: note || null,
+          })
+          .where(and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending")))
+          .returning({ id: intercompanyPaymentRequests.id });
+
+        if (claimed.length === 0) {
+          return res.status(409).json({ message: "This request has already been processed by another user." });
+        }
+
+        res.json({ success: true });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-
-      // Atomic conditional claim — same pattern as approve to prevent TOCTOU race
-      const claimed = await db
-        .update(intercompanyPaymentRequests)
-        .set({
-          status: "dismissed",
-          approvedByUserId: userId,
-          approvedAt: new Date(),
-          dismissNote: note || null,
-        })
-        .where(and(eq(intercompanyPaymentRequests.id, requestId), eq(intercompanyPaymentRequests.status, "pending")))
-        .returning({ id: intercompanyPaymentRequests.id });
-
-      if (claimed.length === 0) {
-        return res.status(409).json({ message: "This request has already been processed by another user." });
-      }
-
-      res.json({ success: true });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 }

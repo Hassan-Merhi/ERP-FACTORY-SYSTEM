@@ -17,149 +17,174 @@ import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { postErpVoucherTx } from "../../../services/accounting/erpVoucherPosting";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+const numeric = z.union([z.number(), z.string()]);
+const text = z.string().nullable().optional();
+
+// The handler answers its own 400s for the month and the cash account.
+const repayByMonthInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    // Read before the session company (no client sends it).
+    companyId: numeric.optional(),
+    month: text,
+    repaymentDate: text,
+    cashAccountId: numeric.nullable().optional(),
+    notes: text,
+    // Request identity: the client fetch guard adds it and operationalVoucherRequestBoundary claims it.
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerAdvanceRepayByMonthRoutes(app: Express) {
-  app.post("/api/factory/advances/repay-by-month", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/advances/repay-by-month",
+    requireAuth,
+    validateRequest(repayByMonthInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.body.companyId || getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { month, repaymentDate, cashAccountId: rawCashAccountId } = req.body;
-      if (!month || !/^\d{4}-\d{2}$/.test(month)) {
-        return res.status(400).json({ message: "month must be YYYY-MM" });
-      }
-      const cashAccountId = rawCashAccountId ? parseInt(rawCashAccountId) : null;
-      if (!cashAccountId) return res.status(400).json({ message: "cashAccountId is required" });
+        const { month, repaymentDate, cashAccountId: rawCashAccountId } = req.body;
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+          return res.status(400).json({ message: "month must be YYYY-MM" });
+        }
+        const cashAccountId = rawCashAccountId ? parseInt(rawCashAccountId) : null;
+        if (!cashAccountId) return res.status(400).json({ message: "cashAccountId is required" });
 
-      const repayDate = repaymentDate || getClientDate(req);
+        const repayDate = repaymentDate || getClientDate(req);
 
-      const [acct] = await db
-        .select({ id: ledgerAccounts.id })
-        .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
-      if (!acct) return res.status(400).json({ message: "Cash account not found" });
-
-      // Find all outstanding advances (both Loan and Salary Deduction) for this month
-      const outstanding = await db
-        .select()
-        .from(factoryWorkerAdvances)
-        .where(
-          and(
-            eq(factoryWorkerAdvances.companyId, companyId),
-            eq(factoryWorkerAdvances.fullyPaid, false),
-            sql`to_char(${factoryWorkerAdvances.advanceDate}, 'YYYY-MM') = ${month}`
-          )
-        );
-
-      if (outstanding.length === 0) {
-        return res.status(400).json({ message: "No outstanding advances found for that month" });
-      }
-
-      // Load worker names
-      const workerIds = [...new Set(outstanding.map((a) => a.workerId))];
-      const workerRows = await db
-        .select({ id: factoryWorkers.id, fullName: factoryWorkers.fullName })
-        .from(factoryWorkers)
-        .where(inArray(factoryWorkers.id, workerIds));
-      const workerMap: Record<number, string> = Object.fromEntries(workerRows.map((w) => [w.id, w.fullName]));
-
-      const result = await db.transaction(async (tx) => {
-        // Resolve/create the Factory Worker Advances ledger account once
-        let [advancesAccount] = await tx
+        const [acct] = await db
           .select({ id: ledgerAccounts.id })
           .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Worker Advances")));
-        if (!advancesAccount) {
-          const maxCodeResult = await tx
-            .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
+          .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
+        if (!acct) return res.status(400).json({ message: "Cash account not found" });
+
+        // Find all outstanding advances (both Loan and Salary Deduction) for this month
+        const outstanding = await db
+          .select()
+          .from(factoryWorkerAdvances)
+          .where(
+            and(
+              eq(factoryWorkerAdvances.companyId, companyId),
+              eq(factoryWorkerAdvances.fullyPaid, false),
+              sql`to_char(${factoryWorkerAdvances.advanceDate}, 'YYYY-MM') = ${month}`
+            )
+          );
+
+        if (outstanding.length === 0) {
+          return res.status(400).json({ message: "No outstanding advances found for that month" });
+        }
+
+        // Load worker names
+        const workerIds = [...new Set(outstanding.map((a) => a.workerId))];
+        const workerRows = await db
+          .select({ id: factoryWorkers.id, fullName: factoryWorkers.fullName })
+          .from(factoryWorkers)
+          .where(inArray(factoryWorkers.id, workerIds));
+        const workerMap: Record<number, string> = Object.fromEntries(workerRows.map((w) => [w.id, w.fullName]));
+
+        const result = await db.transaction(async (tx) => {
+          // Resolve/create the Factory Worker Advances ledger account once
+          let [advancesAccount] = await tx
+            .select({ id: ledgerAccounts.id })
             .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\\d+$'`));
-          const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
-          [advancesAccount] = await tx
-            .insert(ledgerAccounts)
-            .values({
+            .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Worker Advances")));
+          if (!advancesAccount) {
+            const maxCodeResult = await tx
+              .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\\d+$'`));
+            const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
+            [advancesAccount] = await tx
+              .insert(ledgerAccounts)
+              .values({
+                companyId,
+                code: nextCode,
+                name: "Factory Worker Advances",
+                accountType: "Asset",
+                active: true,
+                isHidden: false,
+              })
+              .returning();
+          }
+
+          let repaidCount = 0;
+          let repaidTotal: Decimal = new MoneyDecimal(0);
+
+          for (const advance of outstanding) {
+            const bal = toMoney(advance.remainingBalance).toDecimalPlaces(2);
+            if (bal.lte(0)) continue;
+
+            const workerName = workerMap[advance.workerId] || `Worker #${advance.workerId}`;
+            const narration = `Advance repayment from ${workerName}: $${bal.toFixed(2)} (advance #${advance.id})`;
+
+            const [repayment] = await tx
+              .insert(factoryAdvanceRepayments)
+              .values({
+                companyId,
+                advanceId: advance.id,
+                workerId: advance.workerId,
+                repaymentDate: repayDate,
+                amount: bal.toFixed(2),
+                cashAccountId,
+                notes: req.body.notes || null,
+              })
+              .returning();
+
+            await tx
+              .update(factoryWorkerAdvances)
+              .set({
+                remainingBalance: "0.00",
+                fullyPaid: true,
+              })
+              .where(eq(factoryWorkerAdvances.id, advance.id));
+
+            // Voucher: DR Cash, CR Factory Worker Advances
+            const voucherNumber = `RECEIPT-REPAY-${repayment.id}-1`;
+            await postErpVoucherTx(tx, {
               companyId,
-              code: nextCode,
-              name: "Factory Worker Advances",
-              accountType: "Asset",
-              active: true,
-              isHidden: false,
-            })
-            .returning();
-        }
+              voucherNumber,
+              voucherType: "Receipt",
+              voucherDate: repayDate,
+              description: narration,
+              currency: "USD",
+              sourceModule: "FACTORY",
+              lines: [
+                { ledgerAccountId: cashAccountId, debit: bal.toFixed(2), narration: narration },
+                { ledgerAccountId: advancesAccount.id, credit: bal.toFixed(2), narration: narration },
+              ],
+              source: { type: "advance-repayment", id: repayment.id },
+            });
 
-        let repaidCount = 0;
-        let repaidTotal: Decimal = new MoneyDecimal(0);
-
-        for (const advance of outstanding) {
-          const bal = toMoney(advance.remainingBalance).toDecimalPlaces(2);
-          if (bal.lte(0)) continue;
-
-          const workerName = workerMap[advance.workerId] || `Worker #${advance.workerId}`;
-          const narration = `Advance repayment from ${workerName}: $${bal.toFixed(2)} (advance #${advance.id})`;
-
-          const [repayment] = await tx
-            .insert(factoryAdvanceRepayments)
-            .values({
+            await writeDaybookEntry(tx, {
               companyId,
-              advanceId: advance.id,
-              workerId: advance.workerId,
-              repaymentDate: repayDate,
-              amount: bal.toFixed(2),
-              cashAccountId,
-              notes: req.body.notes || null,
-            })
-            .returning();
+              txDate: repayDate,
+              txType: "ADVANCE_REPAYMENT",
+              referenceId: repayment.id,
+              referenceTable: "factory_advance_repayments",
+              description: narration,
+              amountCurrency: bal.toNumber(),
+              currencyCode: "USD",
+              amountUsd: bal.toNumber(),
+              createdBy: req.session.userId ?? undefined,
+            });
 
-          await tx
-            .update(factoryWorkerAdvances)
-            .set({
-              remainingBalance: "0.00",
-              fullyPaid: true,
-            })
-            .where(eq(factoryWorkerAdvances.id, advance.id));
+            repaidCount++;
+            repaidTotal = repaidTotal.plus(bal);
+          }
 
-          // Voucher: DR Cash, CR Factory Worker Advances
-          const voucherNumber = `RECEIPT-REPAY-${repayment.id}-1`;
-          await postErpVoucherTx(tx, {
-            companyId,
-            voucherNumber,
-            voucherType: "Receipt",
-            voucherDate: repayDate,
-            description: narration,
-            currency: "USD",
-            sourceModule: "FACTORY",
-            lines: [
-              { ledgerAccountId: cashAccountId, debit: bal.toFixed(2), narration: narration },
-              { ledgerAccountId: advancesAccount.id, credit: bal.toFixed(2), narration: narration },
-            ],
-            source: { type: "advance-repayment", id: repayment.id },
-          });
+          return { repaid: repaidCount, total: repaidTotal.toNumber() };
+        });
 
-          await writeDaybookEntry(tx, {
-            companyId,
-            txDate: repayDate,
-            txType: "ADVANCE_REPAYMENT",
-            referenceId: repayment.id,
-            referenceTable: "factory_advance_repayments",
-            description: narration,
-            amountCurrency: bal.toNumber(),
-            currencyCode: "USD",
-            amountUsd: bal.toNumber(),
-            createdBy: req.session.userId ?? undefined,
-          });
-
-          repaidCount++;
-          repaidTotal = repaidTotal.plus(bal);
-        }
-
-        return { repaid: repaidCount, total: repaidTotal.toNumber() };
-      });
-
-      res.json(result);
-    } catch (error: unknown) {
-      logger.error("Error in repay-by-month:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json(result);
+      } catch (error: unknown) {
+        logger.error("Error in repay-by-month:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

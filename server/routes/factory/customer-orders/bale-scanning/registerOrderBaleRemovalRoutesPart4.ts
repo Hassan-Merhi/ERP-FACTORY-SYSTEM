@@ -12,6 +12,16 @@ import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../priorityScanQueue";
 import { factoryBales, customerOrders, customerOrderBales, customerOrderBaleRemovals } from "@shared/schema";
 import { eq, and, isNull, ne, sql } from "drizzle-orm";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../../lib/validateRequest";
+
+// Takes only the bale id (parseId in the handler); the Bale Explorer posts {}.
+const baleActionInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerOrderBaleRemovalRoutesPart4(app: Express) {
   // POST /api/factory/bales/:id/release-from-loading
@@ -22,6 +32,7 @@ export function registerOrderBaleRemovalRoutesPart4(app: Express) {
     "/api/factory/bales/:id/release-from-loading",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(baleActionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

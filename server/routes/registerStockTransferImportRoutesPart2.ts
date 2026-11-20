@@ -8,6 +8,10 @@ import { createWorkbook, jsonToSheet, readExcel, sheetToJson, writeWorkbook } fr
 import type { ParsedStockTransferItem, SpreadsheetRow } from "./stockTransferImportTypes";
 import { rowQuantity } from "./stockTransferImportQuantity";
 import { registerStockTransferImportRoutesPart4 } from "./registerStockTransferImportRoutesPart4";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Multipart upload of one spreadsheet (useStockTransferFormModelPart4.ts appends only "file").
+const parseMultiSourceInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerStockTransferImportRoutesPart2(app: Express) {
   registerStockTransferImportRoutesPart4(app);
@@ -85,6 +89,7 @@ export function registerStockTransferImportRoutesPart2(app: Express) {
     requireAuth,
     requireNonPOS,
     spreadsheetUpload.single("file"),
+    validateRequest(parseMultiSourceInput),
     async (req, res) => {
       try {
         if (!req.session.currentCompanyId) {

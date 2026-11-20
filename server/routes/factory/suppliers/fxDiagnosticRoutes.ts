@@ -46,9 +46,27 @@ import {
   REPAIR_TOKEN_TTL_MS,
 } from "../../../services/factory/repairToken";
 import { lineAmount, toMoney } from "../../../lib/money";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 
 const VALID_SOURCES: FxResolutionSource[] = ["container", "offload_additional_charge", "commission"];
 const ADMIN_ROLES = ["Admin", "Developer"] as const;
+
+// The handler keeps its own source/id/rate checks: id goes through parseInt
+// and the rate through toMoney, so both accept a number or a string.
+const fxRepairInput = {
+  query: emptyQuery,
+  body: z.union([
+    z.undefined(),
+    z.strictObject({
+      source: z.string().optional(),
+      id: z.union([z.number(), z.string()]).optional(),
+      fxRateToUsd: z.union([z.number(), z.string()]).optional(),
+      confirm: z.boolean().optional(),
+      confirmationToken: z.string().optional(),
+    }),
+  ]),
+} satisfies RequestSchemas;
 
 interface RepairTokenPayload {
   companyId: number;
@@ -283,6 +301,7 @@ export function registerFactoryFxDiagnosticRoutes(app: Express) {
     "/api/factory/suppliers/fx-diagnostic/repair",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(fxRepairInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

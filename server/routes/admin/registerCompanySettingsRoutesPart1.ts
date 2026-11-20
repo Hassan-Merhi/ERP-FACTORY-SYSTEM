@@ -9,6 +9,8 @@ import { requireAuth, requireRole } from "../../auth";
 import { writeAuditEvent } from "../../services/audit";
 import { accountingPostingRequests, fiscalPeriodClosures, voucherEntries, vouchers } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { validateRequest } from "../../lib/validateRequest";
+import { resetCompanyDataInput, setParentCompanyInput } from "./companySettingsWriteSchemas";
 
 /**
  * Both resets delete vouchers in bulk. The closed-period guard refuses any of
@@ -128,124 +130,130 @@ export function softResetMarker(changes: unknown): { resetAt: Date; voucherIds: 
 
 export function registerCompanySettingsRoutesPart1(app: Express) {
   // Hard reset: deletes the company's Payment, Receipt and Journal vouchers and their lines.
-  app.post("/api/admin/reset-company-data", requireAuth, requireRole("Owner"), async (req, res) => {
-    try {
-      const companyId = resetCompanyId(req);
+  app.post(
+    "/api/admin/reset-company-data",
+    requireAuth,
+    requireRole("Owner"),
+    validateRequest(resetCompanyDataInput),
+    async (req, res) => {
+      try {
+        const companyId = resetCompanyId(req);
 
-      const company = await storage.getCompanyById(companyId);
-      if (!company) {
-        return res.status(400).json({ message: "Company not found." });
-      }
-
-      const closedRefusal = await closedBooksResetRefusal(companyId);
-      if (closedRefusal) {
-        return res.status(409).json({ message: closedRefusal, code: "ACCOUNTING_PERIOD_CLOSED" });
-      }
-
-      // Define voucher types to DELETE (Payment, Receipt, Journal - excluding POS, Production, Consumption, Stock Transfer)
-      const voucherTypesToDelete = ["Payment", "Receipt", "Journal"];
-
-      // One transaction for the whole reset: a refusal or failure part-way
-      // (closed period, a referenced voucher) leaves every voucher in place.
-      const outcome = await db.transaction(async (tx) => {
-        const vouchersToDelete = await tx
-          .select({
-            id: vouchers.id,
-            voucherType: vouchers.voucherType,
-            voucherNumber: vouchers.voucherNumber,
-            voucherDate: vouchers.voucherDate,
-            totalAmount: vouchers.totalAmount,
-          })
-          .from(vouchers)
-          .where(and(eq(vouchers.companyId, companyId), inArray(vouchers.voucherType, voucherTypesToDelete)))
-          .orderBy(vouchers.id);
-        const voucherIds = vouchersToDelete.map((v) => v.id);
-
-        await refuseClosingVouchers(tx, voucherIds);
-
-        let deletedEntryCount = 0;
-        let deletedPostingRequestCount = 0;
-        for (const ids of chunk(voucherIds, ID_CHUNK_SIZE)) {
-          // Engine-posted vouchers keep a posting-request identity whose FK is
-          // ON DELETE RESTRICT; drop it first, as
-          // deleteInfrastructurePostingIdentityForVoucherTx does per voucher.
-          const postingRequests = await tx
-            .delete(accountingPostingRequests)
-            .where(inArray(accountingPostingRequests.voucherId, ids))
-            .returning({ id: accountingPostingRequests.id });
-          deletedPostingRequestCount += postingRequests.length;
-          // Then the lines, then the vouchers (respecting foreign keys).
-          const entries = await tx
-            .delete(voucherEntries)
-            .where(inArray(voucherEntries.voucherId, ids))
-            .returning({ id: voucherEntries.id });
-          deletedEntryCount += entries.length;
-          await tx.delete(vouchers).where(and(eq(vouchers.companyId, companyId), inArray(vouchers.id, ids)));
+        const company = await storage.getCompanyById(companyId);
+        if (!company) {
+          return res.status(400).json({ message: "Company not found." });
         }
 
-        // Summary by type
-        const typeSummary = voucherTypesToDelete.map((type) => ({
-          type,
-          count: vouchersToDelete.filter((v) => v.voucherType === type).length,
-        }));
+        const closedRefusal = await closedBooksResetRefusal(companyId);
+        if (closedRefusal) {
+          return res.status(409).json({ message: closedRefusal, code: "ACCOUNTING_PERIOD_CLOSED" });
+        }
 
-        await writeAuditEvent(
-          {
-            ...auditActor(req),
-            companyId,
-            action: "delete",
-            tableName: RESET_AUDIT_TABLE,
-            recordIdentifier: HARD_RESET_IDENTIFIER,
-            changes: {
-              summary: {
-                old: {
-                  deletedVouchers: vouchersToDelete.length,
-                  deletedEntries: deletedEntryCount,
-                  deletedPostingRequests: deletedPostingRequestCount,
-                  typeSummary,
-                  vouchersRecordedInFull: vouchersToDelete.length <= AUDIT_MAX_ROWS,
+        // Define voucher types to DELETE (Payment, Receipt, Journal - excluding POS, Production, Consumption, Stock Transfer)
+        const voucherTypesToDelete = ["Payment", "Receipt", "Journal"];
+
+        // One transaction for the whole reset: a refusal or failure part-way
+        // (closed period, a referenced voucher) leaves every voucher in place.
+        const outcome = await db.transaction(async (tx) => {
+          const vouchersToDelete = await tx
+            .select({
+              id: vouchers.id,
+              voucherType: vouchers.voucherType,
+              voucherNumber: vouchers.voucherNumber,
+              voucherDate: vouchers.voucherDate,
+              totalAmount: vouchers.totalAmount,
+            })
+            .from(vouchers)
+            .where(and(eq(vouchers.companyId, companyId), inArray(vouchers.voucherType, voucherTypesToDelete)))
+            .orderBy(vouchers.id);
+          const voucherIds = vouchersToDelete.map((v) => v.id);
+
+          await refuseClosingVouchers(tx, voucherIds);
+
+          let deletedEntryCount = 0;
+          let deletedPostingRequestCount = 0;
+          for (const ids of chunk(voucherIds, ID_CHUNK_SIZE)) {
+            // Engine-posted vouchers keep a posting-request identity whose FK is
+            // ON DELETE RESTRICT; drop it first, as
+            // deleteInfrastructurePostingIdentityForVoucherTx does per voucher.
+            const postingRequests = await tx
+              .delete(accountingPostingRequests)
+              .where(inArray(accountingPostingRequests.voucherId, ids))
+              .returning({ id: accountingPostingRequests.id });
+            deletedPostingRequestCount += postingRequests.length;
+            // Then the lines, then the vouchers (respecting foreign keys).
+            const entries = await tx
+              .delete(voucherEntries)
+              .where(inArray(voucherEntries.voucherId, ids))
+              .returning({ id: voucherEntries.id });
+            deletedEntryCount += entries.length;
+            await tx.delete(vouchers).where(and(eq(vouchers.companyId, companyId), inArray(vouchers.id, ids)));
+          }
+
+          // Summary by type
+          const typeSummary = voucherTypesToDelete.map((type) => ({
+            type,
+            count: vouchersToDelete.filter((v) => v.voucherType === type).length,
+          }));
+
+          await writeAuditEvent(
+            {
+              ...auditActor(req),
+              companyId,
+              action: "delete",
+              tableName: RESET_AUDIT_TABLE,
+              recordIdentifier: HARD_RESET_IDENTIFIER,
+              changes: {
+                summary: {
+                  old: {
+                    deletedVouchers: vouchersToDelete.length,
+                    deletedEntries: deletedEntryCount,
+                    deletedPostingRequests: deletedPostingRequestCount,
+                    typeSummary,
+                    vouchersRecordedInFull: vouchersToDelete.length <= AUDIT_MAX_ROWS,
+                  },
+                },
+                vouchers: {
+                  old: auditPages(
+                    vouchersToDelete.map((v) => ({
+                      id: v.id,
+                      voucherNumber: v.voucherNumber,
+                      voucherType: v.voucherType,
+                      voucherDate: v.voucherDate,
+                      amount: v.totalAmount || "0",
+                    }))
+                  ),
                 },
               },
-              vouchers: {
-                old: auditPages(
-                  vouchersToDelete.map((v) => ({
-                    id: v.id,
-                    voucherNumber: v.voucherNumber,
-                    voucherType: v.voucherType,
-                    voucherDate: v.voucherDate,
-                    amount: v.totalAmount || "0",
-                  }))
-                ),
-              },
             },
-          },
-          tx
-        );
+            tx
+          );
 
-        return { deletedVoucherCount: vouchersToDelete.length, deletedEntryCount, typeSummary };
-      });
+          return { deletedVoucherCount: vouchersToDelete.length, deletedEntryCount, typeSummary };
+        });
 
-      const { deletedVoucherCount, deletedEntryCount, typeSummary } = outcome;
-      res.json({
-        message: `Reset complete for ${company.name}. Deleted ${deletedVoucherCount} voucher(s) and ${deletedEntryCount} entries.`,
-        deletedVouchers: deletedVoucherCount,
-        deletedEntries: deletedEntryCount,
-        typeSummary,
-        preserved: [
-          "Containers",
-          "Container Offloads",
-          "Inventory",
-          "Locations",
-          "Ledger Accounts",
-          "POS Vouchers",
-          "Production/Consumption/Stock Transfer Vouchers",
-          "Purchase Orders",
-        ],
-      });
-    } catch (error: unknown) {
-      return sendResetError(res, error, "Reset company data error:");
+        const { deletedVoucherCount, deletedEntryCount, typeSummary } = outcome;
+        res.json({
+          message: `Reset complete for ${company.name}. Deleted ${deletedVoucherCount} voucher(s) and ${deletedEntryCount} entries.`,
+          deletedVouchers: deletedVoucherCount,
+          deletedEntries: deletedEntryCount,
+          typeSummary,
+          preserved: [
+            "Containers",
+            "Container Offloads",
+            "Inventory",
+            "Locations",
+            "Ledger Accounts",
+            "POS Vouchers",
+            "Production/Consumption/Stock Transfer Vouchers",
+            "Purchase Orders",
+          ],
+        });
+      } catch (error: unknown) {
+        return sendResetError(res, error, "Reset company data error:");
+      }
     }
-  });
+  );
 
   // System Settings - Parent Company (Admin + Developer only)
   app.get("/api/system/parent-company", requireAuth, async (req, res) => {
@@ -262,7 +270,7 @@ export function registerCompanySettingsRoutesPart1(app: Express) {
     }
   });
 
-  app.post("/api/system/parent-company", requireAuth, async (req, res) => {
+  app.post("/api/system/parent-company", requireAuth, validateRequest(setParentCompanyInput), async (req, res) => {
     try {
       // Only Admin can change parent company setting
       const userRole = req.session.currentRole;

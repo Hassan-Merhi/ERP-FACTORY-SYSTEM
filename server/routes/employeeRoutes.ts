@@ -8,6 +8,33 @@ import { registerEmployeeGroupRoutes } from "./employeeGroupRoutes";
 import { registerPayrollRoutes } from "./erp-payroll";
 import { toMoney } from "../lib/money";
 import { registerEmployeeRoutesPart1 } from "./registerEmployeeRoutesPart1";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// The create handler re-parses with insertEmployeeSchema (its messages stay),
+// so this only fixes the shape and the JSON types it accepts.
+const createEmployeeInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    companyId: z.number().optional(),
+    code: z.string().optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().nullable().optional(),
+    joinDate: z.string().optional(),
+    department: z.string().nullable().optional(),
+    employeeType: z.enum(["Employee", "Worker"]).optional(),
+    monthlySalary: z.string().optional(),
+    openingBalance: z.string().nullable().optional(),
+    active: z.boolean().optional(),
+    salesBonusPct: z.string().nullable().optional(),
+    salesBonusPctSourceCompanyId: z.number().nullable().optional(),
+    salesBonusPctLocationId: z.number().nullable().optional(),
+    balesBonusRate: z.string().nullable().optional(),
+    employeeGroupId: z.unknown().optional(), // sent by client/src/pages/payroll/usePayrollModelPart4.tsx; not used
+  }),
+} satisfies RequestSchemas;
 
 export function registerEmployeeRoutes(app: Express) {
   app.get("/api/employees", requireAuth, async (req, res) => {
@@ -114,7 +141,7 @@ export function registerEmployeeRoutes(app: Express) {
     }
   });
 
-  app.post("/api/employees", requireAuth, requireNonPOS, async (req, res) => {
+  app.post("/api/employees", requireAuth, requireNonPOS, validateRequest(createEmployeeInput), async (req, res) => {
     try {
       const parsed = insertEmployeeSchema.parse(req.body);
       let resolvedCode: string;

@@ -6,6 +6,14 @@ import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMes
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import {
+  emptyQuery,
+  positiveIntParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { factoryWorkers } from "@shared/schema";
 import { ProductionTargetSplitError } from "@shared/factoryProductionTargetSplit";
 import {
@@ -15,6 +23,27 @@ import {
 } from "../../services/factory/productionWorkerLinks";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// The handlers keep their own date, count and bale checks and messages; these
+// schemas fix the shape ProductionWorkerLinkControl sends.
+const linkNumber = z.union([z.number(), z.string()]);
+const createLinkInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    effectiveFrom: z.string().optional(),
+    workerIds: z.array(linkNumber).optional(),
+    targetBales: linkNumber.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+const unlinkInput = {
+  params: z.strictObject({ linkId: positiveIntParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    effectiveTo: z.string().optional(),
+    // targetBales is null when the typed draft is not a number; the split check rejects it.
+    allocations: z.array(z.strictObject({ workerId: z.number(), targetBales: z.number().nullable() })).optional(),
+  }),
+} satisfies RequestSchemas;
 
 function getFactoryCompanyId(req: Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -97,6 +126,7 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
     "/api/factory/staff-tracking/production-worker-links",
     requireAuth,
     requireProductionTargetsAccess,
+    validateRequest(createLinkInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);
@@ -166,13 +196,14 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
     "/api/factory/staff-tracking/production-worker-links/:linkId/unlink",
     requireAuth,
     requireProductionTargetsAccess,
+    validateRequest(unlinkInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);
         if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-        const linkId = Number(req.params.linkId);
+        const { linkId } = validatedInput(req, unlinkInput).params;
         const effectiveTo = String(req.body?.effectiveTo || "");
-        if (!Number.isInteger(linkId) || linkId <= 0 || !ISO_DATE.test(effectiveTo)) {
+        if (!ISO_DATE.test(effectiveTo)) {
           return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
         }
         if (await hasFinalizedProductionOnOrAfter(companyId, effectiveTo)) {

@@ -4,6 +4,8 @@ import { requireSessionUserId } from "../../../../lib/sessionUser";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { supplierRateRestoreInput } from "../rawStockWriteRouteSchemas";
 import { logAudit } from "../../../helpers/auditHelpers";
 import { db } from "../../../../db";
 import { factorySuppliers } from "@shared/schema";
@@ -84,6 +86,7 @@ export function registerRawStockSupplierRateRoutesPart1(app: Express) {
     "/api/factory/raw-stock/supplier-rate/restore-from-audit",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(supplierRateRestoreInput),
     async (req: Request, res: Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

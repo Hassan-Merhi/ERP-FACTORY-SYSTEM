@@ -46,6 +46,7 @@
     "audit:doc-index": "node scripts/audit-doc-index.mjs",
     "audit:write-routes": "node scripts/audit-write-route-coverage.mjs",
     "audit:write-evidence": "node scripts/audit-write-evidence.mjs",
+    "audit:write-validation": "node scripts/audit-write-validation.mjs",
     "audit:toolchain": "node scripts/audit-toolchain-coherence.mjs",
     "audit:scripts": "node scripts/audit-script-inventory.mjs",
     "audit:company-scope": "node scripts/audit-company-scope.mjs",

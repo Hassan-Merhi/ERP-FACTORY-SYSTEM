@@ -7,6 +7,8 @@ import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { registerCompanySettingsRoutesPart1 } from "./registerCompanySettingsRoutesPart1";
 import { registerCompanySettingsRoutesPart2 } from "./registerCompanySettingsRoutesPart2";
+import { validateRequest } from "../../lib/validateRequest";
+import { applyMissingMigrationsInput } from "./companySettingsWriteSchemas";
 
 export function registerCompanySettingsRoutes(app: Express) {
   registerCompanySettingsRoutesPart1(app);
@@ -97,6 +99,7 @@ function registerCompanySettingsRoutesPart3(app: Express) {
     "/api/admin/apply-missing-migrations",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(applyMissingMigrationsInput),
     (_req, res) => {
       res.status(410).json({
         success: false,

@@ -24,6 +24,21 @@ import {
 
 import { balePhotoUpload } from "./_helpers";
 import { toMoney } from "../../lib/money";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Multipart: multer leaves only the text form fields in req.body.
+const uploadBalePhotoInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ companyId: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const deleteBalePhotoInput = {
+  params: z.strictObject({ photoId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 /** One raw-material source line on a bale trace response. */
 type BaleTraceSource = {
@@ -156,6 +171,7 @@ export function registerFactoryBaleTracePhotoRoutes(app: Express, requireAuth: A
     "/api/factory/bales/:id/photos",
     requireAuth,
     balePhotoUpload.single("photo"),
+    validateRequest(uploadBalePhotoInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.body.companyId || req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -185,36 +201,41 @@ export function registerFactoryBaleTracePhotoRoutes(app: Express, requireAuth: A
     }
   );
 
-  app.delete("/api/factory/bale-photos/:photoId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.delete(
+    "/api/factory/bale-photos/:photoId",
+    requireAuth,
+    validateRequest(deleteBalePhotoInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const photoId = parseInt(req.params.photoId);
+        const photoId = parseInt(req.params.photoId);
 
-      const [photo] = await db
-        .select()
-        .from(factoryBalePhotos)
-        .where(and(eq(factoryBalePhotos.id, photoId), eq(factoryBalePhotos.companyId, companyId)));
+        const [photo] = await db
+          .select()
+          .from(factoryBalePhotos)
+          .where(and(eq(factoryBalePhotos.id, photoId), eq(factoryBalePhotos.companyId, companyId)));
 
-      if (!photo) return res.status(404).json({ message: "Photo not found" });
+        if (!photo) return res.status(404).json({ message: "Photo not found" });
 
-      const filename = photo.url?.split("/").pop();
-      if (filename) {
-        const filePath = path.join(process.cwd(), "uploads", "bale-photos", filename);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
+        const filename = photo.url?.split("/").pop();
+        if (filename) {
+          const filePath = path.join(process.cwd(), "uploads", "bale-photos", filename);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
         }
+
+        await db.delete(factoryBalePhotos).where(eq(factoryBalePhotos.id, photoId));
+
+        res.json({ success: true });
+      } catch (error: unknown) {
+        logger.error("Error deleting bale photo:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      await db.delete(factoryBalePhotos).where(eq(factoryBalePhotos.id, photoId));
-
-      res.json({ success: true });
-    } catch (error: unknown) {
-      logger.error("Error deleting bale photo:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/factory/uploads/bale-photos/:filename", requireAuth, (req: Request, res: Response) => {
     try {

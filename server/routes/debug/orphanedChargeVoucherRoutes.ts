@@ -7,6 +7,9 @@ import { containerOffloads, containers, voucherEntries, vouchers } from "@shared
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import { plusMoney } from "../../lib/money";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const fixOrphanedChargeVouchersInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 async function findReversedOtwContainers(companyId: number) {
   return db
@@ -114,49 +117,57 @@ export function registerOrphanedChargeVoucherRoutes(app: Express) {
     }
   );
 
-  app.post("/api/admin/fix-orphaned-charge-vouchers", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const otwContainers = await findReversedOtwContainers(companyId);
-      const deletedVouchers: Array<{ voucherId: number; voucherNumber: string; containerNumber: string }> = [];
-
-      for (const container of otwContainers) {
-        const chargeVouchersForContainer = await findChargeVouchers(companyId, container.containerNumber);
-
-        for (const voucher of chargeVouchersForContainer) {
-          // Wave 16 (A): retired (soft delete with its lines, audited), not hard-deleted.
-          await db.transaction((tx) =>
-            retireVouchersTx(tx, {
-              companyId,
-              voucherIds: [voucher.id],
-              reason: "orphaned-otw-charge-voucher-fix",
-              actor: sessionRetirementActor(req),
-            })
-          );
-
-          deletedVouchers.push({
-            voucherId: voucher.id,
-            voucherNumber: voucher.voucherNumber,
-            containerNumber: container.containerNumber,
-          });
-
-          logger.info(`Deleted orphaned voucher: ${voucher.voucherNumber} for container ${container.containerNumber}`);
+  app.post(
+    "/api/admin/fix-orphaned-charge-vouchers",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(fixOrphanedChargeVouchersInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
         }
-      }
 
-      res.json({
-        message: `Deleted ${deletedVouchers.length} orphaned charge vouchers`,
-        deletedCount: deletedVouchers.length,
-        deletedVouchers,
-        containersChecked: otwContainers.length,
-      });
-    } catch (error: unknown) {
-      logger.error("Fix orphaned charge vouchers error:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        const otwContainers = await findReversedOtwContainers(companyId);
+        const deletedVouchers: Array<{ voucherId: number; voucherNumber: string; containerNumber: string }> = [];
+
+        for (const container of otwContainers) {
+          const chargeVouchersForContainer = await findChargeVouchers(companyId, container.containerNumber);
+
+          for (const voucher of chargeVouchersForContainer) {
+            // Wave 16 (A): retired (soft delete with its lines, audited), not hard-deleted.
+            await db.transaction((tx) =>
+              retireVouchersTx(tx, {
+                companyId,
+                voucherIds: [voucher.id],
+                reason: "orphaned-otw-charge-voucher-fix",
+                actor: sessionRetirementActor(req),
+              })
+            );
+
+            deletedVouchers.push({
+              voucherId: voucher.id,
+              voucherNumber: voucher.voucherNumber,
+              containerNumber: container.containerNumber,
+            });
+
+            logger.info(
+              `Deleted orphaned voucher: ${voucher.voucherNumber} for container ${container.containerNumber}`
+            );
+          }
+        }
+
+        res.json({
+          message: `Deleted ${deletedVouchers.length} orphaned charge vouchers`,
+          deletedCount: deletedVouchers.length,
+          deletedVouchers,
+          containersChecked: otwContainers.length,
+        });
+      } catch (error: unknown) {
+        logger.error("Fix orphaned charge vouchers error:", { error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

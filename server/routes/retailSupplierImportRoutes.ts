@@ -6,13 +6,30 @@ import {
   retailSupplierCatalogPreviewRowsSchema,
 } from "../services/retail/retailSupplierCatalogPreview";
 import { describeRetailSupplierBarcode } from "../services/retail/retailSupplierBarcodeIntake";
-import { postRetailSupplierPurchase } from "../services/retail/retailSupplierPurchaseService";
+import {
+  postRetailSupplierPurchase,
+  retailSupplierPurchaseSchema,
+} from "../services/retail/retailSupplierPurchaseService";
 import {
   listRetailSupplierPurchases,
   getRetailSupplierPurchaseDetail,
   findRetailSupplierPurchaseByRequest,
 } from "../services/retail/retailSupplierPurchaseHistory";
 import { requireRetailCompany } from "./retailCompanyGuard";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Strict copies of the service schemas the handlers already parse with; the
+// services re-parse req.body and keep their own refinements and messages.
+const purchaseShape = retailSupplierPurchaseSchema.shape;
+const confirmInput = {
+  query: emptyQuery,
+  body: z.strictObject({ ...purchaseShape, lines: z.array(purchaseShape.lines.element.strict()) }),
+} satisfies RequestSchemas;
+const catalogPreviewInput = {
+  query: emptyQuery,
+  body: z.strictObject({ rows: z.array(retailSupplierCatalogPreviewRowsSchema.element.strict()) }),
+} satisfies RequestSchemas;
 
 /**
  * Retail supplier stock import routes (split out of retailRoutes.ts, which
@@ -85,37 +102,49 @@ export function registerRetailSupplierImportRoutes(app: Express) {
   });
 
   // Supplier stock is NEVER passed through the legacy absolute-quantity bulk import.
-  app.post("/api/retail/supplier-import/confirm", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const actor = { userId: String(req.user!.id), username: req.user?.username ?? null };
-      const result = await postRetailSupplierPurchase(companyId, actor, req.body);
-      res.status(result.replayed ? 200 : 201).json(result);
-    } catch (error) {
-      const message = getErrorMessage(error);
-      res.status(/already|conflict|does not reconcile|changed during/i.test(message) ? 409 : 400).json({ message });
+  app.post(
+    "/api/retail/supplier-import/confirm",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(confirmInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const actor = { userId: String(req.user!.id), username: req.user?.username ?? null };
+        const result = await postRetailSupplierPurchase(companyId, actor, req.body);
+        res.status(result.replayed ? 200 : 201).json(result);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        res.status(/already|conflict|does not reconcile|changed during/i.test(message) ? 409 : 400).json({ message });
+      }
     }
-  });
+  );
 
   // Phase 2: company-scoped catalog reconciliation. Read-only by design:
   // supplier inventory and payable must be posted atomically in Phase 4.
-  app.post("/api/retail/supplier-import/catalog-preview", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const rows = retailSupplierCatalogPreviewRowsSchema.parse(req.body?.rows);
-      const preview = await previewRetailSupplierCatalog(companyId, rows);
-      const barcodePlans = rows.map((row, i) => ({
-        rowNumber: row.rowNumber,
-        ...describeRetailSupplierBarcode(row, preview.decisions[i]),
-      }));
-      // "generate" is explicitly a promise for confirmation, not a reserved
-      // number: preview must never consume the company's EAN-13 sequence.
-      res.set("Cache-Control", "no-store");
-      return res.json({ ...preview, barcodePlans });
-    } catch (error) {
-      return res.status(400).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/retail/supplier-import/catalog-preview",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(catalogPreviewInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const rows = retailSupplierCatalogPreviewRowsSchema.parse(req.body?.rows);
+        const preview = await previewRetailSupplierCatalog(companyId, rows);
+        const barcodePlans = rows.map((row, i) => ({
+          rowNumber: row.rowNumber,
+          ...describeRetailSupplierBarcode(row, preview.decisions[i]),
+        }));
+        // "generate" is explicitly a promise for confirmation, not a reserved
+        // number: preview must never consume the company's EAN-13 sequence.
+        res.set("Cache-Control", "no-store");
+        return res.json({ ...preview, barcodePlans });
+      } catch (error) {
+        return res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

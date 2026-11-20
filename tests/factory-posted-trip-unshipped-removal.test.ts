@@ -14,7 +14,7 @@ const removal = read("server/routes/factory/customer-orders/bale-scanning/remove
 const databaseGuard = read("docs/sql/manual/2026-11-10-factory-dispatch-trip-financial-phase4-guards.sql");
 
 describe("Factory delete one unshipped bale after a trip has posted", () => {
-  const handlerStart = removal.indexOf('app.delete("/api/factory/customer-orders/:id/bales/:baleId"');
+  const handlerStart = removal.indexOf('"/api/factory/customer-orders/:id/bales/:baleId"');
   // The handler ends at the next route's marker comment or, now that remove.ts is
   // split into registrar modules, at the end of the module that registers it.
   const nextRoute = removal.indexOf("// POST /api/factory/bales/:id/release-from-loading", handlerStart);

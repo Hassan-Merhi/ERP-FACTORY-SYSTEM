@@ -7,6 +7,36 @@ import { eq, and, desc } from "drizzle-orm";
 import { employees, factoryWorkers, factoryWorkerDeductions } from "@shared/schema";
 import { getFactoryCompanyId, getErpCompanyId } from "./helpers";
 import { moneyString, parseMoneyInput } from "../../../lib/money";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  positiveIntParam,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// The handlers parse the amount with parseMoneyInput and answer their own 400s
+// for a missing amount or date.
+const createDeductionInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    amount: z.union([z.number(), z.string()]).nullable().optional(),
+    reason: z.string().nullable().optional(),
+    deductionDate: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+// The worker id in the path is not read: the deduction is found by its own id.
+const deleteDeductionInput = {
+  params: z.strictObject({ workerId: stringParam, id: positiveIntParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerWorkerDeductionsRoutes(app: Express) {
   app.get("/api/payroll/worker-deductions", requireAuth, async (req: Request, res: Response) => {
@@ -45,52 +75,60 @@ export function registerWorkerDeductionsRoutes(app: Express) {
     }
   });
 
-  app.post("/api/payroll/workers/:id/deductions", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getErpCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const workerId = parseId(req.params.id);
-      if (workerId === null) return res.status(400).json({ message: "Invalid id" });
-      const { amount, reason, deductionDate } = req.body;
-      const exactAmount = parseMoneyInput(amount);
-      if (!amount || !exactAmount || exactAmount.lte(0))
-        return res.status(400).json({ message: "Amount must be a positive number" });
-      if (!deductionDate) return res.status(400).json({ message: "Deduction date is required" });
-      const [deduction] = await db
-        .insert(factoryWorkerDeductions)
-        .values({
-          companyId,
-          workerId,
-          amount: moneyString(exactAmount),
-          reason: reason || null,
-          deductionDate,
-          applied: false,
-        })
-        .returning();
-      res.json(deduction);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/payroll/workers/:id/deductions",
+    requireAuth,
+    validateRequest(createDeductionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getErpCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const workerId = validatedInput(req, createDeductionInput).params.id;
+        const { amount, reason, deductionDate } = req.body;
+        const exactAmount = parseMoneyInput(amount);
+        if (!amount || !exactAmount || exactAmount.lte(0))
+          return res.status(400).json({ message: "Amount must be a positive number" });
+        if (!deductionDate) return res.status(400).json({ message: "Deduction date is required" });
+        const [deduction] = await db
+          .insert(factoryWorkerDeductions)
+          .values({
+            companyId,
+            workerId,
+            amount: moneyString(exactAmount),
+            reason: reason || null,
+            deductionDate,
+            applied: false,
+          })
+          .returning();
+        res.json(deduction);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  app.delete("/api/payroll/workers/:workerId/deductions/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getErpCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const deductionId = parseId(req.params.id);
-      if (deductionId === null) return res.status(400).json({ message: "Invalid id" });
-      const [existing] = await db
-        .select()
-        .from(factoryWorkerDeductions)
-        .where(and(eq(factoryWorkerDeductions.id, deductionId), eq(factoryWorkerDeductions.companyId, companyId)));
-      if (!existing) return res.status(404).json({ message: "Deduction not found" });
-      if (existing.applied) return res.status(400).json({ message: "Cannot delete an already-applied deduction" });
-      await db.delete(factoryWorkerDeductions).where(eq(factoryWorkerDeductions.id, deductionId));
-      res.json({ message: "Deduction deleted" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.delete(
+    "/api/payroll/workers/:workerId/deductions/:id",
+    requireAuth,
+    validateRequest(deleteDeductionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getErpCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const deductionId = validatedInput(req, deleteDeductionInput).params.id;
+        const [existing] = await db
+          .select()
+          .from(factoryWorkerDeductions)
+          .where(and(eq(factoryWorkerDeductions.id, deductionId), eq(factoryWorkerDeductions.companyId, companyId)));
+        if (!existing) return res.status(404).json({ message: "Deduction not found" });
+        if (existing.applied) return res.status(400).json({ message: "Cannot delete an already-applied deduction" });
+        await db.delete(factoryWorkerDeductions).where(eq(factoryWorkerDeductions.id, deductionId));
+        res.json({ message: "Deduction deleted" });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ─── Worker Deductions CRUD ───────────────────────────────────────────────
 
@@ -141,54 +179,62 @@ export function registerWorkerDeductionsRoutes(app: Express) {
   });
 
   // POST /api/factory/workers/:id/deductions
-  app.post("/api/factory/workers/:id/deductions", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const workerId = parseId(req.params.id);
-      if (workerId === null) return res.status(400).json({ message: "Invalid id" });
-      const { amount, reason, deductionDate } = req.body;
-      const exactAmount = parseMoneyInput(amount);
-      if (!amount || !exactAmount || exactAmount.lte(0)) {
-        return res.status(400).json({ message: "Amount must be a positive number" });
+  app.post(
+    "/api/factory/workers/:id/deductions",
+    requireAuth,
+    validateRequest(createDeductionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const workerId = validatedInput(req, createDeductionInput).params.id;
+        const { amount, reason, deductionDate } = req.body;
+        const exactAmount = parseMoneyInput(amount);
+        if (!amount || !exactAmount || exactAmount.lte(0)) {
+          return res.status(400).json({ message: "Amount must be a positive number" });
+        }
+        if (!deductionDate) return res.status(400).json({ message: "Deduction date is required" });
+        const [deduction] = await db
+          .insert(factoryWorkerDeductions)
+          .values({
+            companyId,
+            workerId,
+            amount: moneyString(exactAmount),
+            reason: reason || null,
+            deductionDate,
+            applied: false,
+          })
+          .returning();
+        res.json(deduction);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      if (!deductionDate) return res.status(400).json({ message: "Deduction date is required" });
-      const [deduction] = await db
-        .insert(factoryWorkerDeductions)
-        .values({
-          companyId,
-          workerId,
-          amount: moneyString(exactAmount),
-          reason: reason || null,
-          deductionDate,
-          applied: false,
-        })
-        .returning();
-      res.json(deduction);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // DELETE /api/factory/workers/:workerId/deductions/:id
-  app.delete("/api/factory/workers/:workerId/deductions/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const deductionId = parseId(req.params.id);
-      if (deductionId === null) return res.status(400).json({ message: "Invalid id" });
-      const [existing] = await db
-        .select()
-        .from(factoryWorkerDeductions)
-        .where(and(eq(factoryWorkerDeductions.id, deductionId), eq(factoryWorkerDeductions.companyId, companyId)));
-      if (!existing) return res.status(404).json({ message: "Deduction not found" });
-      if (existing.applied) return res.status(400).json({ message: "Cannot delete an already-applied deduction" });
-      await db.delete(factoryWorkerDeductions).where(eq(factoryWorkerDeductions.id, deductionId));
-      res.json({ message: "Deduction deleted" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.delete(
+    "/api/factory/workers/:workerId/deductions/:id",
+    requireAuth,
+    validateRequest(deleteDeductionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const deductionId = validatedInput(req, deleteDeductionInput).params.id;
+        const [existing] = await db
+          .select()
+          .from(factoryWorkerDeductions)
+          .where(and(eq(factoryWorkerDeductions.id, deductionId), eq(factoryWorkerDeductions.companyId, companyId)));
+        if (!existing) return res.status(404).json({ message: "Deduction not found" });
+        if (existing.applied) return res.status(400).json({ message: "Cannot delete an already-applied deduction" });
+        await db.delete(factoryWorkerDeductions).where(eq(factoryWorkerDeductions.id, deductionId));
+        res.json({ message: "Deduction deleted" });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // POST /api/factory/advances/bulk - Record advances for multiple workers at once
 }

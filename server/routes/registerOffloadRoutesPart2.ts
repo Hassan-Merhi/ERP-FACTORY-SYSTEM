@@ -24,6 +24,20 @@ import {
   type OffloadOptionalToggleOutcome,
 } from "../services/containers/offloadOptionalToggle";
 import { requestedOptionalState } from "./registerOffloadRoutesPart1";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// client/src/pages/OffloadDetail.tsx sends { optional }; accountingRequestIdentity
+// adds clientRequestId, the durable replay key. requestedOptionalState reads a
+// boolean or "true"/"false" and treats anything else as a plain toggle.
+const toggleOptionalInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    optional: z.union([z.boolean(), z.string()]).nullable().optional(),
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerOffloadRoutesPart2(app: Express) {
   // Toggle offload optional status — suspends/unsuspends inventory + vouchers without reversing permanently.
@@ -38,6 +52,7 @@ export function registerOffloadRoutesPart2(app: Express) {
     "/api/offloads/:id/toggle-optional",
     requireAuth,
     requireRole("Admin", "Developer", "Owner"),
+    validateRequest(toggleOptionalInput),
     async (req, res) => {
       try {
         const access = await assertActiveCompanyAccess(req);

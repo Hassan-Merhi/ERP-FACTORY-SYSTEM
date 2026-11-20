@@ -7,6 +7,9 @@ import {
   sendIntercompanyTransferLegRefusal,
 } from "../services/accounting/intercompanyTransferLegGuard";
 import { requireAuth } from "../auth";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+import { optionalNumeric, optionalText } from "./vouchers/voucherWriteInputSchemas";
 import { voucherEntries, vouchers } from "@shared/schema";
 import { voucherMutationBlockReason } from "../lib/migratedVoucherGuard";
 import { normalizeVoucherEntryAmounts } from "../services/accounting/currencyAmounts";
@@ -29,10 +32,25 @@ function canEditVoucherDate(role: string, voucherDate: string | Date): boolean {
   return date.getTime() === today.getTime();
 }
 
+// The id is read with parseInt (the handler answers its own 400), so it stays a string.
+const editVoucherEntryInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    debitAmount: optionalNumeric,
+    creditAmount: optionalNumeric,
+    transactionDebitAmount: optionalNumeric,
+    transactionCreditAmount: optionalNumeric,
+    historicalExchangeRate: optionalNumeric,
+    transactionCurrency: optionalText,
+    narration: optionalText,
+  }),
+} satisfies RequestSchemas;
+
 export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
   // Registered before voucherEntryRoutes. Existing clients keep the same URL,
   // but CFA amounts are interpreted as original transaction-currency values.
-  app.patch("/api/voucher-entries/:id", requireAuth, async (req, res) => {
+  app.patch("/api/voucher-entries/:id", requireAuth, validateRequest(editVoucherEntryInput), async (req, res) => {
     try {
       const id = Number.parseInt(req.params.id, 10);
       if (!Number.isInteger(id) || id <= 0) {

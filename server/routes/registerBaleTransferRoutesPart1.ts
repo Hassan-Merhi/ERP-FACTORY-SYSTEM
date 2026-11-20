@@ -5,6 +5,8 @@ import { logger } from "../lib/logger";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth } from "../auth";
+import { validateRequest } from "../lib/validateRequest";
+import { createTransferInput } from "./baleTransferRoutesSchemas";
 import { sumMoney } from "../lib/money";
 import { ownLocationIds, positiveIds } from "./helpers/companyOwnership";
 import {
@@ -29,7 +31,7 @@ export async function allBalesOwned(companyId: number, baleIds: readonly unknown
 }
 
 export function registerBaleTransferRoutesPart1(app: Express) {
-  app.post("/api/bale-transfers", requireAuth, async (req, res) => {
+  app.post("/api/bale-transfers", requireAuth, validateRequest(createTransferInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

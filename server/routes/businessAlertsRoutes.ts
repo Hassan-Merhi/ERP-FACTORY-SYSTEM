@@ -3,6 +3,16 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { pool } from "../db";
 import { requireAuth } from "../auth";
 import { toMoney } from "../lib/money";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const runChecksInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+// The handlers parseInt the id themselves.
+const alertActionInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 // ── Internal: run all alert checks for one company ────────────────────────────
 async function upsertAlert(params: {
@@ -223,7 +233,7 @@ export function registerBusinessAlertRoutes(app: Express) {
   });
 
   // POST /api/business-alerts/run-checks — trigger checks manually
-  app.post("/api/business-alerts/run-checks", requireAuth, async (req, res) => {
+  app.post("/api/business-alerts/run-checks", requireAuth, validateRequest(runChecksInput), async (req, res) => {
     try {
       const role = req.session.currentRole ?? "";
       if (!["Admin", "Developer", "Owner"].includes(role)) {
@@ -239,7 +249,7 @@ export function registerBusinessAlertRoutes(app: Express) {
   });
 
   // POST /api/business-alerts/:id/dismiss
-  app.post("/api/business-alerts/:id/dismiss", requireAuth, async (req, res) => {
+  app.post("/api/business-alerts/:id/dismiss", requireAuth, validateRequest(alertActionInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -258,7 +268,7 @@ export function registerBusinessAlertRoutes(app: Express) {
   });
 
   // POST /api/business-alerts/:id/resolve
-  app.post("/api/business-alerts/:id/resolve", requireAuth, async (req, res) => {
+  app.post("/api/business-alerts/:id/resolve", requireAuth, validateRequest(alertActionInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -276,7 +286,7 @@ export function registerBusinessAlertRoutes(app: Express) {
   });
 
   // POST /api/business-alerts/:id/reopen
-  app.post("/api/business-alerts/:id/reopen", requireAuth, async (req, res) => {
+  app.post("/api/business-alerts/:id/reopen", requireAuth, validateRequest(alertActionInput), async (req, res) => {
     try {
       const role = req.session.currentRole ?? "";
       if (!["Admin", "Developer"].includes(role)) {

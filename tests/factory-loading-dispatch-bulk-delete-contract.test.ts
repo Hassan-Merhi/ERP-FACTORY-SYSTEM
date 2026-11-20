@@ -33,7 +33,7 @@ describe("Factory dispatch bulk scan removal", () => {
 
   it("removes exact active scans in one transaction, refuses stale selections, and writes audit evidence", () => {
     const handler = scanRoutes.slice(
-      scanRoutes.indexOf('app.post("/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove')
+      scanRoutes.indexOf('"/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove"')
     );
     expect(handler).toContain("canCorrect(role)");
     expect(handler).toContain("db.transaction(async (tx) =>");
@@ -100,10 +100,10 @@ describe("Factory dispatch deletion", () => {
 
   it("registers both routes in the production API inventory", () => {
     expect(manifest.routes).toContain(
-      "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove [requireAuth > <anonymous> > <anonymous>]"
+      "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/scans/bulk-remove [requireAuth > <anonymous> > validateRequest > <anonymous>]"
     );
     expect(manifest.routes).toContain(
-      "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel [requireAuth > <anonymous> > <anonymous>]"
+      "POST /api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel [requireAuth > <anonymous> > validateRequest > <anonymous>]"
     );
   });
 });

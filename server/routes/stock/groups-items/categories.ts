@@ -11,6 +11,29 @@ import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
 import { stockCategories, insertStockCategorySchema } from "@shared/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The handler sets companyId from the session.
+const createStockCategoryInput = {
+  query: emptyQuery,
+  body: insertStockCategorySchema.omit({ companyId: true }).strict(),
+} satisfies RequestSchemas;
+
+// The handler reads the id with parseInt.
+const stockCategoryIdParams = z.strictObject({ id: stringParam });
+
+const updateStockCategoryInput = {
+  params: stockCategoryIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ name: z.string().optional(), active: z.boolean().optional() }),
+} satisfies RequestSchemas;
+
+const deleteStockCategoryInput = {
+  params: stockCategoryIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerStockCategoryRoutes(app: Express) {
   app.get("/api/stock-categories", requireAuth, async (req, res) => {
@@ -31,110 +54,131 @@ export function registerStockCategoryRoutes(app: Express) {
     }
   });
 
-  app.post("/api/stock-categories", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const parsed = insertStockCategorySchema.parse({ ...req.body, companyId });
-      // Phase 21 (B): the write and its audit commit together.
-      const created = await db.transaction(async (tx) => {
-        const [written] = await tx.insert(stockCategories).values(parsed).returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "create",
-            tableName: "stock_categories",
-            recordId: written.id,
-            recordIdentifier: written.name,
-            changes: { name: { old: null, new: written.name } },
-          },
-          tx
-        );
-        return written;
-      });
-      res.status(201).json(created);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.patch("/api/stock-categories/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
-      const [existing] = await db
-        .select()
-        .from(stockCategories)
-        .where(and(eq(stockCategories.id, id), eq(stockCategories.companyId, companyId)));
-      if (!existing) return res.status(404).json({ message: "Stock category not found" });
-      const updates: Partial<typeof stockCategories.$inferInsert> = {};
-      if (req.body.name !== undefined) {
-        const n = String(req.body.name).trim();
-        if (!n) return res.status(400).json({ message: "Name is required" });
-        updates.name = n;
+  app.post(
+    "/api/stock-categories",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(createStockCategoryInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const parsed = insertStockCategorySchema.parse({ ...req.body, companyId });
+        // Phase 21 (B): the write and its audit commit together.
+        const created = await db.transaction(async (tx) => {
+          const [written] = await tx.insert(stockCategories).values(parsed).returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "create",
+              tableName: "stock_categories",
+              recordId: written.id,
+              recordIdentifier: written.name,
+              changes: { name: { old: null, new: written.name } },
+            },
+            tx
+          );
+          return written;
+        });
+        res.status(201).json(created);
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      if (req.body.active !== undefined) updates.active = req.body.active;
-      // Phase 21 (B): the write and its audit commit together.
-      const updated = await db.transaction(async (tx) => {
-        const [written] = await tx.update(stockCategories).set(updates).where(eq(stockCategories.id, id)).returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "stock_categories",
-            recordId: id,
-            recordIdentifier: written.name,
-            changes: Object.fromEntries(
-              Object.entries(updates).map(([k, v]) => [k, { old: (existing as { [key: string]: unknown })[k], new: v }])
-            ),
-          },
-          tx
-        );
-        return written;
-      });
-      res.json(updated);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
-  app.delete("/api/stock-categories/:id", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
-      const [existing] = await db
-        .select()
-        .from(stockCategories)
-        .where(and(eq(stockCategories.id, id), eq(stockCategories.companyId, companyId)));
-      if (!existing) return res.status(404).json({ message: "Stock category not found" });
-      // Phase 21 (B): the write and its audit commit together.
-      await db.transaction(async (tx) => {
-        await tx.update(stockCategories).set({ active: false }).where(eq(stockCategories.id, id));
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "update",
-            tableName: "stock_categories",
-            recordId: id,
-            recordIdentifier: existing.name,
-            changes: { active: { old: true, new: false } },
-          },
-          tx
-        );
-      });
-      res.json({ message: "Stock category deactivated" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.patch(
+    "/api/stock-categories/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateStockCategoryInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+        const [existing] = await db
+          .select()
+          .from(stockCategories)
+          .where(and(eq(stockCategories.id, id), eq(stockCategories.companyId, companyId)));
+        if (!existing) return res.status(404).json({ message: "Stock category not found" });
+        const updates: Partial<typeof stockCategories.$inferInsert> = {};
+        if (req.body.name !== undefined) {
+          const n = String(req.body.name).trim();
+          if (!n) return res.status(400).json({ message: "Name is required" });
+          updates.name = n;
+        }
+        if (req.body.active !== undefined) updates.active = req.body.active;
+        // Phase 21 (B): the write and its audit commit together.
+        const updated = await db.transaction(async (tx) => {
+          const [written] = await tx.update(stockCategories).set(updates).where(eq(stockCategories.id, id)).returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "stock_categories",
+              recordId: id,
+              recordIdentifier: written.name,
+              changes: Object.fromEntries(
+                Object.entries(updates).map(([k, v]) => [
+                  k,
+                  { old: (existing as { [key: string]: unknown })[k], new: v },
+                ])
+              ),
+            },
+            tx
+          );
+          return written;
+        });
+        res.json(updated);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
+
+  app.delete(
+    "/api/stock-categories/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deleteStockCategoryInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid ID" });
+        const [existing] = await db
+          .select()
+          .from(stockCategories)
+          .where(and(eq(stockCategories.id, id), eq(stockCategories.companyId, companyId)));
+        if (!existing) return res.status(404).json({ message: "Stock category not found" });
+        // Phase 21 (B): the write and its audit commit together.
+        await db.transaction(async (tx) => {
+          await tx.update(stockCategories).set({ active: false }).where(eq(stockCategories.id, id));
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "stock_categories",
+              recordId: id,
+              recordIdentifier: existing.name,
+              changes: { active: { old: true, new: false } },
+            },
+            tx
+          );
+        });
+        res.json({ message: "Stock category deactivated" });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 }

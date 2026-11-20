@@ -33,6 +33,9 @@ import {
   validatePaymentAccount,
 } from "./spGoldenCoastPhase10SalesCashSettlementRoutesValidatePaymentAccount";
 import { findReplayedSettlement, gcSalesCashDebitBalance, listPaymentAccounts } from "./findReplayedSettlement";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { amountish, numberish, spWriteFields } from "./spRequestSchemas";
 
 function respondKnownError(res: Response, error: unknown): boolean {
   if (error instanceof GoldenCoastPhase10RouteError) {
@@ -229,6 +232,22 @@ async function handleSettlement(req: Request, res: Response): Promise<void> {
   }
 }
 
+const phase10CashAccount = z.strictObject({ kind: z.string(), id: numberish });
+
+// Read by parseGoldenCoastPhase10SettlementInput and actorFromRequest.
+const phase10SettlementInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    settlementDate: z.string().optional(),
+    amountUsd: amountish.optional(),
+    transferFeeUsd: amountish.nullable().optional(),
+    paymentAccount: phase10CashAccount.nullable().optional(),
+    // Compatibility alias for paymentAccount from older clients.
+    receiptAccount: phase10CashAccount.nullable().optional(),
+    reference: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerSpGoldenCoastPhase10SalesCashSettlementRoutes(app: Express): void {
   app.get(
     "/api/sp/golden-coast/phase10/sales-cash-settlement/readiness",
@@ -244,6 +263,7 @@ export function registerSpGoldenCoastPhase10SalesCashSettlementRoutes(app: Expre
     phase10RequestBudget,
     requireAuth,
     requireNonPOS,
+    validateRequest(phase10SettlementInput),
     (req, res) => void handleSettlement(req, res)
   );
 }

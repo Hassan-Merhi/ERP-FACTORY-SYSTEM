@@ -22,6 +22,29 @@ import {
   postErpVoucherTx,
   sessionPostingActor,
 } from "../../../services/accounting/erpVoucherPosting";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+const numeric = z.union([z.number(), z.string()]);
+const text = z.string().nullable().optional();
+
+// The handler parses the account with parseInt and the amount with
+// parseMoneyInput and answers its own 400s for missing fields.
+const cashAdjustmentInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    // Read before the session company (no client sends it).
+    companyId: numeric.optional(),
+    cashAccountId: numeric.nullable().optional(),
+    amount: numeric.nullable().optional(),
+    direction: text,
+    date: text,
+    narration: text,
+    // Request identity: the client fetch guard adds it, operationalVoucherRequestBoundary
+    // claims it and erpRequestSourceId makes it the voucher's source id.
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerAdvanceCashRoutes(app: Express) {
   // GET /api/factory/cash-account-balance/:id — current DR-CR balance for a ledger account
@@ -110,75 +133,83 @@ export function registerAdvanceCashRoutes(app: Express) {
   });
 
   // POST /api/factory/advances/cash-adjustment — post a correcting journal entry on a cash account
-  app.post("/api/factory/advances/cash-adjustment", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/advances/cash-adjustment",
+    requireAuth,
+    validateRequest(cashAdjustmentInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.body.companyId || getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { cashAccountId: rawAcctId, amount: rawAmount, direction, date, narration } = req.body;
-      const cashAccountId = parseInt(rawAcctId);
-      if (!cashAccountId || isNaN(cashAccountId)) return res.status(400).json({ message: "cashAccountId is required" });
-      const amount = parseMoneyInput(rawAmount);
-      if (!amount || amount.lte(0)) return res.status(400).json({ message: "amount must be a positive number" });
-      if (!date) return res.status(400).json({ message: "date is required" });
-      const isCredit = direction !== "debit"; // default credit (reduces cash)
+        const { cashAccountId: rawAcctId, amount: rawAmount, direction, date, narration } = req.body;
+        const cashAccountId = parseInt(rawAcctId);
+        if (!cashAccountId || isNaN(cashAccountId))
+          return res.status(400).json({ message: "cashAccountId is required" });
+        const amount = parseMoneyInput(rawAmount);
+        if (!amount || amount.lte(0)) return res.status(400).json({ message: "amount must be a positive number" });
+        if (!date) return res.status(400).json({ message: "date is required" });
+        const isCredit = direction !== "debit"; // default credit (reduces cash)
 
-      const [cashAcct] = await db
-        .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
-        .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
-      if (!cashAcct) return res.status(400).json({ message: "Cash account not found" });
-
-      const requestSourceId = erpRequestSourceId(req);
-      await db.transaction(async (tx) => {
-        // Resolve or auto-create the contra "Factory Advance Adjustments" account
-        let [adjAccount] = await tx
-          .select({ id: ledgerAccounts.id })
+        const [cashAcct] = await db
+          .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
           .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Advance Adjustments")));
-        if (!adjAccount) {
-          const maxCodeResult = await tx
-            .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
+          .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
+        if (!cashAcct) return res.status(400).json({ message: "Cash account not found" });
+
+        const requestSourceId = erpRequestSourceId(req);
+        await db.transaction(async (tx) => {
+          // Resolve or auto-create the contra "Factory Advance Adjustments" account
+          let [adjAccount] = await tx
+            .select({ id: ledgerAccounts.id })
             .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\\d+$'`));
-          const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
-          [adjAccount] = await tx
-            .insert(ledgerAccounts)
-            .values({
-              companyId,
-              code: nextCode,
-              name: "Factory Advance Adjustments",
-              accountType: "Equity",
-              active: true,
-              isHidden: false,
-            })
-            .returning();
-        }
+            .where(
+              and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Advance Adjustments"))
+            );
+          if (!adjAccount) {
+            const maxCodeResult = await tx
+              .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\\d+$'`));
+            const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
+            [adjAccount] = await tx
+              .insert(ledgerAccounts)
+              .values({
+                companyId,
+                code: nextCode,
+                name: "Factory Advance Adjustments",
+                accountType: "Equity",
+                active: true,
+                isHidden: false,
+              })
+              .returning();
+          }
 
-        const desc = narration || "Cash balance adjustment";
+          const desc = narration || "Cash balance adjustment";
 
-        // isCredit = true  → CR Cash / DR Adjustments  (reduces cash balance)
-        // isCredit = false → DR Cash / CR Adjustments  (increases cash balance)
-        await postErpVoucherTx(tx, {
-          companyId,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: desc,
-          sourceModule: "FACTORY",
-          lines: isCredit
-            ? pairLines({ ledgerAccountId: adjAccount.id }, { ledgerAccountId: cashAccountId }, amount, desc)
-            : pairLines({ ledgerAccountId: cashAccountId }, { ledgerAccountId: adjAccount.id }, amount, desc),
-          source: { type: "factory-cash-adjustment", id: `${cashAccountId}:${requestSourceId}` },
-          actor: sessionPostingActor(req, "Cash balance adjustment"),
+          // isCredit = true  → CR Cash / DR Adjustments  (reduces cash balance)
+          // isCredit = false → DR Cash / CR Adjustments  (increases cash balance)
+          await postErpVoucherTx(tx, {
+            companyId,
+            voucherType: "Journal",
+            voucherDate: date,
+            description: desc,
+            sourceModule: "FACTORY",
+            lines: isCredit
+              ? pairLines({ ledgerAccountId: adjAccount.id }, { ledgerAccountId: cashAccountId }, amount, desc)
+              : pairLines({ ledgerAccountId: cashAccountId }, { ledgerAccountId: adjAccount.id }, amount, desc),
+            source: { type: "factory-cash-adjustment", id: `${cashAccountId}:${requestSourceId}` },
+            actor: sessionPostingActor(req, "Cash balance adjustment"),
+          });
         });
-      });
 
-      res.json({
-        message: `Cash adjustment posted — ${isCredit ? "CR" : "DR"} ${cashAcct.name} $${amount.toFixed(2)}`,
-      });
-    } catch (error: unknown) {
-      logger.error("Error posting cash adjustment:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({
+          message: `Cash adjustment posted — ${isCredit ? "CR" : "DR"} ${cashAcct.name} $${amount.toFixed(2)}`,
+        });
+      } catch (error: unknown) {
+        logger.error("Error posting cash adjustment:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

@@ -4,6 +4,8 @@ import { purchaseOrders } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 import { requireAuth } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { poImportBackfillInput } from "./purchaseOrderRouteSchemas";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { logger } from "../../lib/logger";
@@ -19,7 +21,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
  * point in the same order, so config/route-manifest.json is unchanged.
  */
 export function registerPoImportBackfillRoute(app: Express) {
-  app.post("/api/po-import/backfill", requireAuth, async (req, res) => {
+  app.post("/api/po-import/backfill", requireAuth, validateRequest(poImportBackfillInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

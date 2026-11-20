@@ -22,6 +22,35 @@ import {
   phase9AttachmentFileRefTx,
 } from "../../../edge/phase9AttachmentOutbox";
 import { PHASE9_ATTACHMENT_MAX_BYTES } from "../../../edge/phase9AttachmentEnvelope.mjs";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+// The handlers parseInt the id and answer 404 for anything that matches no row.
+const folderNameBody = z.strictObject({ name: z.string().nullable().optional() });
+const createFolderInput = { query: emptyQuery, body: folderNameBody } satisfies RequestSchemas;
+const updateFolderInput = { params: stringIdParams, query: emptyQuery, body: folderNameBody } satisfies RequestSchemas;
+const deleteByIdInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+/** Multipart form fields (strings after multer); the file itself is req.file. */
+const uploadFileInput = {
+  query: emptyQuery,
+  body: z.strictObject({ description: z.string().optional(), folderId: z.string().optional() }).optional(),
+} satisfies RequestSchemas;
+
+const updateFileInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    displayName: z.string().nullable().optional(),
+    folderId: z.union([z.number(), z.string()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerFileRoutes(app: Express) {
   app.get("/api/file-folders", requireAuth, async (req: import("express").Request, res) => {
@@ -40,64 +69,79 @@ export function registerFileRoutes(app: Express) {
     }
   });
 
-  app.post("/api/file-folders", requireAuth, async (req: import("express").Request, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!companyId) return res.status(400).json({ message: "No company context" });
-      const { name } = req.body;
-      if (!name?.trim()) return res.status(400).json({ message: "Folder name required" });
-      const [folder] = await db.insert(fileFolders).values({ companyId, name: name.trim() }).returning();
-      res.json(folder);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.patch("/api/file-folders/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const folderId = parseInt(req.params.id);
-      const { name } = req.body;
-      if (!name?.trim()) return res.status(400).json({ message: "Folder name required" });
-      const [updated] = await db
-        .update(fileFolders)
-        .set({ name: name.trim() })
-        .where(and(eq(fileFolders.id, folderId), eq(fileFolders.companyId, companyId)))
-        .returning();
-      if (!updated) return res.status(404).json({ message: "Folder not found" });
-      res.json(updated);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.delete("/api/file-folders/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const folderId = parseInt(req.params.id);
-      const filesInFolder = await db
-        .select({ id: storedFiles.id })
-        .from(storedFiles)
-        .where(and(eq(storedFiles.companyId, companyId), eq(storedFiles.folderId, folderId)));
-      if (filesInFolder.length > 0) {
-        return res.status(409).json({
-          message: `Folder has ${filesInFolder.length} file(s). Move or delete them first.`,
-          fileCount: filesInFolder.length,
-        });
+  app.post(
+    "/api/file-folders",
+    requireAuth,
+    validateRequest(createFolderInput),
+    async (req: import("express").Request, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!companyId) return res.status(400).json({ message: "No company context" });
+        const { name } = req.body;
+        if (!name?.trim()) return res.status(400).json({ message: "Folder name required" });
+        const [folder] = await db.insert(fileFolders).values({ companyId, name: name.trim() }).returning();
+        res.json(folder);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      const [deleted] = await db
-        .delete(fileFolders)
-        .where(and(eq(fileFolders.id, folderId), eq(fileFolders.companyId, companyId)))
-        .returning({ id: fileFolders.id });
-      if (!deleted) return res.status(404).json({ message: "Folder not found" });
-      res.json({ message: "Folder deleted" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
+
+  app.patch(
+    "/api/file-folders/:id",
+    requireAuth,
+    validateRequest(updateFolderInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const folderId = parseInt(req.params.id);
+        const { name } = req.body;
+        if (!name?.trim()) return res.status(400).json({ message: "Folder name required" });
+        const [updated] = await db
+          .update(fileFolders)
+          .set({ name: name.trim() })
+          .where(and(eq(fileFolders.id, folderId), eq(fileFolders.companyId, companyId)))
+          .returning();
+        if (!updated) return res.status(404).json({ message: "Folder not found" });
+        res.json(updated);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/file-folders/:id",
+    requireAuth,
+    validateRequest(deleteByIdInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const folderId = parseInt(req.params.id);
+        const filesInFolder = await db
+          .select({ id: storedFiles.id })
+          .from(storedFiles)
+          .where(and(eq(storedFiles.companyId, companyId), eq(storedFiles.folderId, folderId)));
+        if (filesInFolder.length > 0) {
+          return res.status(409).json({
+            message: `Folder has ${filesInFolder.length} file(s). Move or delete them first.`,
+            fileCount: filesInFolder.length,
+          });
+        }
+        const [deleted] = await db
+          .delete(fileFolders)
+          .where(and(eq(fileFolders.id, folderId), eq(fileFolders.companyId, companyId)))
+          .returning({ id: fileFolders.id });
+        if (!deleted) return res.status(404).json({ message: "Folder not found" });
+        res.json({ message: "Folder deleted" });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 
   // ── File Storage ─────────────────────────────────────────────
   app.get("/api/files", requireAuth, async (req: import("express").Request, res) => {
@@ -130,6 +174,7 @@ export function registerFileRoutes(app: Express) {
     "/api/files/upload",
     requireAuth,
     generalUpload.single("file"),
+    validateRequest(uploadFileInput),
     async (req: import("express").Request, res) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -189,7 +234,7 @@ export function registerFileRoutes(app: Express) {
     }
   );
 
-  app.patch("/api/files/:id", requireAuth, async (req: Request, res: Response) => {
+  app.patch("/api/files/:id", requireAuth, validateRequest(updateFileInput), async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -276,7 +321,7 @@ export function registerFileRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/files/:id", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/files/:id", requireAuth, validateRequest(deleteByIdInput), async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

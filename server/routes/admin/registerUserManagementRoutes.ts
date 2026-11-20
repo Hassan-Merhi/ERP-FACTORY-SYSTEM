@@ -22,6 +22,8 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import { and, eq, inArray, isNull, like, sql } from "drizzle-orm";
+import { validateRequest } from "../../lib/validateRequest";
+import * as schema from "./userManagementWriteSchemas";
 
 export function registerUserManagementRoutes(app: Express) {
   app.get("/api/admin/legacy-employee-accounts", requireAuth, requireRole("Admin"), async (req, res) => {
@@ -92,6 +94,7 @@ export function registerUserManagementRoutes(app: Express) {
     "/api/admin/migrate-employee-account/:accountId",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(schema.migrateEmployeeAccountInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -130,6 +133,7 @@ export function registerUserManagementRoutes(app: Express) {
     "/api/admin/legacy-employee-accounts/migrate-all",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(schema.migrateAllLegacyEmployeeAccountsInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
@@ -228,64 +232,70 @@ export function registerUserManagementRoutes(app: Express) {
   });
 
   // Update role permissions (bulk upsert)
-  app.put("/api/settings/role-permissions", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const { permissions } = req.body;
-      if (!Array.isArray(permissions)) {
-        return res.status(400).json({ message: "permissions must be an array" });
-      }
-
-      // Add companyId to each permission
-      const permissionsWithCompany = permissions.map((p) => ({
-        ...p,
-        companyId,
-      }));
-
-      // Phase 21 (B): the upserts and one audit row per change commit together.
-      const results = await db.transaction(async (tx) => {
-        const upserted = await storage.bulkUpsertRoleFeaturePermissions(permissionsWithCompany, tx);
-        for (const p of permissions) {
-          await logAudit(
-            {
-              userId: req.user!.id,
-              username: req.session.username || "unknown",
-              companyId,
-              action: "update",
-              tableName: "role_feature_permissions",
-              recordId: null,
-              recordIdentifier: `role:${p.role} feature:${p.featureKey} enabled:${p.enabled}`,
-              changes: { enabled: { old: !p.enabled, new: p.enabled } },
-            },
-            tx
-          );
-        }
-        return upserted;
-      });
-
-      // Session invalidation: force affected users to re-login so new permissions take effect
+  app.put(
+    "/api/settings/role-permissions",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(schema.updateRolePermissionsInput),
+    async (req, res) => {
       try {
-        const affectedRoles = [...new Set(permissions.map((p) => p.role as string))];
-        const affectedUsers = await db
-          .select({ userId: userCompanyRoles.userId })
-          .from(userCompanyRoles)
-          .where(and(eq(userCompanyRoles.companyId, companyId), inArray(userCompanyRoles.role, affectedRoles)));
-        for (const u of affectedUsers) {
-          await db.execute(sql`DELETE FROM session WHERE sess::jsonb ->> 'userId' = ${u.userId}`);
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
         }
-      } catch {
-        // Non-fatal — session table may not exist in all environments
-      }
 
-      res.json({ message: "Permissions updated successfully", permissions: results });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        const { permissions } = req.body;
+        if (!Array.isArray(permissions)) {
+          return res.status(400).json({ message: "permissions must be an array" });
+        }
+
+        // Add companyId to each permission
+        const permissionsWithCompany = permissions.map((p) => ({
+          ...p,
+          companyId,
+        }));
+
+        // Phase 21 (B): the upserts and one audit row per change commit together.
+        const results = await db.transaction(async (tx) => {
+          const upserted = await storage.bulkUpsertRoleFeaturePermissions(permissionsWithCompany, tx);
+          for (const p of permissions) {
+            await logAudit(
+              {
+                userId: req.user!.id,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "update",
+                tableName: "role_feature_permissions",
+                recordId: null,
+                recordIdentifier: `role:${p.role} feature:${p.featureKey} enabled:${p.enabled}`,
+                changes: { enabled: { old: !p.enabled, new: p.enabled } },
+              },
+              tx
+            );
+          }
+          return upserted;
+        });
+
+        // Session invalidation: force affected users to re-login so new permissions take effect
+        try {
+          const affectedRoles = [...new Set(permissions.map((p) => p.role as string))];
+          const affectedUsers = await db
+            .select({ userId: userCompanyRoles.userId })
+            .from(userCompanyRoles)
+            .where(and(eq(userCompanyRoles.companyId, companyId), inArray(userCompanyRoles.role, affectedRoles)));
+          for (const u of affectedUsers) {
+            await db.execute(sql`DELETE FROM session WHERE sess::jsonb ->> 'userId' = ${u.userId}`);
+          }
+        } catch {
+          // Non-fatal — session table may not exist in all environments
+        }
+
+        res.json({ message: "Permissions updated successfully", permissions: results });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // Get permissions for the current user's role (used by sidebar)
   app.get("/api/my-permissions", requireAuth, async (req, res) => {
@@ -332,45 +342,51 @@ export function registerUserManagementRoutes(app: Express) {
     }
   });
 
-  app.put("/api/erp-user-page-access/:userId", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.put(
+    "/api/erp-user-page-access/:userId",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(schema.updateErpUserPageAccessInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const pageKeys = parseErpPageGrantKeys(req.body?.pageKeys);
-      if (pageKeys === null) {
-        return res.status(400).json({ message: "pageKeys must be a unique list of recognized ERP features" });
-      }
-
-      // The membership lock, delete and replacement insert must be atomic:
-      // a concurrent company-role removal or an insertion failure must never
-      // leave a partially updated grant list.
-      const assigned = await db.transaction(async (tx) => {
-        const [membership] = await tx
-          .select({ id: userCompanyRoles.id })
-          .from(userCompanyRoles)
-          .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
-          .for("update")
-          .limit(1);
-        if (!membership) return false;
-
-        await tx
-          .delete(erpUserPageAccess)
-          .where(and(eq(erpUserPageAccess.companyId, companyId), eq(erpUserPageAccess.userId, req.params.userId)));
-        if (pageKeys.length > 0) {
-          await tx
-            .insert(erpUserPageAccess)
-            .values(pageKeys.map((pageKey: string) => ({ companyId, userId: req.params.userId, pageKey })));
+        const pageKeys = parseErpPageGrantKeys(req.body?.pageKeys);
+        if (pageKeys === null) {
+          return res.status(400).json({ message: "pageKeys must be a unique list of recognized ERP features" });
         }
-        return true;
-      });
 
-      if (!assigned) return res.status(404).json({ message: "User is not assigned to this company" });
-      res.json({ message: "Page access updated", pageKeys });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        // The membership lock, delete and replacement insert must be atomic:
+        // a concurrent company-role removal or an insertion failure must never
+        // leave a partially updated grant list.
+        const assigned = await db.transaction(async (tx) => {
+          const [membership] = await tx
+            .select({ id: userCompanyRoles.id })
+            .from(userCompanyRoles)
+            .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
+            .for("update")
+            .limit(1);
+          if (!membership) return false;
+
+          await tx
+            .delete(erpUserPageAccess)
+            .where(and(eq(erpUserPageAccess.companyId, companyId), eq(erpUserPageAccess.userId, req.params.userId)));
+          if (pageKeys.length > 0) {
+            await tx
+              .insert(erpUserPageAccess)
+              .values(pageKeys.map((pageKey: string) => ({ companyId, userId: req.params.userId, pageKey })));
+          }
+          return true;
+        });
+
+        if (!assigned) return res.status(404).json({ message: "User is not assigned to this company" });
+        res.json({ message: "Page access updated", pageKeys });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get("/api/erp-user-hidden-costs/:userId", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
@@ -390,38 +406,44 @@ export function registerUserManagementRoutes(app: Express) {
     }
   });
 
-  app.put("/api/erp-user-hidden-costs/:userId", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const hiddenCostFields = parseErpHiddenCostFields(req.body?.hiddenCostFields);
-      if (hiddenCostFields === null) {
-        return res.status(400).json({ message: "hiddenCostFields must contain unique recognized ERP restrictions" });
+  app.put(
+    "/api/erp-user-hidden-costs/:userId",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(schema.updateErpUserHiddenCostsInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const hiddenCostFields = parseErpHiddenCostFields(req.body?.hiddenCostFields);
+        if (hiddenCostFields === null) {
+          return res.status(400).json({ message: "hiddenCostFields must contain unique recognized ERP restrictions" });
+        }
+
+        const assigned = await db.transaction(async (tx) => {
+          const [membership] = await tx
+            .select({ id: userCompanyRoles.id })
+            .from(userCompanyRoles)
+            .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
+            .for("update")
+            .limit(1);
+          if (!membership) return false;
+
+          const [updated] = await tx
+            .update(users)
+            .set({ hiddenErpCostFields: hiddenCostFields })
+            .where(eq(users.id, req.params.userId))
+            .returning({ id: users.id });
+          return Boolean(updated);
+        });
+
+        if (!assigned) return res.status(404).json({ message: "User is not assigned to this company" });
+        res.json({ message: "ERP cost field restrictions updated", hiddenCostFields });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const assigned = await db.transaction(async (tx) => {
-        const [membership] = await tx
-          .select({ id: userCompanyRoles.id })
-          .from(userCompanyRoles)
-          .where(and(eq(userCompanyRoles.companyId, companyId), eq(userCompanyRoles.userId, req.params.userId)))
-          .for("update")
-          .limit(1);
-        if (!membership) return false;
-
-        const [updated] = await tx
-          .update(users)
-          .set({ hiddenErpCostFields: hiddenCostFields })
-          .where(eq(users.id, req.params.userId))
-          .returning({ id: users.id });
-        return Boolean(updated);
-      });
-
-      if (!assigned) return res.status(404).json({ message: "User is not assigned to this company" });
-      res.json({ message: "ERP cost field restrictions updated", hiddenCostFields });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/my-erp-pages", requireAuth, async (req, res) => {
     try {

@@ -4,6 +4,8 @@ import type { Express, Request, Response } from "express";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import { writeAuditEvent } from "../../../services/audit/auditService";
 import { recordFactoryStockValueEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { adjustInventory } from "../../../inventoryHelper";
@@ -29,6 +31,13 @@ import {
   lockPriorityScanQueueTx,
 } from "./baleStatusWriteGuards";
 
+// The handler parses the id with parseId and keeps its own 400s.
+const restoreToStockInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ reason: z.string().optional() }),
+} satisfies RequestSchemas;
+
 export function registerBalesCrudRoutesPart4(app: Express) {
   /**
    * Physically removed bales cannot be revived through PATCH /status: that
@@ -40,6 +49,7 @@ export function registerBalesCrudRoutesPart4(app: Express) {
     "/api/factory/bales/:id/restore-to-stock",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(restoreToStockInput),
     async (req: Request, res: Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

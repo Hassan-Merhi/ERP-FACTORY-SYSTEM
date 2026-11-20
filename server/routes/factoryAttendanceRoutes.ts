@@ -1,6 +1,8 @@
 import type { Database } from "../db";
 import { parseId } from "../lib/parseId";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+import { z } from "zod";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { eq, and, inArray, gte, lte } from "drizzle-orm";
 import PDFDocument from "pdfkit";
@@ -11,6 +13,26 @@ import { attendanceApprovalRateLimiter, requireAttendanceEditApproval } from "./
 function getFactoryCompanyId(req: import("express").Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
 }
+
+// The handler keeps its own record checks (status values, lengths, dates).
+const attendanceBulkInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    records: z
+      .array(
+        z.strictObject({
+          workerId: z.number(),
+          attendanceDate: z.string(),
+          shift: z.string().optional(),
+          status: z.string(),
+          notes: z.string().optional(),
+        })
+      )
+      .optional(),
+    adminUsername: z.string().optional(),
+    adminPassword: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerFactoryAttendanceRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   // GET /api/factory/attendance?date=YYYY-MM-DD&shift=
@@ -67,6 +89,7 @@ export function registerFactoryAttendanceRoutes(app: Express, requireAuth: Reque
     "/api/factory/attendance/bulk",
     requireAuth,
     attendanceApprovalRateLimiter,
+    validateRequest(attendanceBulkInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);

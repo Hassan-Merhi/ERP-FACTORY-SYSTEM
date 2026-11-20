@@ -7,11 +7,40 @@
 import type { Express } from "express";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { z } from "zod";
+import {
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { inventory, stockItems, purchaseOrders, users, aiActionLog } from "@shared/schema";
 import { sumMoney, toMoney } from "../../lib/money";
 import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { eq, and } from "drizzle-orm";
 import { requireAIActionPermission } from "../../lib/aiActionPermission";
+
+const toggleChatbotInput = {
+  params: z.strictObject({ userId: stringParam }),
+  query: emptyQuery,
+  // A body without a boolean `enabled` used to reach drizzle with nothing to set (an opaque 500).
+  body: z.strictObject({ enabled: z.boolean() }),
+} satisfies RequestSchemas;
+
+const logActionInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    sessionId: z.string().nullable().optional(),
+    prompt: z.string().nullable().optional(),
+    // Stored as jsonb: the confirmed draft, kept verbatim.
+    draftJson: z.record(z.string(), z.unknown()).nullable().optional(),
+    actionType: z.string().nullable().optional(),
+    actionName: z.string().nullable().optional(),
+    createdRecordId: z.number().int().nullable().optional(),
+    status: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerChatbotAlertRoutes(app: Express) {
   // ── PROACTIVE ALERTS DIGEST (5a) ──
@@ -116,37 +145,38 @@ export function registerChatbotAlertRoutes(app: Express) {
   });
 
   // Toggle chatbot for a user (Admin/Owner only)
-  app.patch("/api/users/:userId/chatbot", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const userRole = req.session.currentRole;
+  app.patch(
+    "/api/users/:userId/chatbot",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(toggleChatbotInput),
+    async (req, res) => {
+      try {
+        const userRole = req.session.currentRole;
 
-      // Only Admin/Owner can toggle chatbot
-      if (userRole !== "Admin" && userRole !== "Owner" && userRole !== "Developer") {
-        return res.status(403).json({ message: "Access denied" });
+        // Only Admin/Owner can toggle chatbot
+        if (userRole !== "Admin" && userRole !== "Owner" && userRole !== "Developer") {
+          return res.status(403).json({ message: "Access denied" });
+        }
+
+        const {
+          params: { userId },
+          body: { enabled },
+        } = validatedInput(req, toggleChatbotInput);
+
+        const [updated] = await db
+          .update(users)
+          .set({ chatbotEnabled: enabled })
+          .where(eq(users.id, userId))
+          .returning({ id: users.id });
+        if (!updated) return res.status(404).json({ message: "User not found" });
+
+        res.json({ message: `Chatbot ${enabled ? "enabled" : "disabled"} for user` });
+      } catch (_error: unknown) {
+        res.status(500).json({ message: "Internal server error" });
       }
-
-      const { userId } = req.params;
-      const { enabled } = req.body;
-
-      // Without this, a body missing `enabled` left the update with nothing to
-      // set, which drizzle rejects and the catch below reported as an opaque
-      // 500 "Internal server error".
-      if (typeof enabled !== "boolean") {
-        return res.status(400).json({ message: "Invalid request data", field: "enabled" });
-      }
-
-      const [updated] = await db
-        .update(users)
-        .set({ chatbotEnabled: enabled })
-        .where(eq(users.id, userId))
-        .returning({ id: users.id });
-      if (!updated) return res.status(404).json({ message: "User not found" });
-
-      res.json({ message: `Chatbot ${enabled ? "enabled" : "disabled"} for user` });
-    } catch (_error: unknown) {
-      res.status(500).json({ message: "Internal server error" });
     }
-  });
+  );
 
   // Get users with their chatbot status (Admin/Owner only)
   app.get("/api/users/chatbot-status", requireAuth, requireNonPOS, async (req, res) => {
@@ -174,7 +204,7 @@ export function registerChatbotAlertRoutes(app: Express) {
   });
 
   // ── AI Action Audit Log endpoint ────────────────────────────────────
-  app.post("/api/chatbot/log-action", requireAuth, async (req, res) => {
+  app.post("/api/chatbot/log-action", requireAuth, validateRequest(logActionInput), async (req, res) => {
     try {
       const userId = req.session.userId;
       const companyId = req.session.currentCompanyId;

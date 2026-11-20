@@ -13,6 +13,8 @@ import { storage } from "../../../storage";
 import { requireAuth, requireRole } from "../../../auth";
 import { containers, containerOffloads, containerOffloadItems, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import Decimal from "decimal.js";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
@@ -31,6 +33,13 @@ import {
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
+// The handler parses the id with parseId and answers its own 400.
+const reverseOffloadInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+
 export function registerContainerOffloadRecalcRoutes(app: Express) {
   // Reverse container offload — ERP only (Admin, Owner, or Manager)
   // SP companies that offloaded via the ERP route are also permitted here.
@@ -38,6 +47,7 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
     "/api/containers/:id/reverse-offload",
     requireAuth,
     requireRole("Admin", "Owner", "Manager"),
+    validateRequest(reverseOffloadInput),
     async (req, res) => {
       try {
         const containerId = parseId(req.params.id);

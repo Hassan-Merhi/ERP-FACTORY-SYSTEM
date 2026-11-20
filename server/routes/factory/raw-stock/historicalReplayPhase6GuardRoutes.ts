@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { requireAuth, requireRole } from "../../../auth";
+import { validateRequest } from "../../../lib/validateRequest";
+import { adjustmentValuationBasisInput } from "./rawStockWriteRouteSchemas";
 import { pool } from "../../../db";
 import {
   previewHistoricalCostReplayWithExecutor,
@@ -222,110 +224,116 @@ export function registerHistoricalReplayPhase6GuardRoutes(app: Express): void {
     }
   });
 
-  app.patch(ADJUSTMENT_CLASSIFICATION_PATH, requireAuth, requireRole(...ADMIN_ROLES), async (req, res) => {
-    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    const adjustmentId = Number(req.params.id);
-    const valuationBasis = String(req.body?.valuationBasis || "").toUpperCase();
-    const basisEvidence = typeof req.body?.basisEvidence === "string" ? req.body.basisEvidence.trim() : "";
-    if (basisEvidence.length < 20 || basisEvidence.length > 1000) {
-      return res.status(400).json({
-        code: "HISTORICAL_ADJUSTMENT_EVIDENCE_REQUIRED",
-        message:
-          "Explain the documentary evidence and original valuation basis (20–1000 characters) before classification.",
-      });
-    }
-    const allowed = new Set(["QUANTITY_ONLY", "VALUED_TRANSFER", "OPENING_BALANCE"]);
-    if (!Number.isInteger(adjustmentId) || adjustmentId <= 0) {
-      return res.status(400).json({ message: "Invalid adjustment id" });
-    }
-    if (!allowed.has(valuationBasis)) {
-      return res.status(400).json({
-        message: "valuationBasis must be QUANTITY_ONLY, VALUED_TRANSFER, or OPENING_BALANCE",
-      });
-    }
+  app.patch(
+    ADJUSTMENT_CLASSIFICATION_PATH,
+    requireAuth,
+    requireRole(...ADMIN_ROLES),
+    validateRequest(adjustmentValuationBasisInput),
+    async (req, res) => {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const adjustmentId = Number(req.params.id);
+      const valuationBasis = String(req.body?.valuationBasis || "").toUpperCase();
+      const basisEvidence = typeof req.body?.basisEvidence === "string" ? req.body.basisEvidence.trim() : "";
+      if (basisEvidence.length < 20 || basisEvidence.length > 1000) {
+        return res.status(400).json({
+          code: "HISTORICAL_ADJUSTMENT_EVIDENCE_REQUIRED",
+          message:
+            "Explain the documentary evidence and original valuation basis (20–1000 characters) before classification.",
+        });
+      }
+      const allowed = new Set(["QUANTITY_ONLY", "VALUED_TRANSFER", "OPENING_BALANCE"]);
+      if (!Number.isInteger(adjustmentId) || adjustmentId <= 0) {
+        return res.status(400).json({ message: "Invalid adjustment id" });
+      }
+      if (!allowed.has(valuationBasis)) {
+        return res.status(400).json({
+          message: "valuationBasis must be QUANTITY_ONLY, VALUED_TRANSFER, or OPENING_BALANCE",
+        });
+      }
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      const locked = await client.query<{
-        id: number;
-        type: string;
-        supplier_id: number | null;
-        valuation_basis: string | null;
-        currency_code: string | null;
-        cost_per_kg: string | null;
-      }>(
-        `SELECT id, type, supplier_id, valuation_basis, currency_code, cost_per_kg
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const locked = await client.query<{
+          id: number;
+          type: string;
+          supplier_id: number | null;
+          valuation_basis: string | null;
+          currency_code: string | null;
+          cost_per_kg: string | null;
+        }>(
+          `SELECT id, type, supplier_id, valuation_basis, currency_code, cost_per_kg
            FROM factory_raw_material_adjustments
            WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL
            FOR UPDATE`,
-        [adjustmentId, companyId]
-      );
-      const row = locked.rows[0];
-      if (!row) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "Adjustment not found" });
-      }
-      if (String(row.type).toUpperCase() !== "ADD" || row.supplier_id == null) {
-        await client.query("ROLLBACK");
-        return res.status(409).json({
-          message: "Only supplier-linked ADD adjustments can be classified for replay.",
-        });
-      }
-      if (valuationBasis !== "QUANTITY_ONLY" && String(row.currency_code || "USD").toUpperCase() !== "USD") {
-        await client.query("ROLLBACK");
-        return res.status(409).json({
-          message:
-            "Valued transfers and opening balances require an explicit stored USD cost. This adjustment is not denominated in USD.",
-        });
-      }
-      if (valuationBasis !== "QUANTITY_ONLY" && !(toMoney(row.cost_per_kg).toNumber() > 0)) {
-        await client.query("ROLLBACK");
-        return res.status(409).json({
-          message: "A valued transfer or opening balance must have a positive USD cost per kg.",
-        });
-      }
+          [adjustmentId, companyId]
+        );
+        const row = locked.rows[0];
+        if (!row) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ message: "Adjustment not found" });
+        }
+        if (String(row.type).toUpperCase() !== "ADD" || row.supplier_id == null) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            message: "Only supplier-linked ADD adjustments can be classified for replay.",
+          });
+        }
+        if (valuationBasis !== "QUANTITY_ONLY" && String(row.currency_code || "USD").toUpperCase() !== "USD") {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            message:
+              "Valued transfers and opening balances require an explicit stored USD cost. This adjustment is not denominated in USD.",
+          });
+        }
+        if (valuationBasis !== "QUANTITY_ONLY" && !(toMoney(row.cost_per_kg).toNumber() > 0)) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            message: "A valued transfer or opening balance must have a positive USD cost per kg.",
+          });
+        }
 
-      await client.query(
-        `UPDATE factory_raw_material_adjustments
+        await client.query(
+          `UPDATE factory_raw_material_adjustments
            SET valuation_basis = $1
            WHERE id = $2 AND company_id = $3`,
-        [valuationBasis, adjustmentId, companyId]
-      );
-      await client.query(
-        `INSERT INTO audit_log
+          [valuationBasis, adjustmentId, companyId]
+        );
+        await client.query(
+          `INSERT INTO audit_log
              (user_id, username, company_id, action, table_name, record_id,
               record_identifier, changes, created_at)
            VALUES ($1, $2, $3, 'historical_replay_adjustment_classified',
                    'factory_raw_material_adjustments', $4, $5, $6::jsonb, NOW())`,
-        [
-          String(req.session.userId ?? ""),
-          req.session.username ?? null,
-          companyId,
-          adjustmentId,
-          `raw material adjustment ${adjustmentId} valuation basis`,
-          JSON.stringify({
-            before: row.valuation_basis,
-            after: valuationBasis,
-            basisEvidence,
-            currencyCode: row.currency_code || "USD",
-            costPerKg: row.cost_per_kg,
-          }),
-        ]
-      );
-      await client.query("COMMIT");
-      return res.json({ success: true, adjustmentId, valuationBasis });
-    } catch (error: unknown) {
-      await client.query("ROLLBACK");
-      return res.status(500).json({
-        message: getErrorMessage(error) || "Failed to classify adjustment",
-        code: (error as { code?: string }).code,
-      });
-    } finally {
-      client.release();
+          [
+            String(req.session.userId ?? ""),
+            req.session.username ?? null,
+            companyId,
+            adjustmentId,
+            `raw material adjustment ${adjustmentId} valuation basis`,
+            JSON.stringify({
+              before: row.valuation_basis,
+              after: valuationBasis,
+              basisEvidence,
+              currencyCode: row.currency_code || "USD",
+              costPerKg: row.cost_per_kg,
+            }),
+          ]
+        );
+        await client.query("COMMIT");
+        return res.json({ success: true, adjustmentId, valuationBasis });
+      } catch (error: unknown) {
+        await client.query("ROLLBACK");
+        return res.status(500).json({
+          message: getErrorMessage(error) || "Failed to classify adjustment",
+          code: (error as { code?: string }).code,
+        });
+      } finally {
+        client.release();
+      }
     }
-  });
+  );
 
   app.post(APPLY_PATH, requireAuth, requireRole(...ADMIN_ROLES), async (req, res, next) => {
     const hasToken = typeof req.body?.confirmationToken === "string" && req.body.confirmationToken.length > 0;

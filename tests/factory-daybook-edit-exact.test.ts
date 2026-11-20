@@ -73,8 +73,11 @@ import { registerFactoryDaybookEditRoutes } from "../server/routes/factory/docs-
 
 type Handler = (req: unknown, res: unknown) => Promise<void>;
 const handlers = new Map<string, Handler>();
-const register = (method: string) => (path: string, _auth: unknown, handler: Handler) =>
-  handlers.set(method + path, handler);
+// The terminal handler; guards and validateRequest come before it.
+const register =
+  (method: string) =>
+  (path: string, ...chain: unknown[]) =>
+    handlers.set(method + path, chain[chain.length - 1] as Handler);
 registerFactoryDaybookEditRoutes({
   get: register("GET"),
   put: register("PUT"),

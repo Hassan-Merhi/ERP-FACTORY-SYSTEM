@@ -10,8 +10,21 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import { getCompanyRow, logRun, ensureTargetStockItems } from "./_helpers";
 import { registerSpMigrationStockRoutesPart1 } from "./registerSpMigrationStockRoutesPart1";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Requires { sourceCompanyId, targetCompanyId, companyNameConfirm, confirmation: "MIGRATE" };
+// the handler keeps its own checks and messages for each, so they are optional here.
+const gcStockMasterInput = {
+  body: z.strictObject({
+    sourceCompanyId: z.union([z.number(), z.string()]).nullable().optional(),
+    targetCompanyId: z.union([z.number(), z.string()]).nullable().optional(),
+    companyNameConfirm: z.string().optional(),
+    confirmation: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerSpMigrationStockRoutes(app: Express) {
   // POST /api/sp/migration/gc-stock-master
@@ -25,6 +38,7 @@ export function registerSpMigrationStockRoutes(app: Express) {
     "/api/sp/migration/gc-stock-master",
     requireAuth,
     requireRole("Developer"),
+    validateRequest(gcStockMasterInput),
     async (req: Request, res: Response) => {
       const { sourceCompanyId, targetCompanyId, companyNameConfirm, confirmation } = req.body ?? {};
       if (confirmation !== "MIGRATE") {

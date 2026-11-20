@@ -17,6 +17,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { validateRequest } from "../lib/validateRequest";
+import { posSalesImportInput, salesImportParseInput, salesImportValidateInput } from "./salesImportRouteSchemas";
 import { spreadsheetUpload } from "./_helpers";
 import { adjustInventory } from "../inventoryHelper";
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
@@ -44,44 +46,50 @@ import {
 } from "./posImportRoutesTypes";
 
 export function registerPosImportRoutes(app: Express) {
-  app.post("/api/pos-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) return res.status(400).json({ message: "No company selected" });
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  app.post(
+    "/api/pos-import/parse",
+    requireAuth,
+    spreadsheetUpload.single("file"),
+    validateRequest(salesImportParseInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) return res.status(400).json({ message: "No company selected" });
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-      const workbook = await readExcel(req.file.buffer);
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = sheetToJson(worksheet);
-      if (rows.length === 0) return res.status(400).json({ message: "Excel file is empty" });
+        const workbook = await readExcel(req.file.buffer);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = sheetToJson(worksheet);
+        if (rows.length === 0) return res.status(400).json({ message: "Excel file is empty" });
 
-      const items: PosImportItem[] = [];
-      let totalValue = toInventoryDecimal(0);
-      for (let index = 0; index < rows.length; index++) {
-        const row = rows[index];
-        const barcode = firstPresent(row, "Barcode", "barcode", "Code", "code");
-        const quantity = toInventoryDecimal(firstNumeric(row, "Quantity", "quantity", "Qty", "qty"));
-        const rate = toInventoryDecimal(firstNumeric(row, "Rate", "rate", "Price", "price"));
-        if (!barcode || !quantity.isPositive() || !rate.isPositive()) continue;
+        const items: PosImportItem[] = [];
+        let totalValue = toInventoryDecimal(0);
+        for (let index = 0; index < rows.length; index++) {
+          const row = rows[index];
+          const barcode = firstPresent(row, "Barcode", "barcode", "Code", "code");
+          const quantity = toInventoryDecimal(firstNumeric(row, "Quantity", "quantity", "Qty", "qty"));
+          const rate = toInventoryDecimal(firstNumeric(row, "Rate", "rate", "Price", "price"));
+          if (!barcode || !quantity.isPositive() || !rate.isPositive()) continue;
 
-        const itemValue = multiplyInventoryValues(quantity, rate);
-        totalValue = addInventoryValues(totalValue, itemValue);
-        items.push({
-          rowNum: index + 2,
-          barcode: String(barcode).trim(),
-          quantity: quantity.toNumber(),
-          rate: rate.toNumber(),
-          value: itemValue.toNumber(),
-        });
+          const itemValue = multiplyInventoryValues(quantity, rate);
+          totalValue = addInventoryValues(totalValue, itemValue);
+          items.push({
+            rowNum: index + 2,
+            barcode: String(barcode).trim(),
+            quantity: quantity.toNumber(),
+            rate: rate.toNumber(),
+            value: itemValue.toNumber(),
+          });
+        }
+
+        res.json({ items, totalValue: totalValue.toNumber(), fileName: req.file.originalname });
+      } catch (error: unknown) {
+        logger.error("POS Import parse error:", { error });
+        res.status(400).json({ message: getErrorMessage(error) || "Failed to parse Excel file" });
       }
-
-      res.json({ items, totalValue: totalValue.toNumber(), fileName: req.file.originalname });
-    } catch (error: unknown) {
-      logger.error("POS Import parse error:", { error });
-      res.status(400).json({ message: getErrorMessage(error) || "Failed to parse Excel file" });
     }
-  });
+  );
 
-  app.post("/api/pos-import/validate", requireAuth, async (req, res) => {
+  app.post("/api/pos-import/validate", requireAuth, validateRequest(salesImportValidateInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) return res.status(400).json({ message: "No company selected" });
       const { locationId, items } = req.body;
@@ -153,7 +161,7 @@ export function registerPosImportRoutes(app: Express) {
     }
   });
 
-  app.post("/api/pos-import/import", requireAuth, async (req, res) => {
+  app.post("/api/pos-import/import", requireAuth, validateRequest(posSalesImportInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) return res.status(400).json({ message: "No company selected" });
       const { locationId, saleDate, items, cashAccountId, currency, exchangeRate } = req.body;

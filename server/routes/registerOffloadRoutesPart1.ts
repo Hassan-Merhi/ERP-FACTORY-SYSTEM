@@ -5,6 +5,8 @@ import { getErrorMessage } from "../lib/httpHandlers";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth, requireRole } from "../auth";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+import { z } from "zod";
 import { assertActiveCompanyAccess, sendCompanyAccessError } from "../security/companyAccessBoundary";
 import { containerOffloads, containers, locations } from "@shared/schema";
 import {
@@ -30,6 +32,12 @@ export function requestedOptionalState(body: unknown): boolean | null {
   return null;
 }
 
+// No body, or no offloadIds, repairs every drifted offload of the company.
+const repairOffloadChargeVouchersInput = {
+  query: emptyQuery,
+  body: z.union([z.undefined(), z.strictObject({ offloadIds: z.array(z.union([z.number(), z.string()])).optional() })]),
+} satisfies RequestSchemas;
+
 export function registerOffloadRoutesPart1(app: Express) {
   // Offloads whose DUTY/OFFICE/TRANS/XFER vouchers were edited before voucher
   // edits re-priced the bales: preview the mismatch, then apply it.
@@ -53,6 +61,7 @@ export function registerOffloadRoutesPart1(app: Express) {
     "/api/admin/offload-charge-voucher-repair",
     requireAuth,
     requireRole("Admin", "Developer", "Owner"),
+    validateRequest(repairOffloadChargeVouchersInput),
     async (req, res) => {
       try {
         const access = await assertActiveCompanyAccess(req);

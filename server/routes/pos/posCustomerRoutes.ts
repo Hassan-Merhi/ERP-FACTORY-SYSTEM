@@ -10,6 +10,26 @@ import { requirePosCustomerPermission } from "../../middleware/posCustomerPermis
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import { hasZeroOpeningBalance, posCustomerAccessText } from "@shared/posCustomerAccess";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// The handler still parses the body with insertCustomerSchema (companyId comes
+// from the session), so every customer field stays optional here and keeps its
+// existing error. POS users send { legalName, phone, openingBalance,
+// openingBalanceSide } (client/src/pages/pos/usePOSCustomersState.ts); the
+// opening-balance guard accepts a number or string.
+const createPosCustomerInput = {
+  query: emptyQuery,
+  body: insertCustomerSchema
+    .omit({ deletedAt: true })
+    .partial()
+    .extend({
+      companyId: z.union([z.number(), z.string()]).optional(),
+      openingBalance: z.union([z.string(), z.number()]).nullable().optional(),
+      ledgerAccountId: z.number().nullable().optional(),
+    })
+    .strict(),
+} satisfies RequestSchemas;
 
 export function registerPosCustomerRoutes(app: Express): void {
   // POS Customers - GET endpoint (for POS users with canAccessCustomers permission)
@@ -30,97 +50,103 @@ export function registerPosCustomerRoutes(app: Express): void {
   });
 
   // POS Customers - POST endpoint (for POS users with canAccessCustomers permission)
-  app.post("/api/pos/customers", requireAuth, requirePosCustomerPermission, async (req, res) => {
-    try {
-      const access = await getActiveCompanyPermissionContext(req);
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      if (access.role === "POS" && !hasZeroOpeningBalance(req.body?.openingBalance)) {
-        return res.status(403).json({
-          code: "POS_CUSTOMER_OPENING_BALANCE_DENIED",
-          message: posCustomerAccessText.openingDenied,
-        });
-      }
-      if (access.role === "POS" && req.body?.ledgerAccountId != null) {
-        return res.status(403).json({
-          code: "POS_CUSTOMER_LEDGER_LINK_DENIED",
-          message: posCustomerAccessText.ledgerDenied,
-        });
-      }
-      const safeInput =
-        access.role === "POS"
-          ? { legalName: req.body?.legalName, phone: req.body?.phone, openingBalance: "0", openingBalanceSide: "Dr" }
-          : req.body;
-      const dataWithCompany = { ...safeInput, companyId: access.companyId };
-
-      const parsed = insertCustomerSchema.parse(dataWithCompany);
-      if (parsed.ledgerAccountId !== undefined) {
-        const [linkedLedger] = await db
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(
-            and(
-              eq(ledgerAccounts.id, parsed.ledgerAccountId),
-              eq(ledgerAccounts.companyId, req.session.currentCompanyId)
-            )
-          )
-          .limit(1);
-        if (!linkedLedger) {
-          return res.status(400).json({ message: "Linked ledger account must belong to the customer company" });
+  app.post(
+    "/api/pos/customers",
+    requireAuth,
+    requirePosCustomerPermission,
+    validateRequest(createPosCustomerInput),
+    async (req, res) => {
+      try {
+        const access = await getActiveCompanyPermissionContext(req);
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
         }
-      }
 
-      let code = "CUST001";
-      let suffix = 1;
-      const allCustomers = await storage.getAllCustomers(req.session.currentCompanyId);
+        if (access.role === "POS" && !hasZeroOpeningBalance(req.body?.openingBalance)) {
+          return res.status(403).json({
+            code: "POS_CUSTOMER_OPENING_BALANCE_DENIED",
+            message: posCustomerAccessText.openingDenied,
+          });
+        }
+        if (access.role === "POS" && req.body?.ledgerAccountId != null) {
+          return res.status(403).json({
+            code: "POS_CUSTOMER_LEDGER_LINK_DENIED",
+            message: posCustomerAccessText.ledgerDenied,
+          });
+        }
+        const safeInput =
+          access.role === "POS"
+            ? { legalName: req.body?.legalName, phone: req.body?.phone, openingBalance: "0", openingBalanceSide: "Dr" }
+            : req.body;
+        const dataWithCompany = { ...safeInput, companyId: access.companyId };
 
-      const existingCodes = allCustomers
-        .map((c) => c.code)
-        .filter((c) => c.startsWith("CUST"))
-        .map((c) => parseInt(c.replace("CUST", "")))
-        .filter((n) => !isNaN(n));
+        const parsed = insertCustomerSchema.parse(dataWithCompany);
+        if (parsed.ledgerAccountId !== undefined) {
+          const [linkedLedger] = await db
+            .select({ id: ledgerAccounts.id })
+            .from(ledgerAccounts)
+            .where(
+              and(
+                eq(ledgerAccounts.id, parsed.ledgerAccountId),
+                eq(ledgerAccounts.companyId, req.session.currentCompanyId)
+              )
+            )
+            .limit(1);
+          if (!linkedLedger) {
+            return res.status(400).json({ message: "Linked ledger account must belong to the customer company" });
+          }
+        }
 
-      if (existingCodes.length > 0) {
-        const maxNumber = Math.max(...existingCodes);
-        suffix = maxNumber + 1;
-      }
+        let code = "CUST001";
+        let suffix = 1;
+        const allCustomers = await storage.getAllCustomers(req.session.currentCompanyId);
 
-      code = `CUST${suffix.toString().padStart(3, "0")}`;
+        const existingCodes = allCustomers
+          .map((c) => c.code)
+          .filter((c) => c.startsWith("CUST"))
+          .map((c) => parseInt(c.replace("CUST", "")))
+          .filter((n) => !isNaN(n));
 
-      while (await storage.getCustomerByCode(code, req.session.currentCompanyId)) {
-        suffix++;
+        if (existingCodes.length > 0) {
+          const maxNumber = Math.max(...existingCodes);
+          suffix = maxNumber + 1;
+        }
+
         code = `CUST${suffix.toString().padStart(3, "0")}`;
+
+        while (await storage.getCustomerByCode(code, req.session.currentCompanyId)) {
+          suffix++;
+          code = `CUST${suffix.toString().padStart(3, "0")}`;
+        }
+
+        const customer = await storage.createCustomer({ ...parsed, code });
+
+        const customerAccountCode = `CUST-${customer.code}`;
+        // Use getOrCreateLedgerAccount to survive soft-deleted duplicates that
+        // would cause a unique-constraint crash with a plain INSERT.
+        const customerAccount = await storage.getOrCreateLedgerAccount({
+          companyId: req.session.currentCompanyId,
+          code: customerAccountCode,
+          name: `${customer.legalName} - Customer Account`,
+          accountType: "Asset",
+          subType: "Accounts Receivable",
+          // The customer record owns the opening (counted once by the balance
+          // engine); the linked ledger starts at zero.
+          openingBalance: "0",
+          openingBalanceSide: "Dr",
+          active: true,
+        });
+
+        await storage.updateCustomer(customer.id, {
+          ledgerAccountId: customerAccount.id,
+        });
+
+        res.status(201).json(customer);
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-
-      const customer = await storage.createCustomer({ ...parsed, code });
-
-      const customerAccountCode = `CUST-${customer.code}`;
-      // Use getOrCreateLedgerAccount to survive soft-deleted duplicates that
-      // would cause a unique-constraint crash with a plain INSERT.
-      const customerAccount = await storage.getOrCreateLedgerAccount({
-        companyId: req.session.currentCompanyId,
-        code: customerAccountCode,
-        name: `${customer.legalName} - Customer Account`,
-        accountType: "Asset",
-        subType: "Accounts Receivable",
-        // The customer record owns the opening (counted once by the balance
-        // engine); the linked ledger starts at zero.
-        openingBalance: "0",
-        openingBalanceSide: "Dr",
-        active: true,
-      });
-
-      await storage.updateCustomer(customer.id, {
-        ledgerAccountId: customerAccount.id,
-      });
-
-      res.status(201).json(customer);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ── POS Customer Transactions (statement) ────────────────────────────────
   app.get("/api/pos/customers/:id/transactions", requireAuth, requirePosCustomerPermission, async (req, res) => {

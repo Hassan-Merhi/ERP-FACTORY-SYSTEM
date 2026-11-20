@@ -8,7 +8,15 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { parseId } from "../../../lib/parseId";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
 import { sql, eq, and } from "drizzle-orm";
 import { customerDispatchBatches, customerDispatchTruckRides } from "@shared/schema";
 
@@ -16,6 +24,16 @@ import { getCompanyId } from "./_helpers";
 import { resultRows } from "../../../lib/queryResult";
 import { sqlArray } from "../../../lib/sqlArray";
 import { registerDispatchBatchCrudRoutesPart1 } from "./registerDispatchBatchCrudRoutesPart1";
+
+const optionalText = z.string().nullable().optional();
+
+const updateBatchInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ notes: optionalText, destination: optionalText, batchDate: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const cancelBatchInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerDispatchBatchCrudRoutes(app: Express) {
   // ── GET /api/factory/dispatch-batches ─────────────────────────────────────
@@ -74,91 +92,99 @@ export function registerDispatchBatchCrudRoutes(app: Express) {
 
   // ── PATCH /api/factory/dispatch-batches/:id ───────────────────────────────
   // Update batch notes / destination / date (only while not INVOICED)
-  app.patch("/api/factory/dispatch-batches/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const batchId = parseId(req.params.id);
-      if (batchId === null) return res.status(400).json({ message: "Invalid id" });
+  app.patch(
+    "/api/factory/dispatch-batches/:id",
+    requireAuth,
+    validateRequest(updateBatchInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const batchId = validatedInput(req, updateBatchInput).params.id;
 
-      const [batch] = await db
-        .select()
-        .from(customerDispatchBatches)
-        .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-      if (!batch) return res.status(404).json({ message: "Batch not found" });
-      if (batch.status === "INVOICED") return res.status(400).json({ message: "Cannot edit an invoiced batch" });
-      if (batch.status === "CANCELLED") return res.status(400).json({ message: "Cannot edit a cancelled batch" });
-
-      const { notes, destination, batchDate } = req.body;
-      const updates: Partial<typeof customerDispatchBatches.$inferInsert> = { updatedAt: new Date() };
-      if (notes !== undefined) updates.notes = notes;
-      if (destination !== undefined) updates.destination = destination;
-      if (batchDate !== undefined) updates.batchDate = batchDate;
-
-      const [updated] = await db
-        .update(customerDispatchBatches)
-        .set(updates)
-        .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)))
-        .returning();
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
-    }
-  });
-
-  // ── DELETE /api/factory/dispatch-batches/:id ──────────────────────────────
-  // Cancel a batch (returns bales to IN_STOCK)
-  app.delete("/api/factory/dispatch-batches/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const batchId = parseId(req.params.id);
-      if (batchId === null) return res.status(400).json({ message: "Invalid id" });
-
-      await db.transaction(async (tx) => {
-        const [batch] = await tx
+        const [batch] = await db
           .select()
           .from(customerDispatchBatches)
           .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-        if (!batch) throw new Error("Batch not found");
-        if (batch.status === "INVOICED") throw new Error("Cannot cancel an invoiced batch");
-        if (batch.status === "CANCELLED") throw new Error("Batch already cancelled");
+        if (!batch) return res.status(404).json({ message: "Batch not found" });
+        if (batch.status === "INVOICED") return res.status(400).json({ message: "Cannot edit an invoiced batch" });
+        if (batch.status === "CANCELLED") return res.status(400).json({ message: "Cannot edit a cancelled batch" });
 
-        // Return all reserved bales to IN_STOCK
-        const activeBaleIds = await tx.execute(sql`
+        const { notes, destination, batchDate } = req.body;
+        const updates: Partial<typeof customerDispatchBatches.$inferInsert> = { updatedAt: new Date() };
+        if (notes !== undefined) updates.notes = notes;
+        if (destination !== undefined) updates.destination = destination;
+        if (batchDate !== undefined) updates.batchDate = batchDate;
+
+        const [updated] = await db
+          .update(customerDispatchBatches)
+          .set(updates)
+          .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)))
+          .returning();
+        res.json(updated);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
+    }
+  );
+
+  // ── DELETE /api/factory/dispatch-batches/:id ──────────────────────────────
+  // Cancel a batch (returns bales to IN_STOCK)
+  app.delete(
+    "/api/factory/dispatch-batches/:id",
+    requireAuth,
+    validateRequest(cancelBatchInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const batchId = validatedInput(req, cancelBatchInput).params.id;
+
+        await db.transaction(async (tx) => {
+          const [batch] = await tx
+            .select()
+            .from(customerDispatchBatches)
+            .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
+          if (!batch) throw new Error("Batch not found");
+          if (batch.status === "INVOICED") throw new Error("Cannot cancel an invoiced batch");
+          if (batch.status === "CANCELLED") throw new Error("Batch already cancelled");
+
+          // Return all reserved bales to IN_STOCK
+          const activeBaleIds = await tx.execute(sql`
           SELECT bale_id FROM customer_dispatch_bale_scans
           WHERE batch_id = ${batchId} AND company_id = ${companyId} AND removed_at IS NULL
         `);
-        const ids = resultRows(activeBaleIds).map((r) => Number(r.bale_id));
-        if (ids.length > 0) {
-          // sqlArray, not a bare array: Drizzle renders a bare JS array as
-          // tuple syntax, which ANY() rejects outright — so this statement used
-          // to throw for every batch that had a bale on it, which is every
-          // batch worth cancelling.
-          await tx.execute(sql`
+          const ids = resultRows(activeBaleIds).map((r) => Number(r.bale_id));
+          if (ids.length > 0) {
+            // sqlArray, not a bare array: Drizzle renders a bare JS array as
+            // tuple syntax, which ANY() rejects outright — so this statement used
+            // to throw for every batch that had a bale on it, which is every
+            // batch worth cancelling.
+            await tx.execute(sql`
             UPDATE factory_bales SET status = 'IN_STOCK', updated_at = now()
             WHERE id = ANY(${sqlArray(ids)}) AND status = 'RESERVED_FOR_DISPATCH'
           `);
-        }
+          }
 
-        // Cancel all rides
-        await tx
-          .update(customerDispatchTruckRides)
-          .set({ status: "CANCELLED", updatedAt: new Date() })
-          .where(
-            and(eq(customerDispatchTruckRides.batchId, batchId), eq(customerDispatchTruckRides.companyId, companyId))
-          );
+          // Cancel all rides
+          await tx
+            .update(customerDispatchTruckRides)
+            .set({ status: "CANCELLED", updatedAt: new Date() })
+            .where(
+              and(eq(customerDispatchTruckRides.batchId, batchId), eq(customerDispatchTruckRides.companyId, companyId))
+            );
 
-        // Mark batch cancelled
-        await tx
-          .update(customerDispatchBatches)
-          .set({ status: "CANCELLED", cancelledAt: new Date(), updatedAt: new Date() })
-          .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
-      });
+          // Mark batch cancelled
+          await tx
+            .update(customerDispatchBatches)
+            .set({ status: "CANCELLED", cancelledAt: new Date(), updatedAt: new Date() })
+            .where(and(eq(customerDispatchBatches.id, batchId), eq(customerDispatchBatches.companyId, companyId)));
+        });
 
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      res.status(400).json({ message: getErrorMessage(err) });
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        res.status(400).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }

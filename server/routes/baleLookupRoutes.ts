@@ -11,9 +11,18 @@ import { logger } from "../lib/logger";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { requireAuth, requireRole } from "../auth";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+import { z } from "zod";
 import { registerBaleLookupArticleRoutes } from "./baleLookupArticleRoutes";
 import { baleLabelPrints, customerOrderBales, customerOrders, factoryBaleProducts, factoryBales } from "@shared/schema";
 import { registerBaleLookupRoutesPart1 } from "./registerBaleLookupRoutesPart1";
+
+// The handler keeps its own message for a missing or non-numeric newProductId.
+const changeReferenceProductInput = {
+  params: z.strictObject({ referenceNumber: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ newProductId: z.number().nullable().optional() }),
+} satisfies RequestSchemas;
 
 export function registerBaleLookupRoutes(app: Express) {
   registerBaleLookupArticleRoutes(app);
@@ -25,6 +34,7 @@ export function registerBaleLookupRoutes(app: Express) {
     "/api/lookup/reference/:referenceNumber/change-product",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(changeReferenceProductInput),
     async (req, res) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

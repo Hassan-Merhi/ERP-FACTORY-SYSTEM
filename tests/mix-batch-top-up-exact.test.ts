@@ -84,8 +84,8 @@ import { registerFactoryMixBatchTopUpRoutes } from "../server/routes/factory/mix
 async function patch(body: Record<string, unknown>) {
   let handler: (req: unknown, res: unknown) => Promise<void> = async () => undefined;
   registerFactoryMixBatchTopUpRoutes({
-    post: (_path: string, _auth: unknown, h2: typeof handler) => {
-      handler = h2;
+    post: (_path: string, ...chain: Array<typeof handler>) => {
+      handler = chain[chain.length - 1];
     },
   } as never);
   const res = {

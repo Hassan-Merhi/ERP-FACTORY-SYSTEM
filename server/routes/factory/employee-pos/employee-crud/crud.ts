@@ -11,6 +11,52 @@ import { requireAuth } from "../../../../auth";
 import { voucherEntries, employees, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { toMoney } from "../../../../lib/money";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../../lib/validateRequest";
+
+// The handlers parse the id with parseInt and answer their own 400s for
+// missing names, dates and empty updates, so those fields stay optional here.
+const employeeParams = z.strictObject({ id: stringParam });
+const text = z.string().nullable().optional();
+/** Kept as String(monthlySalary): the forms send a string, scripts a number. */
+const salary = z.union([z.number(), z.string()]);
+
+const createEmployeeInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    firstName: text,
+    lastName: text,
+    code: text,
+    department: text,
+    phone: text,
+    monthlySalary: salary.nullable().optional(),
+    joinDate: text,
+    active: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const updateEmployeeInput = {
+  params: employeeParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    department: text,
+    phone: text,
+    monthlySalary: salary.optional(),
+    active: z.boolean().optional(),
+    code: z.unknown().optional(), // sent by client/src/pages/factory/FactoryEmployees.tsx edit form; not used
+    joinDate: z.unknown().optional(), // sent by client/src/pages/factory/FactoryEmployees.tsx edit form; not used
+  }),
+} satisfies RequestSchemas;
+
+const deleteEmployeeInput = { params: employeeParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerFactoryEmployeeCrudRoutes(app: Express) {
   app.get("/api/factory/employees", requireAuth, async (req: Request, res: Response) => {
@@ -58,120 +104,135 @@ export function registerFactoryEmployeeCrudRoutes(app: Express) {
   });
 
   // POST /api/factory/employees - create employee with employeeType = "Employee"
-  app.post("/api/factory/employees", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/employees",
+    requireAuth,
+    validateRequest(createEmployeeInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { firstName, lastName, code, department, phone, monthlySalary, joinDate, active } = req.body;
-      if (!firstName || !lastName) return res.status(400).json({ message: "First name and last name are required" });
-      if (!joinDate) return res.status(400).json({ message: "Join date is required" });
+        const { firstName, lastName, code, department, phone, monthlySalary, joinDate, active } = req.body;
+        if (!firstName || !lastName) return res.status(400).json({ message: "First name and last name are required" });
+        if (!joinDate) return res.status(400).json({ message: "Join date is required" });
 
-      // Auto-generate code if not provided
-      let empCode = code;
-      if (!empCode) {
-        const firstPart = firstName.trim().substring(0, 3).toUpperCase();
-        const lastPart = lastName.trim().substring(0, 3).toUpperCase();
-        const baseCode = firstPart + lastPart || "EMP";
-        empCode = baseCode;
-        let suffix = 1;
-        const existing = await db
-          .select({ code: employees.code })
-          .from(employees)
-          .where(eq(employees.companyId, companyId));
-        const existingCodes = new Set(existing.map((e) => e.code));
-        while (existingCodes.has(empCode)) {
-          empCode = `${baseCode}${suffix}`;
-          suffix++;
+        // Auto-generate code if not provided
+        let empCode = code;
+        if (!empCode) {
+          const firstPart = firstName.trim().substring(0, 3).toUpperCase();
+          const lastPart = lastName.trim().substring(0, 3).toUpperCase();
+          const baseCode = firstPart + lastPart || "EMP";
+          empCode = baseCode;
+          let suffix = 1;
+          const existing = await db
+            .select({ code: employees.code })
+            .from(employees)
+            .where(eq(employees.companyId, companyId));
+          const existingCodes = new Set(existing.map((e) => e.code));
+          while (existingCodes.has(empCode)) {
+            empCode = `${baseCode}${suffix}`;
+            suffix++;
+          }
+        } else {
+          const [existing] = await db
+            .select()
+            .from(employees)
+            .where(and(eq(employees.companyId, companyId), eq(employees.code, empCode)));
+          if (existing) return res.status(400).json({ message: "Employee code already exists" });
         }
-      } else {
-        const [existing] = await db
-          .select()
-          .from(employees)
-          .where(and(eq(employees.companyId, companyId), eq(employees.code, empCode)));
-        if (existing) return res.status(400).json({ message: "Employee code already exists" });
+
+        const [emp] = await db
+          .insert(employees)
+          .values({
+            companyId,
+            code: empCode,
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            phone: phone || null,
+            department: department || null,
+            monthlySalary: monthlySalary ? String(monthlySalary) : "0",
+            joinDate,
+            employeeType: "Employee",
+            active: active !== false,
+          })
+          .returning();
+
+        res.status(201).json(emp);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const [emp] = await db
-        .insert(employees)
-        .values({
-          companyId,
-          code: empCode,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          phone: phone || null,
-          department: department || null,
-          monthlySalary: monthlySalary ? String(monthlySalary) : "0",
-          joinDate,
-          employeeType: "Employee",
-          active: active !== false,
-        })
-        .returning();
-
-      res.status(201).json(emp);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // PATCH /api/factory/employees/:id - update employee
-  app.patch("/api/factory/employees/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.patch(
+    "/api/factory/employees/:id",
+    requireAuth,
+    validateRequest(updateEmployeeInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid employee ID" });
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid employee ID" });
 
-      const { firstName, lastName, department, phone, monthlySalary, active } = req.body;
-      const updates: Partial<typeof employees.$inferInsert> = {};
-      if (firstName !== undefined) updates.firstName = firstName;
-      if (lastName !== undefined) updates.lastName = lastName;
-      if (department !== undefined) updates.department = department;
-      if (phone !== undefined) updates.phone = phone;
-      if (monthlySalary !== undefined) updates.monthlySalary = String(monthlySalary);
-      if (active !== undefined) updates.active = active;
+        const { firstName, lastName, department, phone, monthlySalary, active } = req.body;
+        const updates: Partial<typeof employees.$inferInsert> = {};
+        if (firstName !== undefined) updates.firstName = firstName;
+        if (lastName !== undefined) updates.lastName = lastName;
+        if (department !== undefined) updates.department = department;
+        if (phone !== undefined) updates.phone = phone;
+        if (monthlySalary !== undefined) updates.monthlySalary = String(monthlySalary);
+        if (active !== undefined) updates.active = active;
 
-      // A body carrying none of the updatable fields reaches drizzle as
-      // .set({}), which throws "No values to set" and surfaced as a 500.
-      if (Object.keys(updates).length === 0) {
-        return res.status(400).json({ message: "No fields to update" });
+        // A body carrying none of the updatable fields reaches drizzle as
+        // .set({}), which throws "No values to set" and surfaced as a 500.
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ message: "No fields to update" });
+        }
+
+        const [updated] = await db
+          .update(employees)
+          .set(updates)
+          .where(and(eq(employees.id, id), eq(employees.companyId, companyId), eq(employees.employeeType, "Employee")))
+          .returning();
+
+        if (!updated) return res.status(404).json({ message: "Employee not found" });
+        res.json(updated);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const [updated] = await db
-        .update(employees)
-        .set(updates)
-        .where(and(eq(employees.id, id), eq(employees.companyId, companyId), eq(employees.employeeType, "Employee")))
-        .returning();
-
-      if (!updated) return res.status(404).json({ message: "Employee not found" });
-      res.json(updated);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // DELETE /api/factory/employees/:id - soft-delete employee
-  app.delete("/api/factory/employees/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.delete(
+    "/api/factory/employees/:id",
+    requireAuth,
+    validateRequest(deleteEmployeeInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid employee ID" });
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid employee ID" });
 
-      const [deleted] = await db
-        .update(employees)
-        .set({ deletedAt: new Date(), active: false })
-        .where(and(eq(employees.id, id), eq(employees.companyId, companyId), eq(employees.employeeType, "Employee")))
-        .returning({ id: employees.id });
+        const [deleted] = await db
+          .update(employees)
+          .set({ deletedAt: new Date(), active: false })
+          .where(and(eq(employees.id, id), eq(employees.companyId, companyId), eq(employees.employeeType, "Employee")))
+          .returning({ id: employees.id });
 
-      if (!deleted) return res.status(404).json({ message: "Employee not found" });
-      res.json({ message: "Employee deleted successfully" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        if (!deleted) return res.status(404).json({ message: "Employee not found" });
+        res.json({ message: "Employee deleted successfully" });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // GET /api/factory/employees/:id/statement - running ledger from voucher entries
   app.get("/api/factory/employees/:id/statement", requireAuth, async (req: Request, res: Response) => {

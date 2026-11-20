@@ -514,7 +514,7 @@ describe("POST /api/vouchers", () => {
     expect(await voucherCountFor(number)).toBe(1);
   });
 
-  it("ignores columns the voucher forms never send", async () => {
+  it("refuses columns the voucher forms never send", async () => {
     const number = voucherNumber();
     const response = await agent.post("/api/vouchers").send({
       voucherNumber: number,
@@ -527,13 +527,9 @@ describe("POST /api/vouchers", () => {
       isCreditSale: true,
     });
 
-    expect(response.status).toBe(200);
-    const [stored] = await db.select().from(schema.vouchers).where(eq(schema.vouchers.id, response.body.id));
-    expect(stored.deletedAt).toBeNull();
-    expect(stored.shiftId).toBeNull();
-    expect(stored.sourceModule).toBe("ERP");
-    expect(stored.isCreditSale).toBe(false);
-    expect(stored.companyId).toBe(ctx.companyId);
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("REQUEST_VALIDATION_FAILED");
+    expect(await voucherCountFor(number)).toBe(0);
   });
 
   it("refuses a companyId other than the selected company", async () => {

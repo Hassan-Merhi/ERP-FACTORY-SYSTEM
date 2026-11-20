@@ -11,6 +11,8 @@ import { factoryStaffTrackingMessages } from "../../i18n/factoryStaffTrackingMes
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { attendanceApprovalRateLimiter, requireAttendanceEditApproval } from "./attendanceEditPolicy";
 import { logAudit } from "../helpers/auditWriteAdapter";
 import { employees, factoryAttendance, factoryWorkers } from "@shared/schema";
@@ -37,11 +39,44 @@ import {
   STATUSES,
 } from "./factoryStaffTrackingQueries";
 
+// The handler keeps its own period, count and per-record checks and messages;
+// this fixes the shape the Production Targets screens send.
+const trackingNumber = z.union([z.number(), z.string()]);
+const bulkTrackingInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    page: z.string().optional(),
+    periodType: z.string().optional(),
+    periodStart: z.string().optional(),
+    periodEnd: z.string().optional(),
+    finalize: z.boolean().optional(),
+    adminUsername: z.string().nullable().optional(),
+    adminPassword: z.string().nullable().optional(),
+    records: z
+      .array(
+        z.strictObject({
+          personType: z.string().optional(),
+          personId: trackingNumber,
+          status: z.string().nullable().optional(),
+          category: z.string().nullable().optional(),
+          categoryOverridden: z.boolean().optional(),
+          targetBales: trackingNumber.nullable().optional(),
+          targetBalesOverridden: z.boolean().optional(),
+          producedBales: trackingNumber.nullable().optional(),
+          notes: z.string().nullable().optional(),
+          groupName: z.unknown().optional(), // sent by client/src/pages/factory/useFactoryProductionTargetsState.ts; not used
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerFactoryStaffTrackingRoutesPart3(app: Express) {
   app.post(
     "/api/factory/staff-tracking/bulk",
     requireAuth,
     attendanceApprovalRateLimiter,
+    validateRequest(bulkTrackingInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getFactoryCompanyId(req);

@@ -12,12 +12,40 @@ import { postTargetBonusPaymentsInTransaction } from "../../services/factory/tar
 import { parseTargetBonusPaymentCommand } from "../../services/factory/targetBonusPaymentPolicy";
 import { actor, allowed, company, fail, guard, rows, usd } from "./productionBonusCheckoutRoutesCreditedCategories";
 import { calculateOffers } from "./productionBonusCheckoutRoutesCalculateOffers";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// parseTargetBonusPaymentCommand and the handler keep their own checks and
+// messages; this schema fixes the shape the Production Targets bonus panel sends.
+const amountLike = z.union([z.number(), z.string()]);
+const checkoutPayInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    confirm: z.boolean().optional(),
+    currency: z.string().nullable().optional(),
+    paymentDate: z.string().optional(),
+    cashAccountId: z.number().optional(),
+    method: z.string().optional(),
+    rosterDate: z.string().nullable().optional(),
+    selections: z
+      .array(
+        z.strictObject({
+          date: z.string(),
+          workerId: z.number(),
+          expectedAmount: amountLike,
+          token: z.string().optional(),
+        })
+      )
+      .optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerProductionBonusCheckoutRoutesPart1(app: Express) {
   app.post(
     "/api/factory/production-target-bonuses/checkout/pay",
     requireAuth,
     guard,
+    validateRequest(checkoutPayInput),
     async (req: Request, res: Response) => {
       if (!allowed(req))
         return res.status(403).json({ message: bonusServerText(req.headers["accept-language"], "adminOnly") });

@@ -4,6 +4,8 @@ import { requireAuth, requireRole } from "../../../../auth";
 import { db } from "../../../../db";
 import { logger } from "../../../../lib/logger";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../../lib/validateRequest";
 
 /**
  * Read-only matching for uploaded physical bale references.
@@ -29,6 +31,15 @@ type Match = {
   cleanBalanceCount: number;
 };
 const MAX_REFERENCES = 1000;
+// FinalizedSaleReturnImport.tsx sends { references, customerId }; the handler
+// keeps its own (translated) customer and reference checks.
+const importPreviewInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    references: z.array(z.string()).optional(),
+    customerId: z.union([z.number(), z.string()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 const normalized = (reference: string) => reference.trim().toLocaleUpperCase("en-US");
 
 const customerErrors = {
@@ -80,6 +91,7 @@ export function registerFinalizedReturnImportPreview(app: Express): void {
     "/api/factory/finalized-sale-returns/import-preview",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(importPreviewInput),
     async (req: Request, res: Response) => {
       try {
         const cid = req.session.factoryCompanyId || req.session.currentCompanyId;

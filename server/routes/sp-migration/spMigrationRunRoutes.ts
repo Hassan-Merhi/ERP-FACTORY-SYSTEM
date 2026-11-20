@@ -15,6 +15,10 @@ import {
 } from "../../middleware/privilegedEndpointSecurity";
 import { sql } from "drizzle-orm";
 import { buildGcMigrationPreview } from "./_helpers";
+import { emptyBody, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Disabled (410); reads no input.
+const rehearsalInput = { body: emptyBody } satisfies RequestSchemas;
 
 const spMigrationReadConcurrency = privilegedConcurrencyLimit({
   scope: "sp-migration-read",
@@ -90,6 +94,7 @@ export function registerSpMigrationRunRoutes(app: Express) {
     requireAuth,
     requireRole("Developer"),
     privilegedMutationRateLimit,
+    validateRequest(rehearsalInput),
     async (_req: unknown, res: import("express").Response) => {
       return res.status(410).json({
         message: "The old all-in-one GC migration flow is disabled. Use the staged migration steps instead.",

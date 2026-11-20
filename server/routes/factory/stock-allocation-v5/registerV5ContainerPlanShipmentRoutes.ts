@@ -8,6 +8,8 @@ import { isContainerDocumentType, normalizeShipmentDate, normalizeShipmentRefere
 import type { PlannerQueryable } from "./container-planner-source";
 import { buildSummary, companyIdFor, loadPlanHeader, positiveInt } from "./loadShipmentRows";
 import { registerV5ContainerPlanShipmentRoutesPart1 } from "./registerV5ContainerPlanShipmentRoutesPart1";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import { createDocumentInput, deleteDocumentInput } from "./registerV5ContainerPlanShipmentRoutesSchemas";
 
 export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   // Shipment board for the whole plan.
@@ -97,11 +99,13 @@ export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   app.post(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/documents",
     requireAuth,
+    validateRequest(createDocumentInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, createDocumentInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         const documentType = req.body?.documentType;
         const title = normalizeShipmentReference(req.body?.title, 200);
 
@@ -156,12 +160,14 @@ export function registerV5ContainerPlanShipmentRoutes(app: Express): void {
   app.delete(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/documents/:documentId",
     requireAuth,
+    validateRequest(deleteDocumentInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
-        const documentId = positiveInt(req.params.documentId);
+        const { params } = validatedInput(req, deleteDocumentInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
+        const documentId = positiveInt(params.documentId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId || !containerId || !documentId) {
           return res.status(400).json({ message: "Invalid plan, container or document id" });

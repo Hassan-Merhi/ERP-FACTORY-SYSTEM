@@ -4,6 +4,7 @@ import { z } from "zod";
 import { and, eq, or, inArray } from "drizzle-orm";
 import { containers, intercompanyTrades, intercompanyImportBatchContainers } from "@shared/schema";
 import { requireAuth } from "../../auth";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
 import {
@@ -100,6 +101,21 @@ const reallocate = z
     allocations: z.array(alloc).min(1).max(100),
   })
   .strict();
+
+// The same strict schemas the handlers parse with; the handlers also check
+// the session and the ids (z.coerce) themselves.
+const tradeParams = z.strictObject({ tradeId: stringParam });
+const invoiceParams = z.strictObject({ invoiceId: stringParam });
+const editTradeInput = { params: tradeParams, query: emptyQuery, body: edit } satisfies RequestSchemas;
+const previewChargeInput = { query: emptyQuery, body: preview } satisfies RequestSchemas;
+const confirmChargeInput = { query: emptyQuery, body: confirm } satisfies RequestSchemas;
+const reviseChargeInput = { params: invoiceParams, query: emptyQuery, body: reallocate } satisfies RequestSchemas;
+const grantInput = { query: emptyQuery, body: grant } satisfies RequestSchemas;
+const revokeGrantInput = {
+  params: z.strictObject({ grantId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 function identity(req: Request): EditIdentity {
   const id = Number(req.session.currentCompanyId);
@@ -207,30 +223,45 @@ export function registerIntercompanyPhase3Routes(app: Express) {
       return failure(res, error);
     }
   });
-  app.patch("/api/intercompany-container-trading/linked-trades/:tradeId", requireAuth, async (req, res) => {
-    try {
-      const submitted = edit.parse(req.body);
-      const result = await editLinkedTrade({ ...submitted, tradeId: idParam(req.params.tradeId) }, identity(req));
-      return res.json(result);
-    } catch (error) {
-      return failure(res, error);
+  app.patch(
+    "/api/intercompany-container-trading/linked-trades/:tradeId",
+    requireAuth,
+    validateRequest(editTradeInput),
+    async (req, res) => {
+      try {
+        const submitted = edit.parse(req.body);
+        const result = await editLinkedTrade({ ...submitted, tradeId: idParam(req.params.tradeId) }, identity(req));
+        return res.json(result);
+      } catch (error) {
+        return failure(res, error);
+      }
     }
-  });
-  app.post("/api/intercompany-container-trading/shared-charges/preview", requireAuth, async (req, res) => {
-    try {
-      return res.json(await previewSharedChargeAllocation(preview.parse(req.body), identity(req)));
-    } catch (error) {
-      return failure(res, error);
+  );
+  app.post(
+    "/api/intercompany-container-trading/shared-charges/preview",
+    requireAuth,
+    validateRequest(previewChargeInput),
+    async (req, res) => {
+      try {
+        return res.json(await previewSharedChargeAllocation(preview.parse(req.body), identity(req)));
+      } catch (error) {
+        return failure(res, error);
+      }
     }
-  });
-  app.post("/api/intercompany-container-trading/shared-charges/confirm", requireAuth, async (req, res) => {
-    try {
-      const result = await confirmSharedCharge(confirm.parse(req.body), identity(req));
-      return res.status(201).json(result);
-    } catch (error) {
-      return failure(res, error);
+  );
+  app.post(
+    "/api/intercompany-container-trading/shared-charges/confirm",
+    requireAuth,
+    validateRequest(confirmChargeInput),
+    async (req, res) => {
+      try {
+        const result = await confirmSharedCharge(confirm.parse(req.body), identity(req));
+        return res.status(201).json(result);
+      } catch (error) {
+        return failure(res, error);
+      }
     }
-  });
+  );
   app.get("/api/intercompany-container-trading/shared-charges/:invoiceId", requireAuth, async (req, res) => {
     try {
       return res.json(await sharedInvoiceDetail(idParam(req.params.invoiceId), identity(req)));
@@ -238,31 +269,42 @@ export function registerIntercompanyPhase3Routes(app: Express) {
       return failure(res, error);
     }
   });
-  app.patch("/api/intercompany-container-trading/shared-charges/:invoiceId", requireAuth, async (req, res) => {
-    try {
-      return res.json(
-        await reviseSharedCharge(
-          {
-            ...reallocate.parse(req.body),
-            invoiceId: idParam(req.params.invoiceId),
-          },
-          identity(req)
-        )
-      );
-    } catch (error) {
-      return failure(res, error);
+  app.patch(
+    "/api/intercompany-container-trading/shared-charges/:invoiceId",
+    requireAuth,
+    validateRequest(reviseChargeInput),
+    async (req, res) => {
+      try {
+        return res.json(
+          await reviseSharedCharge(
+            {
+              ...reallocate.parse(req.body),
+              invoiceId: idParam(req.params.invoiceId),
+            },
+            identity(req)
+          )
+        );
+      } catch (error) {
+        return failure(res, error);
+      }
     }
-  });
-  app.post("/api/intercompany-container-trading/shared-charge-grants", requireAuth, async (req, res) => {
-    try {
-      return res.status(201).json(await grantSharedChargeEditor(grant.parse(req.body), identity(req)));
-    } catch (error) {
-      return failure(res, error);
+  );
+  app.post(
+    "/api/intercompany-container-trading/shared-charge-grants",
+    requireAuth,
+    validateRequest(grantInput),
+    async (req, res) => {
+      try {
+        return res.status(201).json(await grantSharedChargeEditor(grant.parse(req.body), identity(req)));
+      } catch (error) {
+        return failure(res, error);
+      }
     }
-  });
+  );
   app.post(
     "/api/intercompany-container-trading/shared-charge-grants/:grantId/revoke",
     requireAuth,
+    validateRequest(revokeGrantInput),
     async (req, res) => {
       try {
         return res.json(await revokeSharedChargeEditor(idParam(req.params.grantId), identity(req)));

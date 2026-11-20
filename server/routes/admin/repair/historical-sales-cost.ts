@@ -1,7 +1,9 @@
 import type { Express, Request, Response } from "express";
 
 import { requireAuth, requirePasswordConfirmation, requireRole } from "../../../auth";
+import { z } from "zod";
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
 import { logger } from "../../../lib/logger";
 import { sendInventoryCutoverRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { assertRunBeforeCutover } from "../../../services/inventory/historicalSalesCostCutoverGuard";
@@ -51,6 +53,45 @@ function parseCompanyIds(value: unknown): number[] | undefined {
   return companyIds;
 }
 
+// The handlers keep their own HSCR_* checks: confirmations, hash formats and run ids
+// (parsed with parseInt) are compared there, so the schemas only fix the shapes.
+const runIdParams = z.strictObject({ runId: stringParam });
+const optionalText = z.string().optional();
+
+const dryRunInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    confirmation: optionalText,
+    companyIds: z
+      .array(z.union([z.number(), z.string()]))
+      .nullable()
+      .optional(),
+  }),
+} satisfies RequestSchemas;
+
+const applyInput = {
+  params: runIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ auditHash: optionalText, confirmation: optionalText }),
+} satisfies RequestSchemas;
+
+const partialApplyInput = {
+  params: runIdParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    mode: optionalText,
+    auditHash: optionalText,
+    targetHash: optionalText,
+    confirmation: optionalText,
+  }),
+} satisfies RequestSchemas;
+
+const rollbackInput = {
+  params: runIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ auditHash: optionalText, confirmation: optionalText }),
+} satisfies RequestSchemas;
+
 export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
   app.post(
     "/api/admin/repair/historical-sales-cost/dry-run",
@@ -59,6 +100,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
     privilegedMutationRateLimit,
     repairBudget,
     repairConcurrency,
+    validateRequest(dryRunInput),
     async (req: Request, res: Response) => {
       try {
         if (req.body?.confirmation !== "BUILD-HISTORICAL-SALES-COST-DRY-RUN") {
@@ -116,6 +158,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
     repairBudget,
     repairConcurrency,
     requirePasswordConfirmation,
+    validateRequest(applyInput),
     async (req: Request, res: Response) => {
       try {
         const runId = Number.parseInt(req.params.runId, 10);
@@ -214,6 +257,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
     repairBudget,
     repairConcurrency,
     requirePasswordConfirmation,
+    validateRequest(partialApplyInput),
     async (req: Request, res: Response) => {
       try {
         const runId = Number.parseInt(req.params.runId, 10);
@@ -258,6 +302,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
     repairBudget,
     repairConcurrency,
     requirePasswordConfirmation,
+    validateRequest(rollbackInput),
     async (req: Request, res: Response) => {
       try {
         const runId = Number.parseInt(req.params.runId, 10);

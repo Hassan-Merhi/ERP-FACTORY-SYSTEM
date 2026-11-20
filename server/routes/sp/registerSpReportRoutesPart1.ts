@@ -7,6 +7,20 @@ import { sql, eq, asc, desc } from "drizzle-orm";
 import { spStockMovements, spProfitSplits } from "@shared/schema";
 import { requireSpCompany, getSpAccount, parseNum } from "./spHelpers";
 import { resultRows } from "../../lib/queryResult";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { amountish, spWriteFields } from "./spRequestSchemas";
+
+const createProfitSplitInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+    periodMonth: z.string().nullable().optional(),
+    totalRevenue: amountish.nullable().optional(),
+    totalCogs: amountish.nullable().optional(),
+    totalSharedCharges: amountish.nullable().optional(),
+    splitPct: amountish.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerSpReportRoutesPart1(app: Express) {
   app.get("/api/sp/report/stock", requireAuth, async (req: Request, res: Response) => {
@@ -166,46 +180,51 @@ export function registerSpReportRoutesPart1(app: Express) {
     }
   });
 
-  app.post("/api/sp/profit-splits", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = await requireSpCompany(req, res);
-      if (!companyId) return;
+  app.post(
+    "/api/sp/profit-splits",
+    requireAuth,
+    validateRequest(createProfitSplitInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = await requireSpCompany(req, res);
+        if (!companyId) return;
 
-      const { periodMonth, totalRevenue, totalCogs, totalSharedCharges, splitPct } = req.body;
+        const { periodMonth, totalRevenue, totalCogs, totalSharedCharges, splitPct } = req.body;
 
-      if (!periodMonth) return res.status(400).json({ message: "periodMonth required (YYYY-MM)" });
+        if (!periodMonth) return res.status(400).json({ message: "periodMonth required (YYYY-MM)" });
 
-      const rev = parseNum(totalRevenue);
-      const cogs = parseNum(totalCogs);
-      const shared = parseNum(totalSharedCharges);
-      const gross = rev - cogs;
-      const net = gross - shared;
-      const pct = parseNum(splitPct) || 50;
-      const our = net * (pct / 100);
-      const sup = net - our;
+        const rev = parseNum(totalRevenue);
+        const cogs = parseNum(totalCogs);
+        const shared = parseNum(totalSharedCharges);
+        const gross = rev - cogs;
+        const net = gross - shared;
+        const pct = parseNum(splitPct) || 50;
+        const our = net * (pct / 100);
+        const sup = net - our;
 
-      const [split] = await db
-        .insert(spProfitSplits)
-        .values({
-          companyId,
-          periodMonth,
-          totalRevenue: String(rev),
-          totalCogs: String(cogs),
-          totalSharedCharges: String(shared),
-          grossProfit: String(gross),
-          splitPct: String(pct),
-          ourShare: String(our),
-          supplierShare: String(sup),
-          finalizedAt: new Date(),
-        })
-        .returning();
+        const [split] = await db
+          .insert(spProfitSplits)
+          .values({
+            companyId,
+            periodMonth,
+            totalRevenue: String(rev),
+            totalCogs: String(cogs),
+            totalSharedCharges: String(shared),
+            grossProfit: String(gross),
+            splitPct: String(pct),
+            ourShare: String(our),
+            supplierShare: String(sup),
+            finalizedAt: new Date(),
+          })
+          .returning();
 
-      res.json(split);
-    } catch (error: unknown) {
-      if ((error as { code?: string }).code === "23505") {
-        return res.status(400).json({ message: `Profit split for ${req.body.periodMonth} already exists` });
+        res.json(split);
+      } catch (error: unknown) {
+        if ((error as { code?: string }).code === "23505") {
+          return res.status(400).json({ message: `Profit split for ${req.body.periodMonth} already exists` });
+        }
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

@@ -1,4 +1,4 @@
-import { parseId, parseOptionalId } from "../../lib/parseId";
+import { parseOptionalId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import type { Express, Request } from "express";
@@ -9,6 +9,13 @@ import { statusBuilderSheets } from "@shared/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { spreadsheetUpload } from "../helpers/uploadHelpers";
 import xlsxStyle from "xlsx-js-style";
+import { validateRequest, validatedInput } from "../../lib/validateRequest";
+import {
+  createSheetInput,
+  deleteSheetInput,
+  importSheetsInput,
+  updateSheetInput,
+} from "./factoryStatusBuilderSheetsRoutesSchemas";
 import type { WorkBook } from "xlsx-js-style";
 
 const { read: readExcel, utils: xlsxUtils, write: writeExcel } = xlsxStyle;
@@ -129,7 +136,7 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
   });
 
   // ── Create a new blank sheet ───────────────────────────────────────────────
-  app.post("/api/factory/status-builder/sheets", requireAuth, async (req, res) => {
+  app.post("/api/factory/status-builder/sheets", requireAuth, validateRequest(createSheetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId!;
       const { name } = req.body;
@@ -161,54 +168,57 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
   });
 
   // ── Update a sheet ─────────────────────────────────────────────────────────
-  app.put("/api/factory/status-builder/sheets/:id", requireAuth, async (req: Request, res) => {
-    try {
-      const companyId = req.session.currentCompanyId!;
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+  app.put(
+    "/api/factory/status-builder/sheets/:id",
+    requireAuth,
+    validateRequest(updateSheetInput),
+    async (req: Request, res) => {
+      try {
+        const companyId = req.session.currentCompanyId!;
+        const input = validatedInput(req, updateSheetInput);
+        const { id } = input.params;
+        const { name, columns, rows } = input.body;
 
-      const { name, columns, rows } = req.body;
+        const [existing] = await db
+          .select()
+          .from(statusBuilderSheets)
+          .where(and(eq(statusBuilderSheets.id, id), eq(statusBuilderSheets.companyId, companyId)));
+        if (!existing) return res.status(404).json({ message: "Sheet not found" });
 
-      const [existing] = await db
-        .select()
-        .from(statusBuilderSheets)
-        .where(and(eq(statusBuilderSheets.id, id), eq(statusBuilderSheets.companyId, companyId)));
-      if (!existing) return res.status(404).json({ message: "Sheet not found" });
+        const updateData: Partial<typeof statusBuilderSheets.$inferInsert> = {
+          updatedAt: new Date(),
+        };
+        if (name !== undefined) updateData.name = name;
+        if (columns !== undefined) updateData.columns = columns;
+        if (rows !== undefined) updateData.rows = rows;
 
-      const updateData: Partial<typeof statusBuilderSheets.$inferInsert> = {
-        updatedAt: new Date(),
-      };
-      if (name !== undefined) updateData.name = name;
-      if (columns !== undefined) updateData.columns = columns;
-      if (rows !== undefined) updateData.rows = rows;
+        const [updated] = await db
+          .update(statusBuilderSheets)
+          .set(updateData)
+          .where(and(eq(statusBuilderSheets.id, id), eq(statusBuilderSheets.companyId, companyId)))
+          .returning();
 
-      const [updated] = await db
-        .update(statusBuilderSheets)
-        .set(updateData)
-        .where(and(eq(statusBuilderSheets.id, id), eq(statusBuilderSheets.companyId, companyId)))
-        .returning();
+        if (!updated) return res.status(404).json({ message: "Sheet not found" });
 
-      if (!updated) return res.status(404).json({ message: "Sheet not found" });
+        if (rows !== undefined) {
+          logStatusBuilderChanges(
+            companyId,
+            id,
+            updated.name,
+            (existing.rows as SRow[]) ?? [],
+            Array.isArray(existing.columns) ? (existing.columns as unknown[]) : [],
+            rows as SRow[],
+            (columns ?? existing.columns) as unknown[],
+            req.user?.username
+          ).catch((e) => logger.error("[StatusBuilder] history log failed:", { error: e.message }));
+        }
 
-      if (rows !== undefined) {
-        logStatusBuilderChanges(
-          companyId,
-          id,
-          updated.name,
-          (existing.rows as SRow[]) ?? [],
-          Array.isArray(existing.columns) ? (existing.columns as unknown[]) : [],
-          rows as SRow[],
-          columns ?? existing.columns,
-          req.user?.username
-        ).catch((e) => logger.error("[StatusBuilder] history log failed:", { error: e.message }));
+        res.json(updated);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 
   // ── Change history log ─────────────────────────────────────────────────────
   app.get("/api/factory/status-builder/log", requireAuth, async (req: Request, res) => {
@@ -242,117 +252,126 @@ export function registerFactoryStatusBuilderSheetsRoutes(app: Express) {
   });
 
   // ── Delete a sheet ─────────────────────────────────────────────────────────
-  app.delete("/api/factory/status-builder/sheets/:id", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId!;
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid id" });
+  app.delete(
+    "/api/factory/status-builder/sheets/:id",
+    requireAuth,
+    validateRequest(deleteSheetInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId!;
+        const { id } = validatedInput(req, deleteSheetInput).params;
 
-      const [deleted] = await db
-        .delete(statusBuilderSheets)
-        .where(and(eq(statusBuilderSheets.id, id), eq(statusBuilderSheets.companyId, companyId)))
-        .returning();
+        const [deleted] = await db
+          .delete(statusBuilderSheets)
+          .where(and(eq(statusBuilderSheets.id, id), eq(statusBuilderSheets.companyId, companyId)))
+          .returning();
 
-      if (!deleted) return res.status(404).json({ message: "Sheet not found" });
-      res.json({ ok: true });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        if (!deleted) return res.status(404).json({ message: "Sheet not found" });
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── Import Excel ───────────────────────────────────────────────────────────
-  app.post("/api/factory/status-builder/sheets/import", requireAuth, upload.single("file"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId!;
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  app.post(
+    "/api/factory/status-builder/sheets/import",
+    requireAuth,
+    upload.single("file"),
+    validateRequest(importSheetsInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId!;
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-      const wb: WorkBook = readExcel(req.file.buffer, { type: "buffer", cellDates: true });
+        const wb: WorkBook = readExcel(req.file.buffer, { type: "buffer", cellDates: true });
 
-      await db.delete(statusBuilderSheets).where(eq(statusBuilderSheets.companyId, companyId));
+        await db.delete(statusBuilderSheets).where(eq(statusBuilderSheets.companyId, companyId));
 
-      const created = [];
-      for (let sheetIdx = 0; sheetIdx < wb.SheetNames.length; sheetIdx++) {
-        const sheetName = wb.SheetNames[sheetIdx];
-        const ws = wb.Sheets[sheetName];
-        const rawData = xlsxUtils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
+        const created = [];
+        for (let sheetIdx = 0; sheetIdx < wb.SheetNames.length; sheetIdx++) {
+          const sheetName = wb.SheetNames[sheetIdx];
+          const ws = wb.Sheets[sheetName];
+          const rawData = xlsxUtils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
 
-        if (!rawData || rawData.length === 0) {
+          if (!rawData || rawData.length === 0) {
+            const [s] = await db
+              .insert(statusBuilderSheets)
+              .values({
+                companyId,
+                name: sheetName,
+                orderIndex: sheetIdx,
+                columns: [],
+                rows: [],
+              })
+              .returning();
+            created.push(s);
+            continue;
+          }
+
+          const headerRow = rawData[0] ?? [];
+          const columns: string[] = headerRow.slice(1).map((h) => (h == null ? "" : String(h)));
+
+          const rows: { label: string; cells: (number | string | null)[] }[] = [];
+          for (let r = 1; r < rawData.length; r++) {
+            const rawRow = rawData[r] ?? [];
+            const hasData = rawRow.some((v) => v !== null && v !== undefined && v !== "");
+            if (!hasData) continue;
+
+            const rawLabel = rawRow[0];
+            let label: string;
+            if (rawLabel == null) {
+              label = "";
+            } else if (rawLabel instanceof Date) {
+              const y = rawLabel.getFullYear();
+              const m = String(rawLabel.getMonth() + 1).padStart(2, "0");
+              const d = String(rawLabel.getDate()).padStart(2, "0");
+              label = `${y}-${m}-${d}`;
+            } else {
+              label = String(rawLabel).trim();
+            }
+
+            const cells: (number | string | null)[] = rawRow.slice(1).map((v) => {
+              if (v === null || v === undefined || v === "") return null;
+              if (v instanceof Date) {
+                const y = v.getFullYear();
+                const m = String(v.getMonth() + 1).padStart(2, "0");
+                const d = String(v.getDate()).padStart(2, "0");
+                return `${y}-${m}-${d}`;
+              }
+              const n = Number(v);
+              return isNaN(n) ? String(v).trim() : n;
+            });
+            while (cells.length < columns.length) cells.push(null);
+            rows.push({ label, cells: cells.slice(0, columns.length) });
+          }
+
           const [s] = await db
             .insert(statusBuilderSheets)
             .values({
               companyId,
               name: sheetName,
               orderIndex: sheetIdx,
-              columns: [],
-              rows: [],
+              columns,
+              rows,
             })
             .returning();
           created.push(s);
-          continue;
         }
 
-        const headerRow = rawData[0] ?? [];
-        const columns: string[] = headerRow.slice(1).map((h) => (h == null ? "" : String(h)));
+        const finalSheets = await db
+          .select()
+          .from(statusBuilderSheets)
+          .where(eq(statusBuilderSheets.companyId, companyId))
+          .orderBy(asc(statusBuilderSheets.orderIndex), asc(statusBuilderSheets.id));
 
-        const rows: { label: string; cells: (number | string | null)[] }[] = [];
-        for (let r = 1; r < rawData.length; r++) {
-          const rawRow = rawData[r] ?? [];
-          const hasData = rawRow.some((v) => v !== null && v !== undefined && v !== "");
-          if (!hasData) continue;
-
-          const rawLabel = rawRow[0];
-          let label: string;
-          if (rawLabel == null) {
-            label = "";
-          } else if (rawLabel instanceof Date) {
-            const y = rawLabel.getFullYear();
-            const m = String(rawLabel.getMonth() + 1).padStart(2, "0");
-            const d = String(rawLabel.getDate()).padStart(2, "0");
-            label = `${y}-${m}-${d}`;
-          } else {
-            label = String(rawLabel).trim();
-          }
-
-          const cells: (number | string | null)[] = rawRow.slice(1).map((v) => {
-            if (v === null || v === undefined || v === "") return null;
-            if (v instanceof Date) {
-              const y = v.getFullYear();
-              const m = String(v.getMonth() + 1).padStart(2, "0");
-              const d = String(v.getDate()).padStart(2, "0");
-              return `${y}-${m}-${d}`;
-            }
-            const n = Number(v);
-            return isNaN(n) ? String(v).trim() : n;
-          });
-          while (cells.length < columns.length) cells.push(null);
-          rows.push({ label, cells: cells.slice(0, columns.length) });
-        }
-
-        const [s] = await db
-          .insert(statusBuilderSheets)
-          .values({
-            companyId,
-            name: sheetName,
-            orderIndex: sheetIdx,
-            columns,
-            rows,
-          })
-          .returning();
-        created.push(s);
+        res.json(finalSheets);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-
-      const finalSheets = await db
-        .select()
-        .from(statusBuilderSheets)
-        .where(eq(statusBuilderSheets.companyId, companyId))
-        .orderBy(asc(statusBuilderSheets.orderIndex), asc(statusBuilderSheets.id));
-
-      res.json(finalSheets);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 
   // ── Template download ──────────────────────────────────────────────────────
   app.get("/api/factory/status-builder/sheets/template", requireAuth, async (_req, res) => {

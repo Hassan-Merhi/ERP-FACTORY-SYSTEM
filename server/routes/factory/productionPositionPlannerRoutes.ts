@@ -11,6 +11,8 @@ import {
 } from "../../services/factory/productionBonusPreview";
 import { loadActiveProductionWorkerLinks } from "../../services/factory/productionWorkerLinks";
 import { checkFactoryAdmin } from "./_helpers";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ELIGIBLE_BALE_STATUSES = ["IN_STOCK", "SOLD", "RESERVED_FOR_ORDER", "DISPATCHED", "FINALIZED"] as const;
@@ -296,6 +298,26 @@ function validateEntries(value: unknown): PositionPlanInput[] {
   });
 }
 
+// validateEntries and the date check keep their own messages; this fixes the shape.
+const plannerNumber = z.union([z.number(), z.string()]);
+const savePlanInput = {
+  params: z.strictObject({ date: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    entries: z
+      .array(
+        z.strictObject({
+          positionId: plannerNumber,
+          targetBales: plannerNumber,
+          bonusPerExtraBale: plannerNumber,
+          bonusEnabled: z.boolean().optional(),
+        })
+      )
+      .optional(),
+    notes: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
 export function registerProductionPositionPlannerRoutes(app: Express) {
   app.get("/api/factory/production-position-planner/:date", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -310,72 +332,76 @@ export function registerProductionPositionPlannerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/production-position-planner/:date", requireAuth, async (req: Request, res: Response) => {
-    try {
-      if (!checkFactoryAdmin(req, res)) return;
-      const companyId = companyIdFor(req);
-      const date = String(req.params.date ?? "");
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!DATE_RE.test(date)) return res.status(400).json({ message: "Date must be YYYY-MM-DD" });
-      const entries = validateEntries(req.body?.entries);
-      const notes = typeof req.body?.notes === "string" ? req.body.notes.slice(0, 5000) : null;
+  app.post(
+    "/api/factory/production-position-planner/:date",
+    requireAuth,
+    validateRequest(savePlanInput),
+    async (req: Request, res: Response) => {
+      try {
+        if (!checkFactoryAdmin(req, res)) return;
+        const companyId = companyIdFor(req);
+        const date = String(req.params.date ?? "");
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!DATE_RE.test(date)) return res.status(400).json({ message: "Date must be YYYY-MM-DD" });
+        const entries = validateEntries(req.body?.entries);
+        const notes = typeof req.body?.notes === "string" ? req.body.notes.slice(0, 5000) : null;
 
-      const effective = await loadEffectivePositionSnapshots(companyId, date);
-      const effectiveById = new Map(effective.map((entry) => [entry.positionId, entry]));
+        const effective = await loadEffectivePositionSnapshots(companyId, date);
+        const effectiveById = new Map(effective.map((entry) => [entry.positionId, entry]));
 
-      const requestedIds = entries.map((entry) => entry.positionId);
-      if (requestedIds.length > 0) {
-        const existingResult = await db.execute<RawQueryRow<PositionNameRow>>(sql`
+        const requestedIds = entries.map((entry) => entry.positionId);
+        if (requestedIds.length > 0) {
+          const existingResult = await db.execute<RawQueryRow<PositionNameRow>>(sql`
           SELECT id, name
           FROM factory_production_positions
           WHERE company_id = ${companyId} AND id = ANY(${sqlArray(requestedIds)})
         `);
-        if (existingResult.rows.length !== requestedIds.length) {
-          return res
-            .status(400)
-            .json({ message: "One or more production positions belong to another company or do not exist" });
+          if (existingResult.rows.length !== requestedIds.length) {
+            return res
+              .status(400)
+              .json({ message: "One or more production positions belong to another company or do not exist" });
+          }
         }
-      }
 
-      await db.transaction(async (tx) => {
-        await tx.execute(sql`
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`
           INSERT INTO factory_production_plans (company_id, plan_date, category_ids, notes)
           VALUES (${companyId}, ${date}::date, '[]', ${notes})
           ON CONFLICT (company_id, plan_date)
           DO UPDATE SET notes = EXCLUDED.notes
         `);
-        const planResult = await tx.execute<RawQueryRow<PlanRow>>(sql`
+          const planResult = await tx.execute<RawQueryRow<PlanRow>>(sql`
           SELECT id FROM factory_production_plans
           WHERE company_id = ${companyId} AND plan_date = ${date}::date
           LIMIT 1
         `);
-        const planId = Number(planResult.rows[0]?.id);
-        if (!planId) throw new Error("Could not resolve production plan");
+          const planId = Number(planResult.rows[0]?.id);
+          if (!planId) throw new Error("Could not resolve production plan");
 
-        await tx.execute(sql`DELETE FROM factory_production_position_plan_entries WHERE plan_id = ${planId}`);
+          await tx.execute(sql`DELETE FROM factory_production_position_plan_entries WHERE plan_id = ${planId}`);
 
-        for (const entry of entries) {
-          let snapshot = effectiveById.get(entry.positionId) ?? null;
-          if (!snapshot) {
-            const positionResult = await tx.execute<RawQueryRow<PositionNameRow>>(sql`
+          for (const entry of entries) {
+            let snapshot = effectiveById.get(entry.positionId) ?? null;
+            if (!snapshot) {
+              const positionResult = await tx.execute<RawQueryRow<PositionNameRow>>(sql`
               SELECT id, name FROM factory_production_positions
               WHERE company_id = ${companyId} AND id = ${entry.positionId}
               LIMIT 1
             `);
-            const position = positionResult.rows[0];
-            if (!position) throw new Error("Production position not found");
-            snapshot = {
-              positionId: Number(position.id),
-              positionName: String(position.name),
-              targetBales: 0,
-              bonusPerExtraBale: 0,
-              bonusEnabled: false,
-              members: [],
-              saved: false,
-            };
-          }
-          const memberJson = JSON.stringify(snapshot.members);
-          await tx.execute(sql`
+              const position = positionResult.rows[0];
+              if (!position) throw new Error("Production position not found");
+              snapshot = {
+                positionId: Number(position.id),
+                positionName: String(position.name),
+                targetBales: 0,
+                bonusPerExtraBale: 0,
+                bonusEnabled: false,
+                members: [],
+                saved: false,
+              };
+            }
+            const memberJson = JSON.stringify(snapshot.members);
+            await tx.execute(sql`
             INSERT INTO factory_production_position_plan_entries (
               plan_id, company_id, position_id, position_name_snapshot,
               target_bales, bonus_per_extra_bale, bonus_enabled, member_snapshot,
@@ -386,15 +412,16 @@ export function registerProductionPositionPlannerRoutes(app: Express) {
               ${memberJson}::jsonb, NOW()
             )
           `);
-        }
-      });
+          }
+        });
 
-      res.json(await buildPlannerResponse(companyId, date));
-    } catch (error: unknown) {
-      logger.error("[ProductionPositionPlanner] POST error", { error: getErrorMessage(error) });
-      res.status(400).json({ message: getErrorMessage(error) });
+        res.json(await buildPlannerResponse(companyId, date));
+      } catch (error: unknown) {
+        logger.error("[ProductionPositionPlanner] POST error", { error: getErrorMessage(error) });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get(
     "/api/factory/production-position-planner/:date/copy-previous",

@@ -5,9 +5,11 @@ import { requireAuth } from "../auth";
 import { db } from "../db";
 import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { toMoney } from "../lib/money";
+import { validateRequest } from "../lib/validateRequest";
 import { storage } from "../storage";
 import { buildAuditChanges } from "../services/audit";
 import { logAudit } from "./_helpers";
+import { createBankAccountInput } from "./bankAccountRoutesSchemas";
 
 export const BANK_ACCOUNT_AUDIT_FIELDS = [
   "name",
@@ -38,7 +40,7 @@ export function registerBankAccountRoutesPart1(app: Express) {
     }
   });
 
-  app.post("/api/bank-accounts", requireAuth, async (req, res) => {
+  app.post("/api/bank-accounts", requireAuth, validateRequest(createBankAccountInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

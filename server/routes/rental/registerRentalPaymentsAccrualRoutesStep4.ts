@@ -7,6 +7,8 @@ import { companyBusinessDate } from "../../services/accounting/companyBusinessDa
 import { runInCompanyPostingScope } from "../../services/accounting/scheduledPostingScope";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { rentalActionInput } from "./rentalWriteRouteSchemas";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { ledgerAccounts, propertyContracts, propertyPayments, propertyUnits } from "@shared/schema";
 import { getClientDate } from "../../lib/dateUtils";
@@ -212,6 +214,7 @@ export function registerRentalPaymentsAccrualRoutesStep4(
     `${urlPrefix}/run-monthly`,
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(rentalActionInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = getCompanyId(req);

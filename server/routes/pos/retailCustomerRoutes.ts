@@ -25,6 +25,13 @@ import {
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import {
+  emptyQuery,
+  positiveIntParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import { loadSaleResponse } from "../../services/retail/retailSaleService";
 import { getCustomerBalance } from "../../storage/accounting/customer-balances";
@@ -32,10 +39,19 @@ import { customerService } from "../customers/customerService";
 import { getCustomerAuditActor } from "../customers/customerRequestContext";
 import { ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 
-const customerCreateSchema = z.object({
-  legalName: z.string().trim().min(1).max(240),
-  phone: z.string().trim().max(60).optional(),
-});
+const customerCreateInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    legalName: z.string().trim().min(1).max(240),
+    phone: z.string().trim().max(60).optional(),
+  }),
+} satisfies RequestSchemas;
+
+const saleCustomerInput = {
+  params: z.strictObject({ saleId: positiveIntParam }),
+  query: emptyQuery,
+  body: z.strictObject({ customerId: z.coerce.number().int().positive().nullable() }),
+} satisfies RequestSchemas;
 
 const saleSearchSchema = z.object({
   receipt: z.string().trim().max(40).optional(),
@@ -124,11 +140,11 @@ export function registerRetailCustomerRoutes(app: Express): void {
   });
 
   /** Quick-create a customer from the POS (name required, phone optional). */
-  app.post("/api/pos/retail/customers", requireAuth, async (req, res) => {
+  app.post("/api/pos/retail/customers", requireAuth, validateRequest(customerCreateInput), async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
-      const body = customerCreateSchema.parse(req.body);
+      const body = validatedInput(req, customerCreateInput).body;
       // Use the canonical ERP creation path so the customer and their
       // Accounts Receivable ledger are created and linked atomically.
       // Retail POS users are authorized here by requireRetailCompany; they
@@ -362,59 +378,63 @@ export function registerRetailCustomerRoutes(app: Express): void {
   });
 
   /** Attach (or clear) a customer on an existing sale — used to correct a walk-in receipt. */
-  app.post("/api/pos/retail/sales/:saleId/customer", requireAuth, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const saleId = Number(req.params.saleId);
-      if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
-      const body = z.object({ customerId: z.coerce.number().int().positive().nullable() }).parse(req.body ?? {});
-      const [sale] = await db
-        .select({ id: retailPosSales.id, customerId: retailPosSales.customerId })
-        .from(retailPosSales)
-        .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)))
-        .limit(1);
-      if (!sale) return res.status(404).json({ message: "Retail sale not found" });
-      // Customer receivable journal entries are immutable. Once a sale has posted to the
-      // customer's ledger (an on-account tender, or a refund credited to their account),
-      // changing its customer needs a supervised reversal/repost, not a name update.
-      if (body.customerId !== sale.customerId) {
-        const [creditTender] = await db
-          .select({ id: retailPosPayments.id })
-          .from(retailPosPayments)
-          .where(
-            and(
-              eq(retailPosPayments.companyId, companyId),
-              eq(retailPosPayments.saleId, saleId),
-              inArray(retailPosPayments.method, ["credit", "store_credit"])
+  app.post(
+    "/api/pos/retail/sales/:saleId/customer",
+    requireAuth,
+    validateRequest(saleCustomerInput),
+    async (req, res) => {
+      try {
+        const companyId = await requireRetailCompany(req, res);
+        if (!companyId) return;
+        const { params, body } = validatedInput(req, saleCustomerInput);
+        const saleId = params.saleId;
+        const [sale] = await db
+          .select({ id: retailPosSales.id, customerId: retailPosSales.customerId })
+          .from(retailPosSales)
+          .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)))
+          .limit(1);
+        if (!sale) return res.status(404).json({ message: "Retail sale not found" });
+        // Customer receivable journal entries are immutable. Once a sale has posted to the
+        // customer's ledger (an on-account tender, or a refund credited to their account),
+        // changing its customer needs a supervised reversal/repost, not a name update.
+        if (body.customerId !== sale.customerId) {
+          const [creditTender] = await db
+            .select({ id: retailPosPayments.id })
+            .from(retailPosPayments)
+            .where(
+              and(
+                eq(retailPosPayments.companyId, companyId),
+                eq(retailPosPayments.saleId, saleId),
+                inArray(retailPosPayments.method, ["credit", "store_credit"])
+              )
             )
-          )
-          .limit(1);
-        if (creditTender)
-          return res.status(409).json({
-            code: "RETAIL_CREDIT_CUSTOMER_LOCKED",
-            message: "Cannot change the customer on a posted credit sale; use an accounting reversal instead",
-          });
+            .limit(1);
+          if (creditTender)
+            return res.status(409).json({
+              code: "RETAIL_CREDIT_CUSTOMER_LOCKED",
+              message: "Cannot change the customer on a posted credit sale; use an accounting reversal instead",
+            });
+        }
+        let customerName = "Walk-in";
+        if (body.customerId) {
+          const [customer] = await db
+            .select({ legalName: customers.legalName })
+            .from(customers)
+            .where(
+              and(eq(customers.id, body.customerId), eq(customers.companyId, companyId), isNull(customers.deletedAt))
+            )
+            .limit(1);
+          if (!customer) return res.status(404).json({ message: "Customer not found" });
+          customerName = customer.legalName;
+        }
+        await db
+          .update(retailPosSales)
+          .set({ customerId: body.customerId, customerName, updatedAt: new Date() })
+          .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)));
+        res.json(await loadSaleResponse(companyId, saleId));
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      let customerName = "Walk-in";
-      if (body.customerId) {
-        const [customer] = await db
-          .select({ legalName: customers.legalName })
-          .from(customers)
-          .where(
-            and(eq(customers.id, body.customerId), eq(customers.companyId, companyId), isNull(customers.deletedAt))
-          )
-          .limit(1);
-        if (!customer) return res.status(404).json({ message: "Customer not found" });
-        customerName = customer.legalName;
-      }
-      await db
-        .update(retailPosSales)
-        .set({ customerId: body.customerId, customerName, updatedAt: new Date() })
-        .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)));
-      res.json(await loadSaleResponse(companyId, saleId));
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

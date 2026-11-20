@@ -1,4 +1,3 @@
-import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
@@ -17,163 +16,218 @@ import {
 import { getFactoryCompanyId, writeDaybookEntry } from "./helpers";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
+import { z } from "zod";
+import {
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const numeric = z.union([z.number(), z.string()]);
+const text = z.string().nullable().optional();
+
+// The handler parses ids with parseInt and amounts with parseMoneyInput,
+// skips rows without a worker or a positive amount and answers its own 400s.
+const bulkAdvancesInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    items: z
+      .array(z.strictObject({ workerId: numeric.nullable().optional(), amount: numeric.nullable().optional() }))
+      .nullable()
+      .optional(),
+    advanceDate: text,
+    cashAccountId: numeric.nullable().optional(),
+    repaymentType: text,
+    notes: text,
+    // Phase 5 request identity: the client fetch guard adds it and the voucher-path boundary claims it.
+    clientRequestId: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const updateAdvanceInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    // Read before the session company (no client sends it).
+    companyId: numeric.optional(),
+    notes: text,
+    advanceDate: text,
+  }),
+} satisfies RequestSchemas;
 
 export function registerWorkerAdvanceAdminRoutes(app: Express) {
-  app.post("/api/factory/advances/bulk", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/advances/bulk",
+    requireAuth,
+    validateRequest(bulkAdvancesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { items, advanceDate, cashAccountId: rawCashAccountId, repaymentType: rawRepaymentType, notes } = req.body;
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "No items provided" });
-      }
+        const {
+          items,
+          advanceDate,
+          cashAccountId: rawCashAccountId,
+          repaymentType: rawRepaymentType,
+          notes,
+        } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ message: "No items provided" });
+        }
 
-      const advDate = advanceDate || getClientDate(req);
-      const cashAccountId = rawCashAccountId ? parseInt(rawCashAccountId) : null;
-      const repaymentType = rawRepaymentType === "manual_repayment" ? "manual_repayment" : "salary_deduction";
+        const advDate = advanceDate || getClientDate(req);
+        const cashAccountId = rawCashAccountId ? parseInt(rawCashAccountId) : null;
+        const repaymentType = rawRepaymentType === "manual_repayment" ? "manual_repayment" : "salary_deduction";
 
-      if (cashAccountId) {
-        const [acct] = await db
-          .select({ id: ledgerAccounts.id })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
-        if (!acct) return res.status(400).json({ message: "Cash account not found for this company" });
-      }
-
-      const results = await db.transaction(async (tx) => {
-        // Resolve or create the "Factory Worker Advances" ledger account once
-        let advancesAccountId: number | null = null;
         if (cashAccountId) {
-          let [advancesAccount] = await tx
+          const [acct] = await db
             .select({ id: ledgerAccounts.id })
             .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Worker Advances")));
-          if (!advancesAccount) {
-            const maxCodeResult = await tx
-              .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
+            .where(and(eq(ledgerAccounts.id, cashAccountId), eq(ledgerAccounts.companyId, companyId)));
+          if (!acct) return res.status(400).json({ message: "Cash account not found for this company" });
+        }
+
+        const results = await db.transaction(async (tx) => {
+          // Resolve or create the "Factory Worker Advances" ledger account once
+          let advancesAccountId: number | null = null;
+          if (cashAccountId) {
+            let [advancesAccount] = await tx
+              .select({ id: ledgerAccounts.id })
               .from(ledgerAccounts)
-              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^[0-9]+$'`));
-            const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
-            [advancesAccount] = await tx
-              .insert(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, "Factory Worker Advances")));
+            if (!advancesAccount) {
+              const maxCodeResult = await tx
+                .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
+                .from(ledgerAccounts)
+                .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^[0-9]+$'`));
+              const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
+              [advancesAccount] = await tx
+                .insert(ledgerAccounts)
+                .values({
+                  companyId,
+                  code: nextCode,
+                  name: "Factory Worker Advances",
+                  accountType: "Asset",
+                  active: true,
+                  isHidden: false,
+                })
+                .returning();
+            }
+            advancesAccountId = advancesAccount.id;
+          }
+
+          const created: unknown[] = [];
+          for (const item of items) {
+            const workerId = parseInt(item.workerId);
+            const amount = parseMoneyInput(item.amount)?.toDecimalPlaces(2) ?? null;
+            if (!workerId || !amount || amount.lte(0)) continue;
+
+            const [worker] = await tx
+              .select({ fullName: factoryWorkers.fullName })
+              .from(factoryWorkers)
+              .where(and(eq(factoryWorkers.id, workerId), eq(factoryWorkers.companyId, companyId)));
+            if (!worker) continue;
+
+            const [advance] = await tx
+              .insert(factoryWorkerAdvances)
               .values({
                 companyId,
-                code: nextCode,
-                name: "Factory Worker Advances",
-                accountType: "Asset",
-                active: true,
-                isHidden: false,
+                workerId,
+                advanceDate: advDate,
+                amount: amount.toFixed(2),
+                remainingBalance: amount.toFixed(2),
+                cashAccountId,
+                notes: notes || null,
+                repaymentType,
               })
               .returning();
-          }
-          advancesAccountId = advancesAccount.id;
-        }
 
-        const created: unknown[] = [];
-        for (const item of items) {
-          const workerId = parseInt(item.workerId);
-          const amount = parseMoneyInput(item.amount)?.toDecimalPlaces(2) ?? null;
-          if (!workerId || !amount || amount.lte(0)) continue;
+            if (cashAccountId && advancesAccountId) {
+              const narration = `Advance to ${worker.fullName}: $${amount.toFixed(2)}`;
+              const voucherNumber = `PAYMENT-ADV-${advance.id}-1`;
+              await postErpVoucherTx(tx, {
+                companyId,
+                voucherNumber,
+                voucherType: "Payment",
+                voucherDate: advDate,
+                description: narration,
+                currency: "USD",
+                sourceModule: "FACTORY",
+                lines: [
+                  { ledgerAccountId: advancesAccountId, debit: amount.toFixed(2), narration: narration },
+                  { ledgerAccountId: cashAccountId, credit: amount.toFixed(2), narration: narration },
+                ],
+                source: { type: "worker-advance", id: advance.id },
+              });
+            }
 
-          const [worker] = await tx
-            .select({ fullName: factoryWorkers.fullName })
-            .from(factoryWorkers)
-            .where(and(eq(factoryWorkers.id, workerId), eq(factoryWorkers.companyId, companyId)));
-          if (!worker) continue;
-
-          const [advance] = await tx
-            .insert(factoryWorkerAdvances)
-            .values({
+            await writeDaybookEntry(tx, {
               companyId,
-              workerId,
-              advanceDate: advDate,
-              amount: amount.toFixed(2),
-              remainingBalance: amount.toFixed(2),
-              cashAccountId,
-              notes: notes || null,
-              repaymentType,
-            })
-            .returning();
-
-          if (cashAccountId && advancesAccountId) {
-            const narration = `Advance to ${worker.fullName}: $${amount.toFixed(2)}`;
-            const voucherNumber = `PAYMENT-ADV-${advance.id}-1`;
-            await postErpVoucherTx(tx, {
-              companyId,
-              voucherNumber,
-              voucherType: "Payment",
-              voucherDate: advDate,
-              description: narration,
-              currency: "USD",
-              sourceModule: "FACTORY",
-              lines: [
-                { ledgerAccountId: advancesAccountId, debit: amount.toFixed(2), narration: narration },
-                { ledgerAccountId: cashAccountId, credit: amount.toFixed(2), narration: narration },
-              ],
-              source: { type: "worker-advance", id: advance.id },
+              txDate: advDate,
+              txType: "ADVANCE_GIVEN",
+              referenceId: advance.id,
+              referenceTable: "factory_worker_advances",
+              description: `Advance given to ${worker.fullName}: $${amount.toFixed(2)}`,
+              amountCurrency: amount.toNumber(),
+              amountUsd: amount.toNumber(),
+              createdBy: req.session.userId ?? undefined,
             });
+
+            created.push({ ...advance, workerName: worker.fullName });
           }
+          return created;
+        });
 
-          await writeDaybookEntry(tx, {
-            companyId,
-            txDate: advDate,
-            txType: "ADVANCE_GIVEN",
-            referenceId: advance.id,
-            referenceTable: "factory_worker_advances",
-            description: `Advance given to ${worker.fullName}: $${amount.toFixed(2)}`,
-            amountCurrency: amount.toNumber(),
-            amountUsd: amount.toNumber(),
-            createdBy: req.session.userId ?? undefined,
-          });
-
-          created.push({ ...advance, workerName: worker.fullName });
-        }
-        return created;
-      });
-
-      res.json({ created: results.length, advances: results });
-    } catch (error: unknown) {
-      logger.error("Error creating bulk advances:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ created: results.length, advances: results });
+      } catch (error: unknown) {
+        logger.error("Error creating bulk advances:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // PATCH /api/factory/advances/:id - Edit advance (admin/owner only)
-  app.patch("/api/factory/advances/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const currentRole = req.session.currentRole;
-      if (currentRole !== "Admin" && currentRole !== "Owner" && currentRole !== "Developer") {
-        return res.status(403).json({ message: "Only Admin or Owner can edit advances" });
+  app.patch(
+    "/api/factory/advances/:id",
+    requireAuth,
+    validateRequest(updateAdvanceInput),
+    async (req: Request, res: Response) => {
+      try {
+        const currentRole = req.session.currentRole;
+        if (currentRole !== "Admin" && currentRole !== "Owner" && currentRole !== "Developer") {
+          return res.status(403).json({ message: "Only Admin or Owner can edit advances" });
+        }
+        const companyId = req.body.companyId || getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = validatedInput(req, updateAdvanceInput).params.id;
+
+        const updates: Partial<typeof factoryWorkerAdvances.$inferInsert> = {};
+        if (req.body.notes !== undefined) updates.notes = req.body.notes;
+        if (req.body.advanceDate) updates.advanceDate = req.body.advanceDate;
+
+        // A body carrying none of the updatable fields reaches drizzle as
+        // .set({}), which throws "No values to set" and surfaced as a 500.
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ message: "No fields to update" });
+        }
+
+        const [updated] = await db
+          .update(factoryWorkerAdvances)
+          .set(updates)
+          .where(and(eq(factoryWorkerAdvances.id, id), eq(factoryWorkerAdvances.companyId, companyId)))
+          .returning();
+
+        if (!updated) return res.status(404).json({ message: "Advance not found" });
+        res.json(updated);
+      } catch (error: unknown) {
+        logger.error("Error updating advance:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-
-      const updates: Partial<typeof factoryWorkerAdvances.$inferInsert> = {};
-      if (req.body.notes !== undefined) updates.notes = req.body.notes;
-      if (req.body.advanceDate) updates.advanceDate = req.body.advanceDate;
-
-      // A body carrying none of the updatable fields reaches drizzle as
-      // .set({}), which throws "No values to set" and surfaced as a 500.
-      if (Object.keys(updates).length === 0) {
-        return res.status(400).json({ message: "No fields to update" });
-      }
-
-      const [updated] = await db
-        .update(factoryWorkerAdvances)
-        .set(updates)
-        .where(and(eq(factoryWorkerAdvances.id, id), eq(factoryWorkerAdvances.companyId, companyId)))
-        .returning();
-
-      if (!updated) return res.status(404).json({ message: "Advance not found" });
-      res.json(updated);
-    } catch (error: unknown) {
-      logger.error("Error updating advance:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // GET /api/factory/advances/reconcile/preview - Dry-run reconciliation, returns what would change
   app.get("/api/factory/advances/reconcile/preview", requireAuth, async (req: Request, res: Response) => {

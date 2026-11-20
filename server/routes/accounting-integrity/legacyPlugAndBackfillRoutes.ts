@@ -15,10 +15,12 @@
  * Both act on the session's current company only.
  */
 import type { Express, Request, Response } from "express";
+import { z } from "zod";
 
 import { requireAuth, requireRole } from "../../auth";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { logger } from "../../lib/logger";
 import { toMoney } from "../../lib/money";
 import {
@@ -41,6 +43,19 @@ const PLUG_PLAN = "/api/accounting/legacy-equity-plug/plan";
 const PLUG_APPLY = "/api/accounting/legacy-equity-plug/apply";
 const MIRROR_PLAN = "/api/accounting/stock-adjustment-inventory-mirror-reversal/plan";
 const MIRROR_APPLY = "/api/accounting/stock-adjustment-inventory-mirror-reversal/apply";
+
+// Shapes only: reviewedHash() and reversalOptions() keep their checks and messages.
+const reviewedApplyFields = { confirm: z.boolean().optional(), planHash: z.string().optional() };
+const plugApplyInput = { query: emptyQuery, body: z.strictObject(reviewedApplyFields) } satisfies RequestSchemas;
+const mirrorApplyInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    ...reviewedApplyFields,
+    offset: z.string().optional(),
+    allowNonSupplierPartner: z.union([z.boolean(), z.string()]).optional(),
+    reason: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 const actorOf = (req: Request) => ({
   userId: String(req.session.userId ?? ""),
@@ -94,25 +109,31 @@ export function registerLegacyPlugAndBackfillRoutes(app: Express): void {
     }
   });
 
-  app.post(PLUG_APPLY, requireAuth, requireRole("Owner"), async (req: Request, res: Response) => {
-    try {
-      const companyId = resolveRequestCompanyId(req);
-      const planHash = reviewedHash(req, res);
-      if (!planHash) return;
-      const plan = await applyLegacyEquityPlugClear(companyId, {
-        planHash,
-        liveImportCycleDifference: await liveDifference(companyId),
-        actor: actorOf(req),
-      });
-      res.json({ applied: true, plan });
-    } catch (error: unknown) {
-      if (error instanceof LegacyEquityPlugRefusal) {
-        return res.status(error.status).json({ code: error.code, message: error.message });
+  app.post(
+    PLUG_APPLY,
+    requireAuth,
+    requireRole("Owner"),
+    validateRequest(plugApplyInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = resolveRequestCompanyId(req);
+        const planHash = reviewedHash(req, res);
+        if (!planHash) return;
+        const plan = await applyLegacyEquityPlugClear(companyId, {
+          planHash,
+          liveImportCycleDifference: await liveDifference(companyId),
+          actor: actorOf(req),
+        });
+        res.json({ applied: true, plan });
+      } catch (error: unknown) {
+        if (error instanceof LegacyEquityPlugRefusal) {
+          return res.status(error.status).json({ code: error.code, message: error.message });
+        }
+        logger.error(`POST ${PLUG_APPLY} error`, { error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      logger.error(`POST ${PLUG_APPLY} error`, { error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get(MIRROR_PLAN, requireAuth, requireRole("Owner", "Admin"), async (req: Request, res: Response) => {
     try {
@@ -126,27 +147,33 @@ export function registerLegacyPlugAndBackfillRoutes(app: Express): void {
     }
   });
 
-  app.post(MIRROR_APPLY, requireAuth, requireRole("Owner"), async (req: Request, res: Response) => {
-    try {
-      const companyId = resolveRequestCompanyId(req);
-      const planHash = reviewedHash(req, res);
-      if (!planHash) return;
-      const options = reversalOptions(req.body);
-      if (typeof options === "string") return res.status(400).json({ message: options });
-      const result = await applyStockAdjustmentBackfillReversal(companyId, {
-        ...options,
-        planHash,
-        actor: actorOf(req),
-      });
-      res.json({ applied: true, ...result });
-    } catch (error: unknown) {
-      if (error instanceof BackfillReversalRefusal) {
-        return res.status(error.status).json({ code: error.code, message: error.message });
+  app.post(
+    MIRROR_APPLY,
+    requireAuth,
+    requireRole("Owner"),
+    validateRequest(mirrorApplyInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = resolveRequestCompanyId(req);
+        const planHash = reviewedHash(req, res);
+        if (!planHash) return;
+        const options = reversalOptions(req.body);
+        if (typeof options === "string") return res.status(400).json({ message: options });
+        const result = await applyStockAdjustmentBackfillReversal(companyId, {
+          ...options,
+          planHash,
+          actor: actorOf(req),
+        });
+        res.json({ applied: true, ...result });
+      } catch (error: unknown) {
+        if (error instanceof BackfillReversalRefusal) {
+          return res.status(error.status).json({ code: error.code, message: error.message });
+        }
+        const closed = closedPeriodErrorResponse(error);
+        if (closed) return res.status(closed.status).json(closed.body);
+        logger.error(`POST ${MIRROR_APPLY} error`, { error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      const closed = closedPeriodErrorResponse(error);
-      if (closed) return res.status(closed.status).json(closed.body);
-      logger.error(`POST ${MIRROR_APPLY} error`, { error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

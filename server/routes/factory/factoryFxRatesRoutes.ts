@@ -12,6 +12,16 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { getClientDate } from "../../lib/dateUtils";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { resolveFactoryFxRateToUsd, type FactoryFxRateResolution } from "../../services/factory/factoryFxRateReadOnly";
 import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
 import { factoryFxRates, insertFactoryFxRateSchema } from "@shared/schema";
@@ -26,6 +36,26 @@ import {
 const RATE_EDITOR_ROLES = ["Admin", "Owner"] as const;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+// The handler checks the currency code and date format with its own messages.
+const saveFetchedRateInput = {
+  query: emptyQuery,
+  body: z.strictObject({ currencyCode: z.string().optional(), date: z.string().optional() }),
+} satisfies RequestSchemas;
+
+// companyId and source are set by the server; effectiveDate defaults to the client date.
+const saveManualRateInput = {
+  query: emptyQuery,
+  body: z.strictObject({ currencyCode: z.string(), rateToUsd: z.string(), effectiveDate: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const removeRateRowInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+const deleteCurrencyRatesInput = {
+  params: z.strictObject({ currency: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 /** A looked-up rate; `suggestion` marks an external rate that is not recorded. */
 function rateResponse(resolution: FactoryFxRateResolution) {
@@ -103,6 +133,7 @@ export function registerFactoryFxRatesRoutes(app: Express) {
     "/api/factory/fx-rates/fetched",
     requireAuth,
     requireRole(...RATE_EDITOR_ROLES),
+    validateRequest(saveFetchedRateInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -135,6 +166,7 @@ export function registerFactoryFxRatesRoutes(app: Express) {
     "/api/factory/fx-rates",
     requireAuth,
     requireRole(...RATE_EDITOR_ROLES),
+    validateRequest(saveManualRateInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -167,14 +199,12 @@ export function registerFactoryFxRatesRoutes(app: Express) {
     "/api/factory/fx-rates/row/:id",
     requireAuth,
     requireRole(...RATE_EDITOR_ROLES),
+    validateRequest(removeRateRowInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const rateId = Number(req.params.id);
-        if (!Number.isSafeInteger(rateId) || rateId <= 0) {
-          return res.status(400).json({ message: "Invalid rate ID" });
-        }
+        const rateId = validatedInput(req, removeRateRowInput).params.id;
         const result = await removeFactoryFxRateById(
           { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
           rateId
@@ -195,6 +225,7 @@ export function registerFactoryFxRatesRoutes(app: Express) {
     "/api/factory/fx-rates/:currency",
     requireAuth,
     requireRole(...RATE_EDITOR_ROLES),
+    validateRequest(deleteCurrencyRatesInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

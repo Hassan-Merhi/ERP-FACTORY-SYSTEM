@@ -9,6 +9,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { jobActionInput } from "./aiImportSchemas";
 import { aiImportJobs, aiImportRows } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -18,7 +20,7 @@ import { assertJobOwnership, postRows } from "./_helpers";
 export function registerAiImportPostRoutes(app: Express) {
   // POST /api/ai-import/jobs/:id/post
   // Creates business records in a transaction; writes audit log; marks job posted
-  app.post("/api/ai-import/jobs/:id/post", requireAuth, async (req, res) => {
+  app.post("/api/ai-import/jobs/:id/post", requireAuth, validateRequest(jobActionInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       const userId = req.session.userId;

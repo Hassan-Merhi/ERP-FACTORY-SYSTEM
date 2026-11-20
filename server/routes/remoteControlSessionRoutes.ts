@@ -53,6 +53,8 @@ import {
   respondAuditUnavailable,
   writeAuditOrUnavailable,
 } from "./remoteControlSessionHelpers";
+import { validateRequest } from "../lib/validateRequest";
+import * as input from "./remoteControlSessionRoutesSchemas";
 
 export function registerRemoteControlSessionRoutes(app: Express): void {
   app.get("/api/screen-feed/control/tabs/:userId", requireAuth, viewPermission, (req, res) => {
@@ -61,25 +63,30 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
     res.json({ tabs: listRemoteControlTabs(req.params.userId) });
   });
 
-  app.post("/api/screen-feed/control/tab-heartbeat", requireLogin, (req, res) => {
-    try {
-      const session = registerRemoteControlTab({
-        userId: sessionUserId(req),
-        username: sessionUsername(req),
-        tabId: req.body?.tabId,
-        companyId: getSessionCompanyId(req),
-        route: req.body?.route,
-      });
-      res.setHeader("Cache-Control", "no-store");
-      if (!session) {
-        res.status(204).end();
-        return;
+  app.post(
+    "/api/screen-feed/control/tab-heartbeat",
+    requireLogin,
+    validateRequest(input.tabHeartbeatInput),
+    (req, res) => {
+      try {
+        const session = registerRemoteControlTab({
+          userId: sessionUserId(req),
+          username: sessionUsername(req),
+          tabId: req.body?.tabId,
+          companyId: getSessionCompanyId(req),
+          route: req.body?.route,
+        });
+        res.setHeader("Cache-Control", "no-store");
+        if (!session) {
+          res.status(204).end();
+          return;
+        }
+        res.json({ session: serializeSession(session) });
+      } catch (error) {
+        handleSessionError(error, res);
       }
-      res.json({ session: serializeSession(session) });
-    } catch (error) {
-      handleSessionError(error, res);
     }
-  });
+  );
 
   app.get("/api/screen-feed/control/status", requireLogin, (req, res) => {
     const userId = sessionUserId(req);
@@ -147,54 +154,67 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
     });
   });
 
-  app.post("/api/screen-feed/control/sessions", requireAuth, viewPermission, async (req, res) => {
-    if (!requireController(req, res)) return;
-    try {
-      const durationMinutes = Number(req.body?.durationMinutes);
-      const session = startRemoteControlSession({
-        targetUserId: req.body?.targetUserId,
-        targetUsername: req.body?.targetUsername,
-        requestedTabId: req.body?.tabId,
-        controllerUserId: sessionUserId(req),
-        controllerUsername: sessionUsername(req),
-        controllerRole: sessionRole(req),
-        controllerCompanyId: getSessionCompanyId(req),
-        durationMs: Number.isFinite(durationMinutes) ? durationMinutes * 60 * 1000 : undefined,
-      });
-      const audited = await writeAuditOrUnavailable(
-        {
-          event: "session_started",
-          session,
-          actorUserId: sessionUserId(req),
-          actorUsername: sessionUsername(req),
-          details: { capability: "view", status: "requested", route: session.targetRoute },
-        },
-        res
-      );
-      if (!audited) {
-        stopRemoteControlSession(session.id, "audit-unavailable");
-        return;
+  app.post(
+    "/api/screen-feed/control/sessions",
+    requireAuth,
+    viewPermission,
+    validateRequest(input.startSessionInput),
+    async (req, res) => {
+      if (!requireController(req, res)) return;
+      try {
+        const durationMinutes = Number(req.body?.durationMinutes);
+        const session = startRemoteControlSession({
+          targetUserId: req.body?.targetUserId,
+          targetUsername: req.body?.targetUsername,
+          requestedTabId: req.body?.tabId,
+          controllerUserId: sessionUserId(req),
+          controllerUsername: sessionUsername(req),
+          controllerRole: sessionRole(req),
+          controllerCompanyId: getSessionCompanyId(req),
+          durationMs: Number.isFinite(durationMinutes) ? durationMinutes * 60 * 1000 : undefined,
+        });
+        const audited = await writeAuditOrUnavailable(
+          {
+            event: "session_started",
+            session,
+            actorUserId: sessionUserId(req),
+            actorUsername: sessionUsername(req),
+            details: { capability: "view", status: "requested", route: session.targetRoute },
+          },
+          res
+        );
+        if (!audited) {
+          stopRemoteControlSession(session.id, "audit-unavailable");
+          return;
+        }
+        res.status(201).json({ session: serializeSession(session) });
+      } catch (error) {
+        handleSessionError(error, res);
       }
-      res.status(201).json({ session: serializeSession(session) });
-    } catch (error) {
-      handleSessionError(error, res);
     }
-  });
+  );
 
-  app.post("/api/screen-feed/control/sessions/:sessionId/heartbeat", requireAuth, viewPermission, (req, res) => {
-    if (!requireController(req, res)) return;
-    const session = heartbeatRemoteControlController(req.params.sessionId, sessionUserId(req));
-    if (!session || session.companyId !== getSessionCompanyId(req)) {
-      return res.status(404).json({ message: "The support session is no longer active." });
+  app.post(
+    "/api/screen-feed/control/sessions/:sessionId/heartbeat",
+    requireAuth,
+    viewPermission,
+    validateRequest(input.sessionActionInput),
+    (req, res) => {
+      if (!requireController(req, res)) return;
+      const session = heartbeatRemoteControlController(req.params.sessionId, sessionUserId(req));
+      if (!session || session.companyId !== getSessionCompanyId(req)) {
+        return res.status(404).json({ message: "The support session is no longer active." });
+      }
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ session: serializeSession(session) });
     }
-    res.setHeader("Cache-Control", "no-store");
-    res.json({ session: serializeSession(session) });
-  });
+  );
 
   app.post(
     "/api/screen-feed/control/sessions/:sessionId/mouse-authorization",
     requireAuth,
     mousePermission,
+    validateRequest(input.sessionActionInput),
     async (req, res) => {
       if (!requireController(req, res)) return;
       try {
@@ -234,6 +254,7 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
     "/api/screen-feed/control/sessions/:sessionId/mouse-authorization/revoke",
     requireAuth,
     mousePermission,
+    validateRequest(input.sessionActionInput),
     async (req, res) => {
       if (!requireController(req, res)) return;
       try {
@@ -289,81 +310,87 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
     writeEvent(res, "ready", { sessionId, tabId });
   });
 
-  app.post("/api/screen-feed/control/sessions/:sessionId/commands", requireAuth, mousePermission, async (req, res) => {
-    if (!requireController(req, res)) return;
-    try {
-      const session = getRemoteControlSession(req.params.sessionId);
-      if (!session || session.companyId !== getSessionCompanyId(req)) {
-        return res.status(404).json({ message: "Support session not found." });
-      }
-      const type = req.body?.type;
-      if (
-        (type !== "pointer-move" && type !== "click" && type !== "scroll") ||
-        !isRemoteMouseCommandAllowedOnRoute(session.targetRoute, type)
-      ) {
-        // A refusal is rare and terminal for this command, so it is still
-        // worth a synchronous, guaranteed record.
-        await writeRemoteSupportAudit({
-          event: "command_blocked",
+  app.post(
+    "/api/screen-feed/control/sessions/:sessionId/commands",
+    requireAuth,
+    mousePermission,
+    validateRequest(input.mouseCommandInput),
+    async (req, res) => {
+      if (!requireController(req, res)) return;
+      try {
+        const session = getRemoteControlSession(req.params.sessionId);
+        if (!session || session.companyId !== getSessionCompanyId(req)) {
+          return res.status(404).json({ message: "Support session not found." });
+        }
+        const type = req.body?.type;
+        if (
+          (type !== "pointer-move" && type !== "click" && type !== "scroll") ||
+          !isRemoteMouseCommandAllowedOnRoute(session.targetRoute, type)
+        ) {
+          // A refusal is rare and terminal for this command, so it is still
+          // worth a synchronous, guaranteed record.
+          await writeRemoteSupportAudit({
+            event: "command_blocked",
+            session,
+            actorUserId: sessionUserId(req),
+            actorUsername: sessionUsername(req),
+            details: {
+              capability: "mouse",
+              commandType: typeof type === "string" ? type : "invalid",
+              status: "denied",
+              reason: "sensitive-route",
+              route: session.targetRoute,
+            },
+          });
+          return res.status(403).json({
+            code: "SENSITIVE_REMOTE_ACTION_BLOCKED",
+            message: "Mouse clicks are blocked on this sensitive ERP route.",
+          });
+        }
+
+        // Phase 10: decide admission before any audit or publication work. Rate
+        // limiting used to run at the end of publication, after an audit row had
+        // already been written for a command that was then thrown away.
+        assertRemoteMouseCommandAdmission({
+          sessionId: session.id,
+          controllerUserId: sessionUserId(req),
+          type,
+        });
+
+        // Auditing is enqueued rather than awaited, but it still fails closed:
+        // when the queue cannot promise the row, the command is refused here
+        // instead of shipping unaudited control.
+        if (!isRemoteSupportCommandAuditAccepting()) return respondAuditUnavailable(res);
+        const accepted = enqueueRemoteSupportCommandAudit({
+          event: "mouse_command",
           session,
           actorUserId: sessionUserId(req),
           actorUsername: sessionUsername(req),
-          details: {
+          details: remoteSupportCommandAuditDetails({
             capability: "mouse",
-            commandType: typeof type === "string" ? type : "invalid",
-            status: "denied",
-            reason: "sensitive-route",
+            commandType: type,
             route: session.targetRoute,
-          },
+          }),
         });
-        return res.status(403).json({
-          code: "SENSITIVE_REMOTE_ACTION_BLOCKED",
-          message: "Mouse clicks are blocked on this sensitive ERP route.",
+        if (!accepted) return respondAuditUnavailable(res);
+
+        const { command, supersededCommandIds } = publishRemoteMouseCommand({
+          sessionId: session.id,
+          controllerUserId: sessionUserId(req),
+          type,
+          x: req.body?.x,
+          y: req.body?.y,
+          deltaX: req.body?.deltaX,
+          deltaY: req.body?.deltaY,
+          frameViewport: req.body?.frameViewport,
+          admitted: true,
         });
+        res.status(202).json({ command: serializeMouseCommand(command), supersededCommandIds });
+      } catch (error) {
+        handleSessionError(error, res);
       }
-
-      // Phase 10: decide admission before any audit or publication work. Rate
-      // limiting used to run at the end of publication, after an audit row had
-      // already been written for a command that was then thrown away.
-      assertRemoteMouseCommandAdmission({
-        sessionId: session.id,
-        controllerUserId: sessionUserId(req),
-        type,
-      });
-
-      // Auditing is enqueued rather than awaited, but it still fails closed:
-      // when the queue cannot promise the row, the command is refused here
-      // instead of shipping unaudited control.
-      if (!isRemoteSupportCommandAuditAccepting()) return respondAuditUnavailable(res);
-      const accepted = enqueueRemoteSupportCommandAudit({
-        event: "mouse_command",
-        session,
-        actorUserId: sessionUserId(req),
-        actorUsername: sessionUsername(req),
-        details: remoteSupportCommandAuditDetails({
-          capability: "mouse",
-          commandType: type,
-          route: session.targetRoute,
-        }),
-      });
-      if (!accepted) return respondAuditUnavailable(res);
-
-      const { command, supersededCommandIds } = publishRemoteMouseCommand({
-        sessionId: session.id,
-        controllerUserId: sessionUserId(req),
-        type,
-        x: req.body?.x,
-        y: req.body?.y,
-        deltaX: req.body?.deltaX,
-        deltaY: req.body?.deltaY,
-        frameViewport: req.body?.frameViewport,
-        admitted: true,
-      });
-      res.status(202).json({ command: serializeMouseCommand(command), supersededCommandIds });
-    } catch (error) {
-      handleSessionError(error, res);
     }
-  });
+  );
 
   app.get("/api/screen-feed/control/sessions/:sessionId/results", requireAuth, mousePermission, (req, res) => {
     if (!requireController(req, res)) return;
@@ -392,72 +419,82 @@ export function registerRemoteControlSessionRoutes(app: Express): void {
     writeEvent(res, "ready", { sessionId: req.params.sessionId });
   });
 
-  app.post("/api/screen-feed/control/sessions/:sessionId/commands/:commandId/result", requireLogin, (req, res) => {
-    try {
-      const result = publishRemoteMouseCommandResult({
-        sessionId: req.params.sessionId,
-        commandId: req.params.commandId,
-        targetUserId: sessionUserId(req),
-        targetTabId: req.body?.tabId,
-        status: req.body?.status,
-        reason: req.body?.reason,
-      });
-      const session = getRemoteControlSession(req.params.sessionId);
-      if (session) {
-        // The acknowledgement path is the employee tab's inner loop: one call
-        // per executed command. Awaiting an insert here made every command
-        // round trip pay for a write twice, so the row is batched instead.
-        enqueueRemoteSupportCommandAudit({
-          event: result.status === "blocked" ? "command_blocked" : "mouse_result",
-          session,
-          actorUserId: sessionUserId(req),
-          actorUsername: sessionUsername(req),
-          details: {
-            capability: "mouse",
-            status: result.status,
-            reason: result.reason,
-            route: session.targetRoute,
-          },
+  app.post(
+    "/api/screen-feed/control/sessions/:sessionId/commands/:commandId/result",
+    requireLogin,
+    validateRequest(input.mouseCommandResultInput),
+    (req, res) => {
+      try {
+        const result = publishRemoteMouseCommandResult({
+          sessionId: req.params.sessionId,
+          commandId: req.params.commandId,
+          targetUserId: sessionUserId(req),
+          targetTabId: req.body?.tabId,
+          status: req.body?.status,
+          reason: req.body?.reason,
         });
+        const session = getRemoteControlSession(req.params.sessionId);
+        if (session) {
+          // The acknowledgement path is the employee tab's inner loop: one call
+          // per executed command. Awaiting an insert here made every command
+          // round trip pay for a write twice, so the row is batched instead.
+          enqueueRemoteSupportCommandAudit({
+            event: result.status === "blocked" ? "command_blocked" : "mouse_result",
+            session,
+            actorUserId: sessionUserId(req),
+            actorUsername: sessionUsername(req),
+            details: {
+              capability: "mouse",
+              status: result.status,
+              reason: result.reason,
+              route: session.targetRoute,
+            },
+          });
+        }
+        res.setHeader("Cache-Control", "no-store");
+        res.json({ result: serializeMouseCommandResult(result) });
+      } catch (error) {
+        handleSessionError(error, res);
+      }
+    }
+  );
+
+  app.post(
+    "/api/screen-feed/control/sessions/:sessionId/stop",
+    requireLogin,
+    validateRequest(input.stopSessionInput),
+    async (req, res) => {
+      const session = getRemoteControlSession(req.params.sessionId);
+      if (!session) return res.status(404).json({ message: "Support session not found." });
+      const actorUserId = sessionUserId(req);
+      const actorIsTarget = session.targetUserId === actorUserId;
+      const actorIsController = session.controllerUserId === actorUserId;
+      const actorIsAuthorizedController = isRemoteControlControllerRole(sessionRole(req));
+      if (!actorIsTarget && !actorIsController && !actorIsAuthorizedController) {
+        return res.status(403).json({ message: "Access denied." });
+      }
+      const reason =
+        typeof req.body?.reason === "string" && req.body.reason.trim()
+          ? req.body.reason.trim().slice(0, 160)
+          : actorIsTarget
+            ? "target-emergency-stop"
+            : "controller-stopped";
+      const stopped = stopRemoteControlSession(session.id, reason);
+      if (stopped) {
+        try {
+          await writeRemoteSupportAudit({
+            event: "session_stopped",
+            session: stopped,
+            actorUserId,
+            actorUsername: sessionUsername(req),
+            details: { capability: "view", stopReason: reason, route: stopped.targetRoute },
+          });
+        } catch {
+          // Stopping remains fail-safe even when the audit database is unavailable.
+        }
       }
       res.setHeader("Cache-Control", "no-store");
-      res.json({ result: serializeMouseCommandResult(result) });
-    } catch (error) {
-      handleSessionError(error, res);
+      res.json({ session: serializeSession(stopped) });
     }
-  });
-
-  app.post("/api/screen-feed/control/sessions/:sessionId/stop", requireLogin, async (req, res) => {
-    const session = getRemoteControlSession(req.params.sessionId);
-    if (!session) return res.status(404).json({ message: "Support session not found." });
-    const actorUserId = sessionUserId(req);
-    const actorIsTarget = session.targetUserId === actorUserId;
-    const actorIsController = session.controllerUserId === actorUserId;
-    const actorIsAuthorizedController = isRemoteControlControllerRole(sessionRole(req));
-    if (!actorIsTarget && !actorIsController && !actorIsAuthorizedController) {
-      return res.status(403).json({ message: "Access denied." });
-    }
-    const reason =
-      typeof req.body?.reason === "string" && req.body.reason.trim()
-        ? req.body.reason.trim().slice(0, 160)
-        : actorIsTarget
-          ? "target-emergency-stop"
-          : "controller-stopped";
-    const stopped = stopRemoteControlSession(session.id, reason);
-    if (stopped) {
-      try {
-        await writeRemoteSupportAudit({
-          event: "session_stopped",
-          session: stopped,
-          actorUserId,
-          actorUsername: sessionUsername(req),
-          details: { capability: "view", stopReason: reason, route: stopped.targetRoute },
-        });
-      } catch {
-        // Stopping remains fail-safe even when the audit database is unavailable.
-      }
-    }
-    res.setHeader("Cache-Control", "no-store");
-    res.json({ session: serializeSession(stopped) });
-  });
+  );
 }

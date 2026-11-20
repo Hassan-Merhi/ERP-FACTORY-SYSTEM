@@ -3,6 +3,27 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, idParams, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The repair scans the session company's open orders and takes no input.
+const repairPerKgPricesInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+// Both reprice actions take only the order id (orderIdOf keeps its own id check).
+const repriceOrderInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+// The handlers keep their own required-field and price checks.
+const applyProformaPricesInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ proformaId: z.union([z.number(), z.string()]).nullable().optional() }),
+} satisfies RequestSchemas;
+const repriceArticleInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    articleCode: z.string().optional(),
+    pricePerBale: z.union([z.number(), z.string()]).nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 import { recalculateOrderTotals } from "../_helpers";
 import {
   customerOrderBales,
@@ -27,35 +48,134 @@ import {
 } from "./repriceOrderTx";
 
 export function registerOrderPricingRoutes(app: Express) {
-  app.post("/api/factory/customer-orders/:id/reprice", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const ids = orderIdOf(req, res);
-      if (!ids) return;
-      const { companyId, orderId } = ids;
+  app.post(
+    "/api/factory/customer-orders/:id/reprice",
+    requireAuth,
+    validateRequest(repriceOrderInput),
+    async (req: Request, res: Response) => {
+      try {
+        const ids = orderIdOf(req, res);
+        if (!ids) return;
+        const { companyId, orderId } = ids;
 
-      // "Apply Current Prices" = use the CURRENT catalogue selling price as primary source.
-      // Proforma price is only a fallback if no catalogue price is found for that article.
-      const repriced = await db.transaction((tx) =>
-        repriceOrderTx(
-          tx,
-          companyId,
-          orderId,
-          (order) =>
-            ["DRAFT", "LOADING", "PENDING_VERIFICATION", "VERIFIED", "FINALIZED"].includes(order.status)
-              ? null
-              : "Cannot reprice a cancelled order",
-          async (order, orderBales) => {
-            // 1. Collect all unique article codes and bale IDs from this order
+        // "Apply Current Prices" = use the CURRENT catalogue selling price as primary source.
+        // Proforma price is only a fallback if no catalogue price is found for that article.
+        const repriced = await db.transaction((tx) =>
+          repriceOrderTx(
+            tx,
+            companyId,
+            orderId,
+            (order) =>
+              ["DRAFT", "LOADING", "PENDING_VERIFICATION", "VERIFIED", "FINALIZED"].includes(order.status)
+                ? null
+                : "Cannot reprice a cancelled order",
+            async (order, orderBales) => {
+              // 1. Collect all unique article codes and bale IDs from this order
+              const articleCodes = [...new Set(orderBales.map((b) => b.articleCode).filter(Boolean) as string[])];
+              const baleIds = [...new Set(orderBales.map((b) => b.baleId).filter(Boolean))];
+
+              // 2a. Bulk-fetch current selling prices by article code (primary path)
+              const cataloguePriceMap = new Map<string, string>(); // lowerArticleCode → sellingPrice
+              if (articleCodes.length > 0) {
+                const catalogueRows = await tx
+                  .select({
+                    articleCode: factoryBaleProducts.articleCode,
+                    sellingPrice: factoryBaleProducts.sellingPrice,
+                  })
+                  .from(factoryBaleProducts)
+                  .where(
+                    and(
+                      eq(factoryBaleProducts.companyId, companyId),
+                      inArray(factoryBaleProducts.articleCode, articleCodes)
+                    )
+                  );
+                for (const r of catalogueRows) {
+                  if (r.articleCode && r.sellingPrice != null) {
+                    cataloguePriceMap.set(r.articleCode.toLowerCase().trim(), r.sellingPrice);
+                  }
+                }
+              }
+
+              // 2b. Fallback: also pull prices via factoryBales.productId chain
+              //     This covers cases where the article code in the bale doesn't match the catalogue entry.
+              const baleIdPriceMap = new Map<number, string>(); // baleId → sellingPrice
+              if (baleIds.length > 0) {
+                const chainRows = await tx
+                  .select({ baleId: factoryBales.id, sellingPrice: factoryBaleProducts.sellingPrice })
+                  .from(factoryBales)
+                  .innerJoin(factoryBaleProducts, eq(factoryBaleProducts.id, factoryBales.productId))
+                  .where(inArray(factoryBales.id, baleIds));
+                for (const r of chainRows) {
+                  if (r.baleId && r.sellingPrice != null) baleIdPriceMap.set(r.baleId, r.sellingPrice);
+                }
+              }
+
+              // 3. Proforma prices as fallback for articles not in catalogue
+              const proformaMap = new Map<string, string>();
+              if (order.proformaIdUsed) {
+                const proformaLines = await tx
+                  .select()
+                  .from(customerProformaLines)
+                  .where(eq(customerProformaLines.proformaId, order.proformaIdUsed));
+                for (const pl of proformaLines) {
+                  if (pl.articleCode) proformaMap.set(pl.articleCode.toLowerCase(), pl.pricePerBale);
+                }
+              }
+
+              const updates: PriceUpdate[] = [];
+              for (const bale of orderBales) {
+                const codeKey = bale.articleCode?.toLowerCase().trim();
+                // Priority 1: catalogue price by article code
+                // Priority 2: catalogue price via bale→product chain (baleId lookup)
+                // Priority 3: proforma price
+                const rawPrice =
+                  codeKey && cataloguePriceMap.has(codeKey)
+                    ? cataloguePriceMap.get(codeKey)!
+                    : bale.baleId && baleIdPriceMap.has(bale.baleId)
+                      ? baleIdPriceMap.get(bale.baleId)!
+                      : codeKey && proformaMap.has(codeKey)
+                        ? proformaMap.get(codeKey)!
+                        : null;
+                // Skip if the price is 0 (not yet set) or already identical
+                const price = changedPrice(rawPrice, bale.priceUsed);
+                if (price) updates.push({ baleRowId: bale.id, price });
+              }
+              return updates;
+            }
+          )
+        );
+
+        res.json(await orderWithDetails(orderId, repriced));
+      } catch (error: unknown) {
+        pricingErrorResponse(res, error, "Error repricing order:");
+      }
+    }
+  );
+
+  // Apply PRODUCTION prices to all bales in this order
+  app.post(
+    "/api/factory/customer-orders/:id/reprice-production",
+    requireAuth,
+    validateRequest(repriceOrderInput),
+    async (req: Request, res: Response) => {
+      try {
+        const ids = orderIdOf(req, res);
+        if (!ids) return;
+        const { companyId, orderId } = ids;
+
+        const repriced = await db.transaction((tx) =>
+          repriceOrderTx(tx, companyId, orderId, notCancelled, async (_order, orderBales) => {
+            // Collect unique article codes and bale IDs
             const articleCodes = [...new Set(orderBales.map((b) => b.articleCode).filter(Boolean) as string[])];
             const baleIds = [...new Set(orderBales.map((b) => b.baleId).filter(Boolean))];
 
-            // 2a. Bulk-fetch current selling prices by article code (primary path)
-            const cataloguePriceMap = new Map<string, string>(); // lowerArticleCode → sellingPrice
+            // Lookup production prices by article code
+            const catalogueProdMap = new Map<string, string>();
             if (articleCodes.length > 0) {
-              const catalogueRows = await tx
+              const catRows = await tx
                 .select({
                   articleCode: factoryBaleProducts.articleCode,
-                  sellingPrice: factoryBaleProducts.sellingPrice,
+                  productionPrice: factoryBaleProducts.productionPrice,
                 })
                 .from(factoryBaleProducts)
                 .where(
@@ -64,142 +184,54 @@ export function registerOrderPricingRoutes(app: Express) {
                     inArray(factoryBaleProducts.articleCode, articleCodes)
                   )
                 );
-              for (const r of catalogueRows) {
-                if (r.articleCode && r.sellingPrice != null) {
-                  cataloguePriceMap.set(r.articleCode.toLowerCase().trim(), r.sellingPrice);
+              for (const r of catRows) {
+                if (r.articleCode && r.productionPrice != null) {
+                  catalogueProdMap.set(r.articleCode.toLowerCase().trim(), r.productionPrice);
                 }
               }
             }
 
-            // 2b. Fallback: also pull prices via factoryBales.productId chain
-            //     This covers cases where the article code in the bale doesn't match the catalogue entry.
-            const baleIdPriceMap = new Map<number, string>(); // baleId → sellingPrice
+            // Fallback: via baleId → product chain
+            const baleIdProdMap = new Map<number, string>();
             if (baleIds.length > 0) {
               const chainRows = await tx
-                .select({ baleId: factoryBales.id, sellingPrice: factoryBaleProducts.sellingPrice })
+                .select({ baleId: factoryBales.id, productionPrice: factoryBaleProducts.productionPrice })
                 .from(factoryBales)
                 .innerJoin(factoryBaleProducts, eq(factoryBaleProducts.id, factoryBales.productId))
                 .where(inArray(factoryBales.id, baleIds));
               for (const r of chainRows) {
-                if (r.baleId && r.sellingPrice != null) baleIdPriceMap.set(r.baleId, r.sellingPrice);
-              }
-            }
-
-            // 3. Proforma prices as fallback for articles not in catalogue
-            const proformaMap = new Map<string, string>();
-            if (order.proformaIdUsed) {
-              const proformaLines = await tx
-                .select()
-                .from(customerProformaLines)
-                .where(eq(customerProformaLines.proformaId, order.proformaIdUsed));
-              for (const pl of proformaLines) {
-                if (pl.articleCode) proformaMap.set(pl.articleCode.toLowerCase(), pl.pricePerBale);
+                if (r.baleId && r.productionPrice != null) baleIdProdMap.set(r.baleId, r.productionPrice);
               }
             }
 
             const updates: PriceUpdate[] = [];
             for (const bale of orderBales) {
               const codeKey = bale.articleCode?.toLowerCase().trim();
-              // Priority 1: catalogue price by article code
-              // Priority 2: catalogue price via bale→product chain (baleId lookup)
-              // Priority 3: proforma price
               const rawPrice =
-                codeKey && cataloguePriceMap.has(codeKey)
-                  ? cataloguePriceMap.get(codeKey)!
-                  : bale.baleId && baleIdPriceMap.has(bale.baleId)
-                    ? baleIdPriceMap.get(bale.baleId)!
-                    : codeKey && proformaMap.has(codeKey)
-                      ? proformaMap.get(codeKey)!
-                      : null;
-              // Skip if the price is 0 (not yet set) or already identical
+                codeKey && catalogueProdMap.has(codeKey)
+                  ? catalogueProdMap.get(codeKey)!
+                  : bale.baleId && baleIdProdMap.has(bale.baleId)
+                    ? baleIdProdMap.get(bale.baleId)!
+                    : null;
               const price = changedPrice(rawPrice, bale.priceUsed);
               if (price) updates.push({ baleRowId: bale.id, price });
             }
             return updates;
-          }
-        )
-      );
+          })
+        );
 
-      res.json(await orderWithDetails(orderId, repriced));
-    } catch (error: unknown) {
-      pricingErrorResponse(res, error, "Error repricing order:");
+        res.json(await orderWithDetails(orderId, repriced));
+      } catch (error: unknown) {
+        pricingErrorResponse(res, error, "Error repricing order with production prices:");
+      }
     }
-  });
-
-  // Apply PRODUCTION prices to all bales in this order
-  app.post("/api/factory/customer-orders/:id/reprice-production", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const ids = orderIdOf(req, res);
-      if (!ids) return;
-      const { companyId, orderId } = ids;
-
-      const repriced = await db.transaction((tx) =>
-        repriceOrderTx(tx, companyId, orderId, notCancelled, async (_order, orderBales) => {
-          // Collect unique article codes and bale IDs
-          const articleCodes = [...new Set(orderBales.map((b) => b.articleCode).filter(Boolean) as string[])];
-          const baleIds = [...new Set(orderBales.map((b) => b.baleId).filter(Boolean))];
-
-          // Lookup production prices by article code
-          const catalogueProdMap = new Map<string, string>();
-          if (articleCodes.length > 0) {
-            const catRows = await tx
-              .select({
-                articleCode: factoryBaleProducts.articleCode,
-                productionPrice: factoryBaleProducts.productionPrice,
-              })
-              .from(factoryBaleProducts)
-              .where(
-                and(
-                  eq(factoryBaleProducts.companyId, companyId),
-                  inArray(factoryBaleProducts.articleCode, articleCodes)
-                )
-              );
-            for (const r of catRows) {
-              if (r.articleCode && r.productionPrice != null) {
-                catalogueProdMap.set(r.articleCode.toLowerCase().trim(), r.productionPrice);
-              }
-            }
-          }
-
-          // Fallback: via baleId → product chain
-          const baleIdProdMap = new Map<number, string>();
-          if (baleIds.length > 0) {
-            const chainRows = await tx
-              .select({ baleId: factoryBales.id, productionPrice: factoryBaleProducts.productionPrice })
-              .from(factoryBales)
-              .innerJoin(factoryBaleProducts, eq(factoryBaleProducts.id, factoryBales.productId))
-              .where(inArray(factoryBales.id, baleIds));
-            for (const r of chainRows) {
-              if (r.baleId && r.productionPrice != null) baleIdProdMap.set(r.baleId, r.productionPrice);
-            }
-          }
-
-          const updates: PriceUpdate[] = [];
-          for (const bale of orderBales) {
-            const codeKey = bale.articleCode?.toLowerCase().trim();
-            const rawPrice =
-              codeKey && catalogueProdMap.has(codeKey)
-                ? catalogueProdMap.get(codeKey)!
-                : bale.baleId && baleIdProdMap.has(bale.baleId)
-                  ? baleIdProdMap.get(bale.baleId)!
-                  : null;
-            const price = changedPrice(rawPrice, bale.priceUsed);
-            if (price) updates.push({ baleRowId: bale.id, price });
-          }
-          return updates;
-        })
-      );
-
-      res.json(await orderWithDetails(orderId, repriced));
-    } catch (error: unknown) {
-      pricingErrorResponse(res, error, "Error repricing order with production prices:");
-    }
-  });
+  );
 
   // Apply a specific proforma's prices to all bales in an order (by articleCode match)
   app.post(
     "/api/factory/customer-orders/:id/apply-proforma-prices",
     requireAuth,
+    validateRequest(applyProformaPricesInput),
     async (req: Request, res: Response) => {
       try {
         const ids = orderIdOf(req, res);
@@ -269,6 +301,7 @@ export function registerOrderPricingRoutes(app: Express) {
   app.patch(
     "/api/factory/customer-orders/:id/bales/reprice-article",
     requireAuth,
+    validateRequest(repriceArticleInput),
     async (req: Request, res: Response) => {
       try {
         const ids = orderIdOf(req, res);
@@ -304,104 +337,109 @@ export function registerOrderPricingRoutes(app: Express) {
     }
   );
 
-  app.post("/api/factory/repair-perkg-prices", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/repair-perkg-prices",
+    requireAuth,
+    validateRequest(repairPerKgPricesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      // Find all LOADING / PENDING_VERIFICATION orders that have a proforma
-      const ordersToScan = await db
-        .select({ id: customerOrders.id, proformaIdUsed: customerOrders.proformaIdUsed })
-        .from(customerOrders)
-        .where(
-          and(
-            eq(customerOrders.companyId, companyId),
-            sql`${customerOrders.status} IN ('LOADING', 'PENDING_VERIFICATION')`,
-            sql`${customerOrders.proformaIdUsed} IS NOT NULL`
-          )
-        );
+        // Find all LOADING / PENDING_VERIFICATION orders that have a proforma
+        const ordersToScan = await db
+          .select({ id: customerOrders.id, proformaIdUsed: customerOrders.proformaIdUsed })
+          .from(customerOrders)
+          .where(
+            and(
+              eq(customerOrders.companyId, companyId),
+              sql`${customerOrders.status} IN ('LOADING', 'PENDING_VERIFICATION')`,
+              sql`${customerOrders.proformaIdUsed} IS NOT NULL`
+            )
+          );
 
-      let ordersScanned = 0;
-      let balesRepaired = 0;
-      const changedOrderIds: number[] = [];
-      const errors: string[] = [];
+        let ordersScanned = 0;
+        let balesRepaired = 0;
+        const changedOrderIds: number[] = [];
+        const errors: string[] = [];
 
-      for (const order of ordersToScan) {
-        ordersScanned++;
-        try {
-          // Fetch all proforma lines for this order's proforma that use per_kg
-          const proformaPerKgLines = await db
-            .select({
-              articleCode: customerProformaLines.articleCode,
-              pricingMode: customerProformaLines.pricingMode,
-              pricePerKg: customerProformaLines.pricePerKg,
-            })
-            .from(customerProformaLines)
-            .where(
-              and(
-                eq(customerProformaLines.proformaId, order.proformaIdUsed!),
-                sql`${customerProformaLines.pricingMode} = 'per_kg'`,
-                sql`${customerProformaLines.pricePerKg} IS NOT NULL AND ${customerProformaLines.pricePerKg}::numeric > 0`
-              )
-            );
-
-          if (proformaPerKgLines.length === 0) continue;
-
-          const perKgMap = new Map<string, ReturnType<typeof toMoney>>();
-          for (const pl of proformaPerKgLines) {
-            if (pl.articleCode && pl.pricePerKg) {
-              perKgMap.set(pl.articleCode.toLowerCase(), toMoney(String(pl.pricePerKg)));
-            }
-          }
-
-          // These orders are not finalized (LOADING / PENDING_VERIFICATION): no
-          // invoice journal or customer balance moves; the order row is locked.
-          const repaired = await db.transaction(async (tx) => {
-            const locked = await lockCustomerOrderTx(tx, companyId, order.id);
-            if (!locked) return 0;
-            // Find all bales in this order that match a per_kg article and have priceUsed = 0
-            const bales = await tx
+        for (const order of ordersToScan) {
+          ordersScanned++;
+          try {
+            // Fetch all proforma lines for this order's proforma that use per_kg
+            const proformaPerKgLines = await db
               .select({
-                id: customerOrderBales.id,
-                articleCode: customerOrderBales.articleCode,
-                weight: customerOrderBales.weight,
-                priceUsed: customerOrderBales.priceUsed,
+                articleCode: customerProformaLines.articleCode,
+                pricingMode: customerProformaLines.pricingMode,
+                pricePerKg: customerProformaLines.pricePerKg,
               })
-              .from(customerOrderBales)
-              .where(eq(customerOrderBales.orderId, order.id));
+              .from(customerProformaLines)
+              .where(
+                and(
+                  eq(customerProformaLines.proformaId, order.proformaIdUsed!),
+                  sql`${customerProformaLines.pricingMode} = 'per_kg'`,
+                  sql`${customerProformaLines.pricePerKg} IS NOT NULL AND ${customerProformaLines.pricePerKg}::numeric > 0`
+                )
+              );
 
-            let count = 0;
-            for (const bale of bales) {
-              const key = (bale.articleCode || "").toLowerCase();
-              const pkgRate = perKgMap.get(key);
-              if (!pkgRate || pkgRate.isZero()) continue;
-              if (!toMoney(String(bale.priceUsed || "0")).isZero()) continue; // already repaired — skip (idempotent)
-              // Exact: 0.5 kg at 4.35 is 2.18; the float product gave 2.17.
-              const newPrice = moneyString(toMoney(String(bale.weight || "0")).times(pkgRate));
-              await tx
-                .update(customerOrderBales)
-                .set({ priceUsed: newPrice })
-                .where(eq(customerOrderBales.id, bale.id));
-              count++;
+            if (proformaPerKgLines.length === 0) continue;
+
+            const perKgMap = new Map<string, ReturnType<typeof toMoney>>();
+            for (const pl of proformaPerKgLines) {
+              if (pl.articleCode && pl.pricePerKg) {
+                perKgMap.set(pl.articleCode.toLowerCase(), toMoney(String(pl.pricePerKg)));
+              }
             }
-            if (count > 0) await recalculateOrderTotals(tx, order.id);
-            return count;
-          });
 
-          if (repaired > 0) {
-            balesRepaired += repaired;
-            changedOrderIds.push(order.id);
+            // These orders are not finalized (LOADING / PENDING_VERIFICATION): no
+            // invoice journal or customer balance moves; the order row is locked.
+            const repaired = await db.transaction(async (tx) => {
+              const locked = await lockCustomerOrderTx(tx, companyId, order.id);
+              if (!locked) return 0;
+              // Find all bales in this order that match a per_kg article and have priceUsed = 0
+              const bales = await tx
+                .select({
+                  id: customerOrderBales.id,
+                  articleCode: customerOrderBales.articleCode,
+                  weight: customerOrderBales.weight,
+                  priceUsed: customerOrderBales.priceUsed,
+                })
+                .from(customerOrderBales)
+                .where(eq(customerOrderBales.orderId, order.id));
+
+              let count = 0;
+              for (const bale of bales) {
+                const key = (bale.articleCode || "").toLowerCase();
+                const pkgRate = perKgMap.get(key);
+                if (!pkgRate || pkgRate.isZero()) continue;
+                if (!toMoney(String(bale.priceUsed || "0")).isZero()) continue; // already repaired — skip (idempotent)
+                // Exact: 0.5 kg at 4.35 is 2.18; the float product gave 2.17.
+                const newPrice = moneyString(toMoney(String(bale.weight || "0")).times(pkgRate));
+                await tx
+                  .update(customerOrderBales)
+                  .set({ priceUsed: newPrice })
+                  .where(eq(customerOrderBales.id, bale.id));
+                count++;
+              }
+              if (count > 0) await recalculateOrderTotals(tx, order.id);
+              return count;
+            });
+
+            if (repaired > 0) {
+              balesRepaired += repaired;
+              changedOrderIds.push(order.id);
+            }
+          } catch (err: unknown) {
+            errors.push(`Order ${order.id}: ${getErrorMessage(err)}`);
           }
-        } catch (err: unknown) {
-          errors.push(`Order ${order.id}: ${getErrorMessage(err)}`);
         }
-      }
 
-      res.json({ ordersScanned, balesRepaired, changedOrderIds, errors });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ ordersScanned, balesRepaired, changedOrderIds, errors });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ─────── CONTAINER DOCUMENT TYPES ───────
 }

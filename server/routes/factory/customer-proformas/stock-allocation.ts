@@ -22,6 +22,17 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { customerProformas, customerProformaLines, customers, proformaStockReservations } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The handler keeps its "proformaId and articleCode required" check.
+const toggleReservationInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    proformaId: z.union([z.number(), z.string()]).optional(),
+    articleCode: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerFactoryStockAllocationRoutes(app: Express) {
   // ─── Stock Allocation endpoints ─────────────────────────────────────────────
@@ -333,39 +344,45 @@ export function registerFactoryStockAllocationRoutes(app: Express) {
   });
 
   // POST /api/factory/stock-allocation/reservations/toggle — toggle a reservation on/off
-  app.post("/api/factory/stock-allocation/reservations/toggle", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/stock-allocation/reservations/toggle",
+    requireAuth,
+    validateRequest(toggleReservationInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { proformaId, articleCode } = req.body;
-      if (!proformaId || !articleCode) return res.status(400).json({ message: "proformaId and articleCode required" });
+        const { proformaId, articleCode } = req.body;
+        if (!proformaId || !articleCode)
+          return res.status(400).json({ message: "proformaId and articleCode required" });
 
-      // Check if reservation exists
-      const [existing] = await db
-        .select()
-        .from(proformaStockReservations)
-        .where(
-          and(
-            eq(proformaStockReservations.companyId, companyId),
-            eq(proformaStockReservations.proformaId, proformaId),
-            eq(proformaStockReservations.articleCode, articleCode)
+        // Check if reservation exists
+        const [existing] = await db
+          .select()
+          .from(proformaStockReservations)
+          .where(
+            and(
+              eq(proformaStockReservations.companyId, companyId),
+              eq(proformaStockReservations.proformaId, proformaId),
+              eq(proformaStockReservations.articleCode, articleCode)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (existing) {
-        await db.delete(proformaStockReservations).where(eq(proformaStockReservations.id, existing.id));
-        res.json({ reserved: false });
-      } else {
-        await db.insert(proformaStockReservations).values({ companyId, proformaId, articleCode });
-        res.json({ reserved: true });
+        if (existing) {
+          await db.delete(proformaStockReservations).where(eq(proformaStockReservations.id, existing.id));
+          res.json({ reserved: false });
+        } else {
+          await db.insert(proformaStockReservations).values({ companyId, proformaId, articleCode });
+          res.json({ reserved: true });
+        }
+      } catch (error: unknown) {
+        logger.error("Error toggling reservation:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-    } catch (error: unknown) {
-      logger.error("Error toggling reservation:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ─── End Stock Allocation ─────────────────────────────────────────────────────
 }

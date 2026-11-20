@@ -15,11 +15,14 @@ import {
 } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { inventory, stockItems, vouchers, salesItems, locations } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+const fixSalesInventoryInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerSalesInventoryFixRoutes(app: Express) {
   // Fix inventory for Sales vouchers that were edited with location changes
   // This recalculates inventory based on current voucher locations
-  app.post("/api/admin/fix-sales-inventory", requireAuth, async (req, res) => {
+  app.post("/api/admin/fix-sales-inventory", requireAuth, validateRequest(fixSalesInventoryInput), async (req, res) => {
     try {
       // Admin only
       if (req.session.currentRole !== "Admin" && req.session.currentRole !== "Developer") {

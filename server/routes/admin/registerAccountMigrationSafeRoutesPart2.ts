@@ -4,6 +4,8 @@ import type { Express, Request, Response } from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { executeAccountMigrationInput } from "./accountMigrationWriteSchemas";
 import { logger } from "../../lib/logger";
 import { toMoney } from "../../lib/money";
 import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
@@ -46,6 +48,7 @@ export function registerAccountMigrationSafeRoutesPart2(app: Express) {
     "/api/admin/account-migration/execute",
     requireAuth,
     requireRole("Admin", "Developer"),
+    validateRequest(executeAccountMigrationInput),
     async (req: Request, res: Response) => {
       const accountIds = idArray(req.body?.accountIds);
       const srcCompanyId = positiveInt(req.body?.srcCompanyId);

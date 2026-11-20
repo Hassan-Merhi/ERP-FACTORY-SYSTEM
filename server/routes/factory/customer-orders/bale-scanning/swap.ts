@@ -16,6 +16,15 @@ import { eq, and, sql, ilike, inArray } from "drizzle-orm";
 import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../../lib/validateRequest";
+
+// The barcode lookup screen sends both reference numbers; the handler keeps its
+// own required and same-bale checks.
+const swapInput = {
+  query: emptyQuery,
+  body: z.strictObject({ currentBaleRef: z.string().optional(), replacementBaleRef: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerOrderBaleSwapRoutes(app: Express) {
   // GET /api/factory/bales/:id/order-info — get the order a bale is allocated to (for the confirmation dialog)
@@ -63,7 +72,7 @@ export function registerOrderBaleSwapRoutes(app: Express) {
 
   // POST /api/factory/bales/swap — swap a loaded bale (SOLD/RESERVED) with an IN_STOCK bale by reference number
   // The current bale is returned to stock; the replacement bale takes its place in the order.
-  app.post("/api/factory/bales/swap", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/bales/swap", requireAuth, validateRequest(swapInput), async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });

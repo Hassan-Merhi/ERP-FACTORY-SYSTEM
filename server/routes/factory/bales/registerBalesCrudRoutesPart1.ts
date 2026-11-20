@@ -20,6 +20,22 @@ import {
   lockPriorityScanQueueTx,
 } from "./baleStatusWriteGuards";
 import { registerBalesCrudRoutesPart5 } from "./registerBalesCrudRoutesPart5";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The handlers Number() each id and keep their own list, status and date
+// checks (and messages); the schemas only pin the shape.
+const idList = z.array(z.union([z.number(), z.string()]));
+
+const bulkStatusInput = {
+  query: emptyQuery,
+  body: z.strictObject({ ids: idList.optional(), status: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const bulkDateInput = {
+  query: emptyQuery,
+  body: z.strictObject({ ids: idList.optional(), stockEntryDate: z.string().optional() }),
+} satisfies RequestSchemas;
 
 export function registerBalesCrudRoutesPart1(app: Express) {
   registerBalesCrudRoutesPart5(app);
@@ -34,6 +50,7 @@ export function registerBalesCrudRoutesPart1(app: Express) {
     "/api/factory/bales/bulk-status",
     requireAuth,
     requireRole("Admin", "Owner"),
+    validateRequest(bulkStatusInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -129,44 +146,49 @@ export function registerBalesCrudRoutesPart1(app: Express) {
   );
 
   // PATCH /api/factory/bales/bulk-date — update stock_entry_date for a set of bales
-  app.patch("/api/factory/bales/bulk-date", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.patch(
+    "/api/factory/bales/bulk-date",
+    requireAuth,
+    validateRequest(bulkDateInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { ids, stockEntryDate } = req.body;
-      if (!Array.isArray(ids) || ids.length === 0)
-        return res.status(400).json({ message: "ids must be a non-empty array" });
-      if (!stockEntryDate || typeof stockEntryDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(stockEntryDate))
-        return res.status(400).json({ message: "stockEntryDate must be YYYY-MM-DD" });
+        const { ids, stockEntryDate } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0)
+          return res.status(400).json({ message: "ids must be a non-empty array" });
+        if (!stockEntryDate || typeof stockEntryDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(stockEntryDate))
+          return res.status(400).json({ message: "stockEntryDate must be YYYY-MM-DD" });
 
-      const now = new Date();
-      const result = await db.transaction(async (tx) => {
-        const updatedBales = await tx
-          .update(factoryBales)
-          .set({ stockEntryDate, updatedAt: now })
-          .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids.map(Number))))
-          .returning({ id: factoryBales.id });
+        const now = new Date();
+        const result = await db.transaction(async (tx) => {
+          const updatedBales = await tx
+            .update(factoryBales)
+            .set({ stockEntryDate, updatedAt: now })
+            .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids.map(Number))))
+            .returning({ id: factoryBales.id });
 
-        const updatedIds = updatedBales.map((bale) => bale.id);
-        if (updatedIds.length > 0) {
-          await tx
-            .update(factoryBaleProductionAttributions)
-            .set({ stockEntryDate })
-            .where(
-              and(
-                eq(factoryBaleProductionAttributions.companyId, companyId),
-                inArray(factoryBaleProductionAttributions.baleId, updatedIds)
-              )
-            );
-        }
+          const updatedIds = updatedBales.map((bale) => bale.id);
+          if (updatedIds.length > 0) {
+            await tx
+              .update(factoryBaleProductionAttributions)
+              .set({ stockEntryDate })
+              .where(
+                and(
+                  eq(factoryBaleProductionAttributions.companyId, companyId),
+                  inArray(factoryBaleProductionAttributions.baleId, updatedIds)
+                )
+              );
+          }
 
-        return updatedBales;
-      });
+          return updatedBales;
+        });
 
-      res.json({ updated: result.length });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ updated: result.length });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

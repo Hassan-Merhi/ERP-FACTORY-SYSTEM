@@ -94,7 +94,11 @@ async function call(route: string, req: Record<string, any>) {
     get: (name: string) => headers[name.toLowerCase()],
     header: (name: string) => headers[name.toLowerCase()],
     ...req,
-    body: { clientRequestId: `${PREFIX}-${requestSeq}`, ...(req.body ?? {}) },
+    // Only the POS sale routes read clientRequestId; the container routes
+    // validate their body strictly and do not accept it.
+    body: path.startsWith("/api/factory/pos/")
+      ? { clientRequestId: `${PREFIX}-${requestSeq}`, ...(req.body ?? {}) }
+      : req.body,
     headers,
     session: { factoryCompanyId: companyId, currentCompanyId: companyId, userId: "1", username: "owner" },
   };

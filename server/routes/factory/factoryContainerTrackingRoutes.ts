@@ -12,6 +12,15 @@ import {
 import { getFactoryTrackingProgress } from "../../services/factory-container-tracking";
 import { getFactoryEtaTrackingSummary } from "../../services/factoryJsonCargoTrackingService";
 import { requireNonPOS } from "../../auth";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// Automated tracking is disabled: these routes answer 410 and read no input.
+const disabledTrackingItemInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
+const disabledTrackingBulkInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerFactoryContainerTrackingRoutes(app: Express) {
   // POST /api/factory/containers/:id/refresh-eta — JSONCargo ETA-only refresh
@@ -19,6 +28,7 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
     "/api/factory/containers/:id/refresh-eta",
     requireAuth,
     requireNonPOS,
+    validateRequest(disabledTrackingItemInput),
     async (req: Request, res: Response) => {
       try {
         return res
@@ -32,15 +42,21 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
   );
 
   // POST /api/factory/containers/refresh-etas — bulk JSONCargo ETA refresh (admin-only)
-  app.post("/api/factory/containers/refresh-etas", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
-    try {
-      return res
-        .status(410)
-        .json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to refresh ETAs" });
+  app.post(
+    "/api/factory/containers/refresh-etas",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(disabledTrackingBulkInput),
+    async (req: Request, res: Response) => {
+      try {
+        return res
+          .status(410)
+          .json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) || "Failed to refresh ETAs" });
+      }
     }
-  });
+  );
 
   // GET /api/factory/containers/eta-tracking-summary — dashboard summary, no secrets
   app.get(
@@ -131,36 +147,46 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
   });
 
   // POST /api/factory/container-tracking/:id/track-now — manually trigger tracking
-  app.post("/api/factory/container-tracking/:id/track-now", requireAuth, async (req: Request, res: Response) => {
-    try {
-      return res
-        .status(410)
-        .json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
-    } catch (err: unknown) {
-      const status =
-        (err as { code?: string }).code === "TRACKING_BUSY" || getErrorMessage(err) === "PUPPETEER_QUEUE_FULL"
-          ? 429
-          : getErrorMessage(err)?.includes("not found")
-            ? 404
-            : getErrorMessage(err)?.includes("disabled")
-              ? 400
-              : getErrorMessage(err)?.includes("quota")
-                ? 429
-                : 500;
-      res
-        .status(status)
-        .json({ message: getErrorMessage(err) || "Tracking failed", code: (err as { code?: string }).code ?? null });
+  app.post(
+    "/api/factory/container-tracking/:id/track-now",
+    requireAuth,
+    validateRequest(disabledTrackingItemInput),
+    async (req: Request, res: Response) => {
+      try {
+        return res
+          .status(410)
+          .json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
+      } catch (err: unknown) {
+        const status =
+          (err as { code?: string }).code === "TRACKING_BUSY" || getErrorMessage(err) === "PUPPETEER_QUEUE_FULL"
+            ? 429
+            : getErrorMessage(err)?.includes("not found")
+              ? 404
+              : getErrorMessage(err)?.includes("disabled")
+                ? 400
+                : getErrorMessage(err)?.includes("quota")
+                  ? 429
+                  : 500;
+        res
+          .status(status)
+          .json({ message: getErrorMessage(err) || "Tracking failed", code: (err as { code?: string }).code ?? null });
+      }
     }
-  });
+  );
 
   // PATCH /api/factory/container-tracking/:id/settings — enable/disable tracking
-  app.patch("/api/factory/container-tracking/:id/settings", requireAuth, async (req: Request, res: Response) => {
-    try {
-      return res
-        .status(410)
-        .json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to update tracking settings" });
+  app.patch(
+    "/api/factory/container-tracking/:id/settings",
+    requireAuth,
+    validateRequest(disabledTrackingItemInput),
+    async (req: Request, res: Response) => {
+      try {
+        return res
+          .status(410)
+          .json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) || "Failed to update tracking settings" });
+      }
     }
-  });
+  );
 }

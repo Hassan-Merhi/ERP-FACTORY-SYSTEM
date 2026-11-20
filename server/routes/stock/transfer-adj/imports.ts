@@ -19,249 +19,278 @@ import {
   stockItemEditRecorder,
   updateStockItemFieldsTx,
 } from "../../../services/inventory/stockItemEditCapture";
+import { validateRequest } from "../../../lib/validateRequest";
+import {
+  importBarcodesInput,
+  importGradeCategoryTemplateInput,
+  importStockItemsInput,
+  updateCategoriesInput,
+} from "./transferAdjRouteSchemas";
 
 export function registerStockItemImportRoutes(app: Express) {
   // Bulk import stock items
-  app.post("/api/stock-items/import", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.post(
+    "/api/stock-items/import",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(importStockItemsInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      const { items } = req.body;
-      if (!Array.isArray(items)) {
-        return res.status(400).json({ message: "Items must be an array" });
-      }
+        const { items } = req.body;
+        if (!Array.isArray(items)) {
+          return res.status(400).json({ message: "Items must be an array" });
+        }
 
-      // Fetch all valid stock groups for this company for validation
-      const validStockGroups = await storage.getAllStockGroups(req.session.currentCompanyId);
-      const validStockGroupIds = new Set(validStockGroups.map((sg) => sg.id));
+        // Fetch all valid stock groups for this company for validation
+        const validStockGroups = await storage.getAllStockGroups(req.session.currentCompanyId);
+        const validStockGroupIds = new Set(validStockGroups.map((sg) => sg.id));
 
-      const results = {
-        created: [] as unknown[],
-        skipped: [] as unknown[],
-        errors: [] as unknown[],
-      };
+        const results = {
+          created: [] as unknown[],
+          skipped: [] as unknown[],
+          errors: [] as unknown[],
+        };
 
-      for (const item of items) {
-        try {
-          // Ensure companyId matches session
-          const itemWithCompany = {
-            ...item,
-            companyId: req.session.currentCompanyId,
-          };
+        for (const item of items) {
+          try {
+            // Ensure companyId matches session
+            const itemWithCompany = {
+              ...item,
+              companyId: req.session.currentCompanyId,
+            };
 
-          // Validate stock group - require valid stockGroupId, reject if missing or invalid
-          if (!itemWithCompany.stockGroupId || !validStockGroupIds.has(itemWithCompany.stockGroupId)) {
+            // Validate stock group - require valid stockGroupId, reject if missing or invalid
+            if (!itemWithCompany.stockGroupId || !validStockGroupIds.has(itemWithCompany.stockGroupId)) {
+              results.errors.push({
+                code: item.code,
+                name: item.name,
+                error: "Missing or invalid stock group. All stock items must have a valid stock group.",
+              });
+              continue;
+            }
+
+            const parsed = insertStockItemSchema.parse(itemWithCompany);
+
+            // Check for duplicate code
+            const existing = await storage.getStockItemByCode(parsed.code, req.session.currentCompanyId);
+            if (existing) {
+              results.skipped.push({
+                code: parsed.code,
+                name: parsed.name,
+                reason: "Code already exists",
+              });
+              continue;
+            }
+
+            const created = await storage.createStockItem(parsed);
+            results.created.push(created);
+          } catch (error: unknown) {
             results.errors.push({
               code: item.code,
               name: item.name,
-              error: "Missing or invalid stock group. All stock items must have a valid stock group.",
+              error: getErrorMessage(error),
             });
-            continue;
           }
-
-          const parsed = insertStockItemSchema.parse(itemWithCompany);
-
-          // Check for duplicate code
-          const existing = await storage.getStockItemByCode(parsed.code, req.session.currentCompanyId);
-          if (existing) {
-            results.skipped.push({
-              code: parsed.code,
-              name: parsed.name,
-              reason: "Code already exists",
-            });
-            continue;
-          }
-
-          const created = await storage.createStockItem(parsed);
-          results.created.push(created);
-        } catch (error: unknown) {
-          results.errors.push({
-            code: item.code,
-            name: item.name,
-            error: getErrorMessage(error),
-          });
         }
-      }
 
-      res.json({
-        message: `Import completed: ${results.created.length} created, ${results.skipped.length} skipped, ${results.errors.length} errors`,
-        results,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({
+          message: `Import completed: ${results.created.length} created, ${results.skipped.length} skipped, ${results.errors.length} errors`,
+          results,
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ── Bulk barcode import (assigns alias codes to existing stock items) ──────────
-  app.post("/api/stock-items/import-barcodes", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/stock-items/import-barcodes",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(importBarcodesInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { rows } = req.body as { rows: { itemCode: string; barcode: string }[] };
-      if (!Array.isArray(rows) || rows.length === 0)
-        return res.status(400).json({ message: "rows must be a non-empty array" });
+        const { rows } = req.body as { rows: { itemCode: string; barcode: string }[] };
+        if (!Array.isArray(rows) || rows.length === 0)
+          return res.status(400).json({ message: "rows must be a non-empty array" });
 
-      // Build a lookup map: primary code (lower) → stockItem
-      const allItems = await db
-        .select({ id: stockItems.id, code: stockItems.code })
-        .from(stockItems)
-        .where(eq(stockItems.companyId, companyId));
-      const itemByCode = new Map(allItems.map((i) => [i.code.trim().toLowerCase(), i.id]));
+        // Build a lookup map: primary code (lower) → stockItem
+        const allItems = await db
+          .select({ id: stockItems.id, code: stockItems.code })
+          .from(stockItems)
+          .where(eq(stockItems.companyId, companyId));
+        const itemByCode = new Map(allItems.map((i) => [i.code.trim().toLowerCase(), i.id]));
 
-      // Also build alias → stockItemId map so we can detect barcodes already assigned
-      const allAliases = await db
-        .select({ aliasCode: stockItemCodeAliases.aliasCode, stockItemId: stockItemCodeAliases.stockItemId })
-        .from(stockItemCodeAliases)
-        .where(eq(stockItemCodeAliases.companyId, companyId));
-      const aliasByCode = new Map(allAliases.map((a) => [a.aliasCode.trim().toLowerCase(), a.stockItemId]));
+        // Also build alias → stockItemId map so we can detect barcodes already assigned
+        const allAliases = await db
+          .select({ aliasCode: stockItemCodeAliases.aliasCode, stockItemId: stockItemCodeAliases.stockItemId })
+          .from(stockItemCodeAliases)
+          .where(eq(stockItemCodeAliases.companyId, companyId));
+        const aliasByCode = new Map(allAliases.map((a) => [a.aliasCode.trim().toLowerCase(), a.stockItemId]));
 
-      let imported = 0;
-      let skipped = 0;
-      const notFoundCodes: string[] = [];
+        let imported = 0;
+        let skipped = 0;
+        const notFoundCodes: string[] = [];
 
-      const recorder = stockItemEditRecorder("POST /api/stock-items/import-barcodes");
-      if (recorder.active) {
-        // Factory LAN server: one transaction, every added barcode recorded for the cloud.
-        await db.transaction(async (tx) => {
-          for (const row of rows) {
-            const itemCodeKey = (row.itemCode || "").trim().toLowerCase();
-            const barcodeKey = (row.barcode || "").trim().toLowerCase();
-            const stockItemId = itemCodeKey ? itemByCode.get(itemCodeKey) : undefined;
-            if (!itemCodeKey || !barcodeKey) {
-              skipped++;
-            } else if (!stockItemId) {
-              notFoundCodes.push(row.itemCode);
-            } else if (itemCodeKey === barcodeKey || aliasByCode.has(barcodeKey)) {
-              skipped++;
-            } else if (
-              await addStockItemAliasTx(tx, recorder, { companyId, stockItemId, aliasCode: (row.barcode || "").trim() })
-            ) {
-              aliasByCode.set(barcodeKey, stockItemId);
-              imported++;
-            } else {
-              skipped++;
+        const recorder = stockItemEditRecorder("POST /api/stock-items/import-barcodes");
+        if (recorder.active) {
+          // Factory LAN server: one transaction, every added barcode recorded for the cloud.
+          await db.transaction(async (tx) => {
+            for (const row of rows) {
+              const itemCodeKey = (row.itemCode || "").trim().toLowerCase();
+              const barcodeKey = (row.barcode || "").trim().toLowerCase();
+              const stockItemId = itemCodeKey ? itemByCode.get(itemCodeKey) : undefined;
+              if (!itemCodeKey || !barcodeKey) {
+                skipped++;
+              } else if (!stockItemId) {
+                notFoundCodes.push(row.itemCode);
+              } else if (itemCodeKey === barcodeKey || aliasByCode.has(barcodeKey)) {
+                skipped++;
+              } else if (
+                await addStockItemAliasTx(tx, recorder, {
+                  companyId,
+                  stockItemId,
+                  aliasCode: (row.barcode || "").trim(),
+                })
+              ) {
+                aliasByCode.set(barcodeKey, stockItemId);
+                imported++;
+              } else {
+                skipped++;
+              }
             }
+            await finishStockItemEditCaptureTx(tx, req, recorder);
+          });
+          return res.json({ imported, skipped, notFound: notFoundCodes.length, notFoundCodes });
+        }
+
+        for (const row of rows) {
+          const itemCodeKey = (row.itemCode || "").trim().toLowerCase();
+          const barcodeKey = (row.barcode || "").trim().toLowerCase();
+          const barcodeRaw = (row.barcode || "").trim();
+
+          if (!itemCodeKey || !barcodeKey) {
+            skipped++;
+            continue;
           }
-          await finishStockItemEditCaptureTx(tx, req, recorder);
-        });
-        return res.json({ imported, skipped, notFound: notFoundCodes.length, notFoundCodes });
+
+          const stockItemId = itemByCode.get(itemCodeKey);
+          if (!stockItemId) {
+            notFoundCodes.push(row.itemCode);
+            continue;
+          }
+
+          // Skip if barcode is already the primary code of this item
+          if (itemCodeKey === barcodeKey) {
+            skipped++;
+            continue;
+          }
+
+          // Skip if already an alias (anywhere in the company)
+          if (aliasByCode.has(barcodeKey)) {
+            skipped++;
+            continue;
+          }
+
+          try {
+            await db
+              .insert(stockItemCodeAliases)
+              .values({
+                companyId,
+                stockItemId,
+                aliasCode: barcodeRaw,
+              })
+              .onConflictDoNothing();
+            aliasByCode.set(barcodeKey, stockItemId); // prevent re-insert in same batch
+            imported++;
+          } catch {
+            skipped++;
+          }
+        }
+
+        res.json({ imported, skipped, notFound: notFoundCodes.length, notFoundCodes });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      for (const row of rows) {
-        const itemCodeKey = (row.itemCode || "").trim().toLowerCase();
-        const barcodeKey = (row.barcode || "").trim().toLowerCase();
-        const barcodeRaw = (row.barcode || "").trim();
-
-        if (!itemCodeKey || !barcodeKey) {
-          skipped++;
-          continue;
-        }
-
-        const stockItemId = itemByCode.get(itemCodeKey);
-        if (!stockItemId) {
-          notFoundCodes.push(row.itemCode);
-          continue;
-        }
-
-        // Skip if barcode is already the primary code of this item
-        if (itemCodeKey === barcodeKey) {
-          skipped++;
-          continue;
-        }
-
-        // Skip if already an alias (anywhere in the company)
-        if (aliasByCode.has(barcodeKey)) {
-          skipped++;
-          continue;
-        }
-
-        try {
-          await db
-            .insert(stockItemCodeAliases)
-            .values({
-              companyId,
-              stockItemId,
-              aliasCode: barcodeRaw,
-            })
-            .onConflictDoNothing();
-          aliasByCode.set(barcodeKey, stockItemId); // prevent re-insert in same batch
-          imported++;
-        } catch {
-          skipped++;
-        }
-      }
-
-      res.json({ imported, skipped, notFound: notFoundCodes.length, notFoundCodes });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ── Bulk category (stock group) update for existing stock items ───────────────
-  app.post("/api/stock-items/update-categories", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/stock-items/update-categories",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(updateCategoriesInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { rows } = req.body as { rows: { itemCode: string; categoryName: string }[] };
-      if (!Array.isArray(rows) || rows.length === 0)
-        return res.status(400).json({ message: "rows must be a non-empty array" });
+        const { rows } = req.body as { rows: { itemCode: string; categoryName: string }[] };
+        if (!Array.isArray(rows) || rows.length === 0)
+          return res.status(400).json({ message: "rows must be a non-empty array" });
 
-      // Build lookups
-      const allItems = await db
-        .select({ id: stockItems.id, code: stockItems.code })
-        .from(stockItems)
-        .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt)));
-      const itemByCode = new Map(allItems.map((i) => [i.code.toLowerCase().trim(), i.id]));
+        // Build lookups
+        const allItems = await db
+          .select({ id: stockItems.id, code: stockItems.code })
+          .from(stockItems)
+          .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt)));
+        const itemByCode = new Map(allItems.map((i) => [i.code.toLowerCase().trim(), i.id]));
 
-      const allCats = await db
-        .select({ id: stockCategories.id, name: stockCategories.name })
-        .from(stockCategories)
-        .where(eq(stockCategories.companyId, companyId));
-      const catByName = new Map(allCats.map((c) => [c.name.toLowerCase().trim(), c.id]));
+        const allCats = await db
+          .select({ id: stockCategories.id, name: stockCategories.name })
+          .from(stockCategories)
+          .where(eq(stockCategories.companyId, companyId));
+        const catByName = new Map(allCats.map((c) => [c.name.toLowerCase().trim(), c.id]));
 
-      let updated = 0;
-      let notFound = 0;
-      let categoryNotFound = 0;
-      const notFoundCodes: string[] = [];
-      const categoryNotFoundNames: string[] = [];
+        let updated = 0;
+        let notFound = 0;
+        let categoryNotFound = 0;
+        const notFoundCodes: string[] = [];
+        const categoryNotFoundNames: string[] = [];
 
-      const recorder = stockItemEditRecorder("POST /api/stock-items/update-categories");
-      await db.transaction(async (tx) => {
-        for (const row of rows) {
-          const code = String(row.itemCode || "").trim();
-          const catName = String(row.categoryName || "").trim();
-          if (!code || !catName) continue;
+        const recorder = stockItemEditRecorder("POST /api/stock-items/update-categories");
+        await db.transaction(async (tx) => {
+          for (const row of rows) {
+            const code = String(row.itemCode || "").trim();
+            const catName = String(row.categoryName || "").trim();
+            if (!code || !catName) continue;
 
-          const itemId = itemByCode.get(code.toLowerCase());
-          if (!itemId) {
-            notFound++;
-            notFoundCodes.push(code);
-            continue;
+            const itemId = itemByCode.get(code.toLowerCase());
+            if (!itemId) {
+              notFound++;
+              notFoundCodes.push(code);
+              continue;
+            }
+
+            const catId = catByName.get(catName.toLowerCase());
+            if (!catId) {
+              categoryNotFound++;
+              if (!categoryNotFoundNames.includes(catName)) categoryNotFoundNames.push(catName);
+              continue;
+            }
+
+            await updateStockItemFieldsTx(tx, recorder, itemId, { categoryId: catId });
+            updated++;
           }
+          // Factory LAN server: the category changes are recorded for the cloud.
+          await finishStockItemEditCaptureTx(tx, req, recorder);
+        });
 
-          const catId = catByName.get(catName.toLowerCase());
-          if (!catId) {
-            categoryNotFound++;
-            if (!categoryNotFoundNames.includes(catName)) categoryNotFoundNames.push(catName);
-            continue;
-          }
-
-          await updateStockItemFieldsTx(tx, recorder, itemId, { categoryId: catId });
-          updated++;
-        }
-        // Factory LAN server: the category changes are recorded for the cloud.
-        await finishStockItemEditCaptureTx(tx, req, recorder);
-      });
-
-      res.json({ updated, notFound, categoryNotFound, notFoundCodes, categoryNotFoundNames });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ updated, notFound, categoryNotFound, notFoundCodes, categoryNotFoundNames });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ── Grade/Category Template Import ────────────────────────────────────────────
 
@@ -270,6 +299,7 @@ export function registerStockItemImportRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     spreadsheetUpload.single("file"),
+    validateRequest(importGradeCategoryTemplateInput),
     async (req: import("express").Request, res) => {
       try {
         const companyId = req.session.currentCompanyId;

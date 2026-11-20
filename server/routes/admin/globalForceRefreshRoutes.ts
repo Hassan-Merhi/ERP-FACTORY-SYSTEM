@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { requireAuth, requireRole } from "../../auth";
 import { logger } from "../../lib/logger";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { issueGlobalForceRefresh, type ForceRefreshTarget } from "../../services/globalForceRefresh";
 
 const ROUTES: ReadonlyArray<{ path: string; target: ForceRefreshTarget }> = [
@@ -10,30 +11,39 @@ const ROUTES: ReadonlyArray<{ path: string; target: ForceRefreshTarget }> = [
   { path: "/api/admin/force-refresh-privileged", target: "privileged" },
 ];
 
+// client/src/pages/settings/GlobalForceRefreshCard.tsx posts {}.
+const forceRefreshInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
 export function registerGlobalForceRefreshRoutes(app: Express): void {
   for (const { path, target } of ROUTES) {
     // Both operations are global across companies, role-gated and CSRF
     // protected. Never accept arbitrary target users from a request body.
-    app.post(path, requireAuth, requireRole("Admin", "Owner", "Developer"), async (req, res) => {
-      try {
-        const issued = await issueGlobalForceRefresh(target);
-        if (!issued) {
-          return res.status(429).json({
-            message: "A refresh was already requested for this user group recently. Try again in 30 seconds.",
-          });
-        }
+    app.post(
+      path,
+      requireAuth,
+      requireRole("Admin", "Owner", "Developer"),
+      validateRequest(forceRefreshInput),
+      async (req, res) => {
+        try {
+          const issued = await issueGlobalForceRefresh(target);
+          if (!issued) {
+            return res.status(429).json({
+              message: "A refresh was already requested for this user group recently. Try again in 30 seconds.",
+            });
+          }
 
-        logger.info("[GlobalForceRefresh] Role-scoped session reload requested", {
-          actorId: req.session.userId ?? null,
-          actorRole: req.session.currentRole ?? null,
-          target,
-          issuedAt: issued.issuedAt,
-        });
-        return res.json({ ok: true, target, token: issued.token, issuedAt: issued.issuedAt });
-      } catch (error) {
-        logger.error("[GlobalForceRefresh] Could not issue reload", { error, target });
-        return res.status(500).json({ message: "Could not request user refresh" });
+          logger.info("[GlobalForceRefresh] Role-scoped session reload requested", {
+            actorId: req.session.userId ?? null,
+            actorRole: req.session.currentRole ?? null,
+            target,
+            issuedAt: issued.issuedAt,
+          });
+          return res.json({ ok: true, target, token: issued.token, issuedAt: issued.issuedAt });
+        } catch (error) {
+          logger.error("[GlobalForceRefresh] Could not issue reload", { error, target });
+          return res.status(500).json({ message: "Could not request user refresh" });
+        }
       }
-    });
+    );
   }
 }

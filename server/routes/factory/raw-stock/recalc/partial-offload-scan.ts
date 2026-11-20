@@ -8,6 +8,8 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { partialOffloadScanApplyInput } from "../rawStockWriteRouteSchemas";
 import { getRawStockRecalcPreview, applyRawStockRecalc } from "../../../../services/factory/raw-stock-recalc";
 import type { RecalcRow } from "../../../../services/factory/raw-stock-recalc/preview";
 import {
@@ -59,6 +61,7 @@ export function registerRawStockPartialOffloadScanRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/partial-offload-scan/apply",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(partialOffloadScanApplyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

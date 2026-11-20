@@ -23,6 +23,29 @@ import {
   updateStockItemFieldsTx,
 } from "../../../services/inventory/stockItemEditCapture";
 import { requireCreateOnlyVerifiedCreate } from "../../../services/security/createOnlyVerifiedCreates";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// The handler reads each cell with String(...).trim() and checks it.
+const renameCell = z.union([z.string(), z.number()]).nullable().optional();
+const updateNamesByCodeInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    rows: z.array(z.strictObject({ code: renameCell, newName: renameCell })).optional(),
+  }),
+} satisfies RequestSchemas;
+
+const createStockItemInput = {
+  query: emptyQuery,
+  body: insertStockItemSchema
+    .omit({ companyId: true })
+    .extend({
+      // sent by client/src/components/StockItemCreateDialog.tsx and accountingcreate/EntityFormWrapper.tsx;
+      // not used (the session company is injected)
+      companyId: z.unknown().optional(),
+    })
+    .strict(),
+} satisfies RequestSchemas;
 
 export function registerStockItemRoutes(app: Express) {
   // Stock Items
@@ -99,7 +122,8 @@ export function registerStockItemRoutes(app: Express) {
 
   // Bulk rename existing stock items by primary code. Intentionally name-only:
   // inventory, costs, prices, barcodes, groups, grades and categories are untouched.
-  app.post("/api/stock-items/update-names-by-code", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
+  // prettier-ignore
+  app.post("/api/stock-items/update-names-by-code", requireAuth, requireNonPOS, validateRequest(updateNamesByCodeInput), async (req: Request, res: Response) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -206,7 +230,8 @@ export function registerStockItemRoutes(app: Express) {
 
   // Create Only may add a new stock item without opening stock (createOnlyVerifiedCreates.ts).
   const createOnlyStockItem = requireCreateOnlyVerifiedCreate("stockItems");
-  app.post("/api/stock-items", requireAuth, requireNonPOS, createOnlyStockItem, async (req, res) => {
+  // prettier-ignore
+  app.post("/api/stock-items", requireAuth, requireNonPOS, createOnlyStockItem, validateRequest(createStockItemInput), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });

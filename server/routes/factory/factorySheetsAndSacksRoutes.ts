@@ -4,6 +4,34 @@ import { logger } from "../../lib/logger";
 import { pool } from "../../db";
 import { MoneyDecimal, lineAmount, toMoney, type MoneyInput } from "../../lib/money";
 import { requireAuth } from "../../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const optionalText = z.string().nullable().optional();
+const optionalNumberLike = z.union([z.number(), z.string()]).nullable().optional();
+
+// client/src/pages/factory/factorysheetsandsacks/components/ItemFormDialog.tsx (POST and PATCH).
+const itemBody = z.strictObject({
+  type: optionalText,
+  name: optionalText,
+  size: optionalText,
+  quantity: optionalNumberLike,
+  unitPrice: optionalNumberLike,
+  packQty: optionalNumberLike,
+  pcsPerPack: optionalNumberLike,
+  rowColor: optionalText,
+  notes: optionalText,
+});
+const createItemInput = { query: emptyQuery, body: itemBody } satisfies RequestSchemas;
+const updateItemInput = { params: stringIdParams, query: emptyQuery, body: itemBody } satisfies RequestSchemas;
+
+// RestockDialog.tsx / DeductDialog.tsx.
+const stockMoveInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: z.strictObject({ pieces: optionalNumberLike, packs: optionalNumberLike, notes: optionalText }),
+} satisfies RequestSchemas;
+const deleteItemInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 function getFactoryCompanyId(req: import("express").Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -129,110 +157,119 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
   });
 
   // ── POST /api/factory/sheets-sacks ────────────────────────────────────────
-  app.post("/api/factory/sheets-sacks", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
-
-      const { type, name, size, quantity, unitPrice, packQty, pcsPerPack, rowColor, notes } = req.body;
-      if (!name || !type) return res.status(400).json({ message: "name and type are required" });
-
-      const client = await pool.connect();
+  app.post(
+    "/api/factory/sheets-sacks",
+    requireAuth,
+    validateRequest(createItemInput),
+    async (req: Request, res: Response) => {
       try {
-        await client.query("BEGIN");
-        const { rows } = await client.query(
-          `INSERT INTO factory_sheets_sacks
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
+
+        const { type, name, size, quantity, unitPrice, packQty, pcsPerPack, rowColor, notes } = req.body;
+        if (!name || !type) return res.status(400).json({ message: "name and type are required" });
+
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const { rows } = await client.query(
+            `INSERT INTO factory_sheets_sacks
              (company_id, type, name, size, quantity, unit_price, pack_qty, pcs_per_pack, row_color, notes)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
            RETURNING ${SELECT_COLS}`,
-          [
-            companyId,
-            type,
-            name,
-            size || null,
-            quantity || 0,
-            unitPrice || 0,
-            packQty != null ? parseInt(packQty) : null,
-            pcsPerPack != null ? parseInt(pcsPerPack) : null,
-            rowColor || null,
-            notes || null,
-          ]
-        );
-        const item = rows[0];
-        const pcs = parseInt(quantity) || 0;
-        if (pcs > 0) {
-          await insertLog(
-            client,
-            companyId,
-            item.id,
-            name,
-            type,
-            "IN",
-            pcs,
-            packQty != null ? parseInt(packQty) : null,
-            unitPrice,
-            "Initial stock"
+            [
+              companyId,
+              type,
+              name,
+              size || null,
+              quantity || 0,
+              unitPrice || 0,
+              packQty != null ? parseInt(packQty) : null,
+              pcsPerPack != null ? parseInt(pcsPerPack) : null,
+              rowColor || null,
+              notes || null,
+            ]
           );
+          const item = rows[0];
+          const pcs = parseInt(quantity) || 0;
+          if (pcs > 0) {
+            await insertLog(
+              client,
+              companyId,
+              item.id,
+              name,
+              type,
+              "IN",
+              pcs,
+              packQty != null ? parseInt(packQty) : null,
+              unitPrice,
+              "Initial stock"
+            );
+          }
+          await client.query("COMMIT");
+          res.status(201).json(item);
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        } finally {
+          client.release();
         }
-        await client.query("COMMIT");
-        res.status(201).json(item);
-      } catch (e) {
-        await client.query("ROLLBACK");
-        throw e;
-      } finally {
-        client.release();
+      } catch (err: unknown) {
+        logger.error("POST /api/factory/sheets-sacks error:", { error: err });
+        res.status(500).json({ message: getErrorMessage(err) || "Failed to create item" });
       }
-    } catch (err: unknown) {
-      logger.error("POST /api/factory/sheets-sacks error:", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to create item" });
     }
-  });
+  );
 
   // ── PATCH /api/factory/sheets-sacks/:id ──────────────────────────────────
-  app.patch("/api/factory/sheets-sacks/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      const id = parseInt(req.params.id);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
+  app.patch(
+    "/api/factory/sheets-sacks/:id",
+    requireAuth,
+    validateRequest(updateItemInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        const id = parseInt(req.params.id);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
 
-      const { type, name, size, quantity, unitPrice, packQty, pcsPerPack, rowColor, notes } = req.body;
+        const { type, name, size, quantity, unitPrice, packQty, pcsPerPack, rowColor, notes } = req.body;
 
-      // The text fields above normalize blanks to null so COALESCE keeps the
-      // stored value. The numeric ones used `?? null`, which let a blank
-      // string through to a numeric column — "invalid input syntax for type
-      // numeric" as a 500. Treat blank as absent like the text fields, and
-      // reject a value that is present but not a number.
-      //
-      // pack_qty and pcs_per_pack are INTEGER columns, so they need the
-      // integer check too: a finite 1.5 would otherwise reach them and fail
-      // the query the same way, which the parseInt these replaced did not do.
-      type ParsedNumber = { ok: true; value: number | null } | { ok: false };
-      const parseNumber = (value: unknown, integerOnly: boolean): ParsedNumber => {
-        if (value === undefined || value === null || value === "") return { ok: true, value: null };
-        const parsed = Number(value);
-        if (!Number.isFinite(parsed)) return { ok: false };
-        if (integerOnly && !Number.isInteger(parsed)) return { ok: false };
-        return { ok: true, value: parsed };
-      };
-      const parsedQuantity = parseNumber(quantity, false);
-      const parsedUnitPrice = parseNumber(unitPrice, false);
-      const parsedPackQty = parseNumber(packQty, true);
-      const parsedPcsPerPack = parseNumber(pcsPerPack, true);
-      if (!parsedQuantity.ok) return res.status(400).json({ message: "Invalid quantity", field: "quantity" });
-      if (!parsedUnitPrice.ok) return res.status(400).json({ message: "Invalid request data", field: "unitPrice" });
-      if (!parsedPackQty.ok) return res.status(400).json({ message: "Invalid request data", field: "packQty" });
-      if (!parsedPcsPerPack.ok) {
-        return res.status(400).json({ message: "Invalid request data", field: "pcsPerPack" });
-      }
-      const quantityParam = parsedQuantity.value;
-      const unitPriceParam = parsedUnitPrice.value;
-      const packQtyParam = parsedPackQty.value;
-      const pcsPerPackParam = parsedPcsPerPack.value;
+        // The text fields above normalize blanks to null so COALESCE keeps the
+        // stored value. The numeric ones used `?? null`, which let a blank
+        // string through to a numeric column — "invalid input syntax for type
+        // numeric" as a 500. Treat blank as absent like the text fields, and
+        // reject a value that is present but not a number.
+        //
+        // pack_qty and pcs_per_pack are INTEGER columns, so they need the
+        // integer check too: a finite 1.5 would otherwise reach them and fail
+        // the query the same way, which the parseInt these replaced did not do.
+        type ParsedNumber = { ok: true; value: number | null } | { ok: false };
+        const parseNumber = (value: unknown, integerOnly: boolean): ParsedNumber => {
+          if (value === undefined || value === null || value === "") return { ok: true, value: null };
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed)) return { ok: false };
+          if (integerOnly && !Number.isInteger(parsed)) return { ok: false };
+          return { ok: true, value: parsed };
+        };
+        const parsedQuantity = parseNumber(quantity, false);
+        const parsedUnitPrice = parseNumber(unitPrice, false);
+        const parsedPackQty = parseNumber(packQty, true);
+        const parsedPcsPerPack = parseNumber(pcsPerPack, true);
+        if (!parsedQuantity.ok) return res.status(400).json({ message: "Invalid quantity", field: "quantity" });
+        if (!parsedUnitPrice.ok) return res.status(400).json({ message: "Invalid request data", field: "unitPrice" });
+        if (!parsedPackQty.ok) return res.status(400).json({ message: "Invalid request data", field: "packQty" });
+        if (!parsedPcsPerPack.ok) {
+          return res.status(400).json({ message: "Invalid request data", field: "pcsPerPack" });
+        }
+        const quantityParam = parsedQuantity.value;
+        const unitPriceParam = parsedUnitPrice.value;
+        const packQtyParam = parsedPackQty.value;
+        const pcsPerPackParam = parsedPcsPerPack.value;
 
-      const { rows } = await pool.query(
-        `UPDATE factory_sheets_sacks
+        const { rows } = await pool.query(
+          `UPDATE factory_sheets_sacks
          SET type         = COALESCE($1, type),
              name         = COALESCE($2, name),
              size         = $3,
@@ -244,176 +281,192 @@ export function registerFactorySheetsAndSacksRoutes(app: Express) {
              notes        = $9
          WHERE id = $10 AND company_id = $11
          RETURNING ${SELECT_COLS}`,
-        [
-          type || null,
-          name || null,
-          size || null,
-          quantityParam,
-          unitPriceParam,
-          packQtyParam,
-          pcsPerPackParam,
-          rowColor || null,
-          notes || null,
-          id,
-          companyId,
-        ]
-      );
-      if (rows.length === 0) return res.status(404).json({ message: "Item not found" });
-      res.json(rows[0]);
-    } catch (err: unknown) {
-      logger.error("PATCH /api/factory/sheets-sacks/:id error:", { error: err });
-      sendHttpError(res, err);
+          [
+            type || null,
+            name || null,
+            size || null,
+            quantityParam,
+            unitPriceParam,
+            packQtyParam,
+            pcsPerPackParam,
+            rowColor || null,
+            notes || null,
+            id,
+            companyId,
+          ]
+        );
+        if (rows.length === 0) return res.status(404).json({ message: "Item not found" });
+        res.json(rows[0]);
+      } catch (err: unknown) {
+        logger.error("PATCH /api/factory/sheets-sacks/:id error:", { error: err });
+        sendHttpError(res, err);
+      }
     }
-  });
+  );
 
   // ── PATCH /api/factory/sheets-sacks/:id/restock — add stock (IN) ─────────
-  app.patch("/api/factory/sheets-sacks/:id/restock", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      const id = parseInt(req.params.id);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
-
-      const pieces = parseInt(req.body.pieces) || 0;
-      const packs = req.body.packs != null ? parseInt(req.body.packs) : null;
-      if (pieces <= 0) return res.status(400).json({ message: "Pieces to add must be > 0" });
-
-      const client = await pool.connect();
+  app.patch(
+    "/api/factory/sheets-sacks/:id/restock",
+    requireAuth,
+    validateRequest(stockMoveInput),
+    async (req: Request, res: Response) => {
       try {
-        await client.query("BEGIN");
-        // Lock row to prevent lost-update race conditions
-        const { rows: existing } = await client.query(
-          `SELECT quantity, pack_qty, name, type, unit_price
+        const companyId = getFactoryCompanyId(req);
+        const id = parseInt(req.params.id);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
+
+        const pieces = parseInt(req.body.pieces) || 0;
+        const packs = req.body.packs != null ? parseInt(req.body.packs) : null;
+        if (pieces <= 0) return res.status(400).json({ message: "Pieces to add must be > 0" });
+
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          // Lock row to prevent lost-update race conditions
+          const { rows: existing } = await client.query(
+            `SELECT quantity, pack_qty, name, type, unit_price
            FROM factory_sheets_sacks WHERE id = $1 AND company_id = $2 FOR UPDATE`,
-          [id, companyId]
-        );
-        if (existing.length === 0) {
-          await client.query("ROLLBACK");
-          return res.status(404).json({ message: "Item not found" });
-        }
+            [id, companyId]
+          );
+          if (existing.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ message: "Item not found" });
+          }
 
-        const currentQty = toMoney(existing[0].quantity);
-        const currentPackQty = existing[0].pack_qty != null ? parseInt(existing[0].pack_qty) : null;
-        const unitPrice = toMoney(existing[0].unit_price);
-        const newQty = currentQty.plus(pieces).toFixed();
-        const newPackQty = packs != null && currentPackQty != null ? currentPackQty + packs : currentPackQty;
+          const currentQty = toMoney(existing[0].quantity);
+          const currentPackQty = existing[0].pack_qty != null ? parseInt(existing[0].pack_qty) : null;
+          const unitPrice = toMoney(existing[0].unit_price);
+          const newQty = currentQty.plus(pieces).toFixed();
+          const newPackQty = packs != null && currentPackQty != null ? currentPackQty + packs : currentPackQty;
 
-        const { rows } = await client.query(
-          `UPDATE factory_sheets_sacks
+          const { rows } = await client.query(
+            `UPDATE factory_sheets_sacks
            SET quantity = $1, pack_qty = $2
            WHERE id = $3 AND company_id = $4
            RETURNING ${SELECT_COLS}`,
-          [newQty, newPackQty, id, companyId]
-        );
-        await insertLog(
-          client,
-          companyId,
-          id,
-          existing[0].name,
-          existing[0].type,
-          "IN",
-          pieces,
-          packs,
-          unitPrice,
-          req.body.notes || null
-        );
-        await client.query("COMMIT");
-        res.json(rows[0]);
-      } catch (e) {
-        await client.query("ROLLBACK");
-        throw e;
-      } finally {
-        client.release();
+            [newQty, newPackQty, id, companyId]
+          );
+          await insertLog(
+            client,
+            companyId,
+            id,
+            existing[0].name,
+            existing[0].type,
+            "IN",
+            pieces,
+            packs,
+            unitPrice,
+            req.body.notes || null
+          );
+          await client.query("COMMIT");
+          res.json(rows[0]);
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        } finally {
+          client.release();
+        }
+      } catch (err: unknown) {
+        logger.error("PATCH /api/factory/sheets-sacks/:id/restock error:", { error: err });
+        res.status(500).json({ message: getErrorMessage(err) || "Failed to restock" });
       }
-    } catch (err: unknown) {
-      logger.error("PATCH /api/factory/sheets-sacks/:id/restock error:", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to restock" });
     }
-  });
+  );
 
   // ── PATCH /api/factory/sheets-sacks/:id/deduct — reduce stock (OUT) ──────
-  app.patch("/api/factory/sheets-sacks/:id/deduct", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      const id = parseInt(req.params.id);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
-
-      const pieces = parseInt(req.body.pieces) || 0;
-      const packs = req.body.packs != null ? parseInt(req.body.packs) : null;
-      if (pieces <= 0) return res.status(400).json({ message: "Pieces to deduct must be > 0" });
-
-      const client = await pool.connect();
+  app.patch(
+    "/api/factory/sheets-sacks/:id/deduct",
+    requireAuth,
+    validateRequest(stockMoveInput),
+    async (req: Request, res: Response) => {
       try {
-        await client.query("BEGIN");
-        // Lock row to prevent lost-update race conditions
-        const { rows: existing } = await client.query(
-          `SELECT quantity, pack_qty, name, type, unit_price
+        const companyId = getFactoryCompanyId(req);
+        const id = parseInt(req.params.id);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
+
+        const pieces = parseInt(req.body.pieces) || 0;
+        const packs = req.body.packs != null ? parseInt(req.body.packs) : null;
+        if (pieces <= 0) return res.status(400).json({ message: "Pieces to deduct must be > 0" });
+
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          // Lock row to prevent lost-update race conditions
+          const { rows: existing } = await client.query(
+            `SELECT quantity, pack_qty, name, type, unit_price
            FROM factory_sheets_sacks WHERE id = $1 AND company_id = $2 FOR UPDATE`,
-          [id, companyId]
-        );
-        if (existing.length === 0) {
-          await client.query("ROLLBACK");
-          return res.status(404).json({ message: "Item not found" });
-        }
+            [id, companyId]
+          );
+          if (existing.length === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ message: "Item not found" });
+          }
 
-        const currentQty = toMoney(existing[0].quantity);
-        const currentPackQty = existing[0].pack_qty != null ? parseInt(existing[0].pack_qty) : null;
-        const unitPrice = toMoney(existing[0].unit_price);
-        const newQty = MoneyDecimal.max(0, currentQty.minus(pieces)).toFixed();
-        const newPackQty =
-          packs != null && currentPackQty != null ? Math.max(0, currentPackQty - packs) : currentPackQty;
+          const currentQty = toMoney(existing[0].quantity);
+          const currentPackQty = existing[0].pack_qty != null ? parseInt(existing[0].pack_qty) : null;
+          const unitPrice = toMoney(existing[0].unit_price);
+          const newQty = MoneyDecimal.max(0, currentQty.minus(pieces)).toFixed();
+          const newPackQty =
+            packs != null && currentPackQty != null ? Math.max(0, currentPackQty - packs) : currentPackQty;
 
-        const { rows } = await client.query(
-          `UPDATE factory_sheets_sacks
+          const { rows } = await client.query(
+            `UPDATE factory_sheets_sacks
            SET quantity = $1, pack_qty = $2
            WHERE id = $3 AND company_id = $4
            RETURNING ${SELECT_COLS}`,
-          [newQty, newPackQty, id, companyId]
-        );
-        await insertLog(
-          client,
-          companyId,
-          id,
-          existing[0].name,
-          existing[0].type,
-          "OUT",
-          pieces,
-          packs,
-          unitPrice,
-          req.body.notes || null
-        );
-        await client.query("COMMIT");
-        res.json(rows[0]);
-      } catch (e) {
-        await client.query("ROLLBACK");
-        throw e;
-      } finally {
-        client.release();
+            [newQty, newPackQty, id, companyId]
+          );
+          await insertLog(
+            client,
+            companyId,
+            id,
+            existing[0].name,
+            existing[0].type,
+            "OUT",
+            pieces,
+            packs,
+            unitPrice,
+            req.body.notes || null
+          );
+          await client.query("COMMIT");
+          res.json(rows[0]);
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        } finally {
+          client.release();
+        }
+      } catch (err: unknown) {
+        logger.error("PATCH /api/factory/sheets-sacks/:id/deduct error:", { error: err });
+        res.status(500).json({ message: getErrorMessage(err) || "Failed to deduct" });
       }
-    } catch (err: unknown) {
-      logger.error("PATCH /api/factory/sheets-sacks/:id/deduct error:", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to deduct" });
     }
-  });
+  );
 
   // ── DELETE /api/factory/sheets-sacks/:id ─────────────────────────────────
-  app.delete("/api/factory/sheets-sacks/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getFactoryCompanyId(req);
-      const id = parseInt(req.params.id);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
+  app.delete(
+    "/api/factory/sheets-sacks/:id",
+    requireAuth,
+    validateRequest(deleteItemInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getFactoryCompanyId(req);
+        const id = parseInt(req.params.id);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!(await hasWriteAccess(req, companyId))) return res.status(403).json({ message: "Access denied" });
 
-      const { rowCount } = await pool.query(`DELETE FROM factory_sheets_sacks WHERE id = $1 AND company_id = $2`, [
-        id,
-        companyId,
-      ]);
-      if (!rowCount) return res.status(404).json({ message: "Item not found" });
-      res.json({ success: true });
-    } catch (err: unknown) {
-      logger.error("DELETE /api/factory/sheets-sacks/:id error:", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) || "Failed to delete" });
+        const { rowCount } = await pool.query(`DELETE FROM factory_sheets_sacks WHERE id = $1 AND company_id = $2`, [
+          id,
+          companyId,
+        ]);
+        if (!rowCount) return res.status(404).json({ message: "Item not found" });
+        res.json({ success: true });
+      } catch (err: unknown) {
+        logger.error("DELETE /api/factory/sheets-sacks/:id error:", { error: err });
+        res.status(500).json({ message: getErrorMessage(err) || "Failed to delete" });
+      }
     }
-  });
+  );
 }

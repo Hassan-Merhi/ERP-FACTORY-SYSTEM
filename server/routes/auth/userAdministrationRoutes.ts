@@ -4,6 +4,15 @@ import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import {
+  emptyBody,
+  stringIdParams,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
+import { z } from "zod";
+import {
   advanceCurrentSessionAfterPasswordChange,
   replacePasswordAndRevokeSessions,
 } from "../../services/security/userPasswordChangeService";
@@ -47,6 +56,42 @@ function respondRoleAssignmentFailure(req: Request, res: Response, error: unknow
   res.status(400).json({ message: getErrorMessage(error) });
 }
 
+const createUserInput = { body: insertUserSchema.strict() } satisfies RequestSchemas;
+
+// The users columns an administrator may change. A password is rotated through
+// replacePasswordAndRevokeSessions, never written by updateUser.
+const updateUserInput = {
+  params: stringIdParams,
+  body: z.strictObject({
+    username: z.string().optional(),
+    password: z.string().optional(),
+    active: z.boolean().optional(),
+    chatbotEnabled: z.boolean().optional(),
+    hiddenErpCostFields: z.array(z.string()).optional(),
+  }),
+} satisfies RequestSchemas;
+
+const deleteUserInput = { params: stringIdParams, body: emptyBody } satisfies RequestSchemas;
+
+// Missing passwords still reach the handlers' own messages.
+const changePasswordInput = {
+  body: z.strictObject({ currentPassword: z.string().optional(), newPassword: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const resetPasswordInput = {
+  params: z.strictObject({ userId: stringParam }),
+  body: z.strictObject({ newPassword: z.string().optional() }),
+} satisfies RequestSchemas;
+
+const createUserCompanyRoleInput = { body: insertUserCompanyRoleSchema.strict() } satisfies RequestSchemas;
+
+const updateUserCompanyRoleInput = {
+  params: stringIdParams,
+  body: insertUserCompanyRoleSchema.partial().strict(),
+} satisfies RequestSchemas;
+
+const deleteUserCompanyRoleInput = { params: stringIdParams, body: emptyBody } satisfies RequestSchemas;
+
 export function registerUserAdministrationRoutes(app: Express) {
   app.get("/api/users", requireAuth, requireRole("Admin"), async (_req, res) => {
     try {
@@ -62,9 +107,9 @@ export function registerUserAdministrationRoutes(app: Express) {
     }
   });
 
-  app.post("/api/users", requireAuth, requireRole("Admin"), async (req, res) => {
+  app.post("/api/users", requireAuth, requireRole("Admin"), validateRequest(createUserInput), async (req, res) => {
     try {
-      const parsed = insertUserSchema.parse(req.body);
+      const { body: parsed } = validatedInput(req, createUserInput);
       if (await storage.getUserByUsername(parsed.username)) {
         return res.status(400).json({ message: "Username already exists" });
       }
@@ -76,7 +121,7 @@ export function registerUserAdministrationRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/users/:id", requireAuth, requireRole("Admin"), async (req, res) => {
+  app.patch("/api/users/:id", requireAuth, requireRole("Admin"), validateRequest(updateUserInput), async (req, res) => {
     try {
       const updates = req.body;
       const requestedPassword = typeof updates.password === "string" ? updates.password : null;
@@ -111,22 +156,27 @@ export function registerUserAdministrationRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/users/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const { id } = req.params;
-      if (req.user?.id === id) return res.status(400).json({ message: "Cannot delete your own account" });
-      if (req.user?.role !== "Developer") {
-        const targetRoles = await db
-          .select({ role: userCompanyRoles.role })
-          .from(userCompanyRoles)
-          .where(eq(userCompanyRoles.userId, id));
-        if (targetRoles.some((role) => role.role === "Developer")) {
-          return res.status(403).json({ message: "Cannot delete this account" });
+  app.delete(
+    "/api/users/:id",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(deleteUserInput),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        if (req.user?.id === id) return res.status(400).json({ message: "Cannot delete your own account" });
+        if (req.user?.role !== "Developer") {
+          const targetRoles = await db
+            .select({ role: userCompanyRoles.role })
+            .from(userCompanyRoles)
+            .where(eq(userCompanyRoles.userId, id));
+          if (targetRoles.some((role) => role.role === "Developer")) {
+            return res.status(403).json({ message: "Cannot delete this account" });
+          }
         }
-      }
-      // Deleting the account removes all its company roles; refuse when it is
-      // any company's last Admin.
-      const soleAdminCompanies = await db.execute(sql`
+        // Deleting the account removes all its company roles; refuse when it is
+        // any company's last Admin.
+        const soleAdminCompanies = await db.execute(sql`
         SELECT mine.company_id
           FROM user_company_roles mine
          WHERE mine.user_id = ${id} AND mine.role = 'Admin'
@@ -135,26 +185,27 @@ export function registerUserAdministrationRoutes(app: Express) {
               WHERE other.company_id = mine.company_id AND other.role = 'Admin' AND other.user_id <> ${id}
            )
          LIMIT 1`);
-      if (soleAdminCompanies.rows.length > 0) {
-        throw new CompanyAdministratorGuardError(
-          409,
-          "LAST_COMPANY_ADMINISTRATOR",
-          "This account is a company's last administrator. Assign another Admin before deleting it."
-        );
+        if (soleAdminCompanies.rows.length > 0) {
+          throw new CompanyAdministratorGuardError(
+            409,
+            "LAST_COMPANY_ADMINISTRATOR",
+            "This account is a company's last administrator. Assign another Admin before deleting it."
+          );
+        }
+        await storage.deleteUser(id);
+        await invalidateUserSessions(id);
+        res.json({ message: "User deleted successfully" });
+      } catch (error: unknown) {
+        if (error instanceof CompanyAdministratorGuardError) {
+          respondRoleAssignmentFailure(req, res, error);
+          return;
+        }
+        res.status(400).json({ message: getErrorMessage(error) });
       }
-      await storage.deleteUser(id);
-      await invalidateUserSessions(id);
-      res.json({ message: "User deleted successfully" });
-    } catch (error: unknown) {
-      if (error instanceof CompanyAdministratorGuardError) {
-        respondRoleAssignmentFailure(req, res, error);
-        return;
-      }
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
-  app.post("/api/user/change-password", requireAuth, async (req, res) => {
+  app.post("/api/user/change-password", requireAuth, validateRequest(changePasswordInput), async (req, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
       if (!currentPassword || !newPassword) {
@@ -182,20 +233,26 @@ export function registerUserAdministrationRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/reset-password/:userId", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { newPassword } = req.body;
-      if (!newPassword) return res.status(400).json({ message: "New password is required" });
-      if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
-      const user = await storage.getUser(userId);
-      if (!user) return res.status(404).json({ message: "User not found" });
-      await replacePasswordAndRevokeSessions(userId, await hashPassword(newPassword));
-      res.json({ message: `Password reset successfully for user: ${user.username}` });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.post(
+    "/api/admin/reset-password/:userId",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(resetPasswordInput),
+    async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const { newPassword } = req.body;
+        if (!newPassword) return res.status(400).json({ message: "New password is required" });
+        if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+        const user = await storage.getUser(userId);
+        if (!user) return res.status(404).json({ message: "User not found" });
+        await replacePasswordAndRevokeSessions(userId, await hashPassword(newPassword));
+        res.json({ message: `Password reset successfully for user: ${user.username}` });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get("/api/users/:userId/company-roles", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
@@ -205,205 +262,224 @@ export function registerUserAdministrationRoutes(app: Express) {
     }
   });
 
-  app.post("/api/user-company-roles", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const parsed = insertUserCompanyRoleSchema.parse(req.body);
-      const createOnlyRefusal = refuseInactiveCreateOnlyAssignment({ requestedRole: parsed.role });
-      if (createOnlyRefusal) {
-        return res
-          .status(createOnlyRefusal.status)
-          .json({ code: createOnlyRefusal.code, message: createOnlyRefusal.message });
-      }
-      if (parsed.role === "POS" && !parsed.assignedLocationId) {
-        return res.status(400).json({ message: "POS role requires an assigned location" });
-      }
-      const existing = await db
-        .select({ id: userCompanyRoles.id })
-        .from(userCompanyRoles)
-        .where(and(eq(userCompanyRoles.userId, parsed.userId), eq(userCompanyRoles.companyId, parsed.companyId)))
-        .limit(1);
-      if (existing.length > 0) {
-        return res
-          .status(409)
-          .json({ message: "This user already has a role in this company. Edit the existing role instead." });
-      }
-      // Phase 21 (B): the role and its audit row commit together.
-      const role = await db.transaction(async (tx) => {
-        const created = await storage.createUserCompanyRole(parsed, tx);
-        if (parsed.role === ERP_TESTER_ROLE) {
-          await tx
-            .insert(erpUserPageAccess)
-            .values(
-              ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
-                userId: parsed.userId,
-                companyId: parsed.companyId,
-                pageKey,
-              }))
-            )
-            .onConflictDoNothing();
+  app.post(
+    "/api/user-company-roles",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(createUserCompanyRoleInput),
+    async (req, res) => {
+      try {
+        const { body: parsed } = validatedInput(req, createUserCompanyRoleInput);
+        const createOnlyRefusal = refuseInactiveCreateOnlyAssignment({ requestedRole: parsed.role });
+        if (createOnlyRefusal) {
+          return res
+            .status(createOnlyRefusal.status)
+            .json({ code: createOnlyRefusal.code, message: createOnlyRefusal.message });
         }
-        await logAudit(
-          {
-            userId: req.user!.id,
-            username: req.user!.username || req.session.username || "unknown",
-            companyId: req.session.currentCompanyId,
-            action: "create",
-            tableName: "user_company_roles",
-            recordId: created.id,
-            recordIdentifier: `userId:${parsed.userId} role:${parsed.role} company:${parsed.companyId}`,
-            changes: null,
-          },
-          tx
-        );
-        return created;
-      });
-      res.status(201).json(role);
-    } catch (error: unknown) {
-      respondRoleAssignmentFailure(req, res, error);
-    }
-  });
-
-  app.patch("/api/user-company-roles/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const parsed = insertUserCompanyRoleSchema.partial().parse(req.body);
-      if (parsed.role === "POS" && !parsed.assignedLocationId) {
-        return res.status(400).json({ message: "POS role requires an assigned location" });
-      }
-      const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
-      if (!oldRecord) return res.status(404).json({ message: "Role assignment not found" });
-      const createOnlyRefusal = refuseInactiveCreateOnlyAssignment({
-        requestedRole: parsed.role,
-        previousRole: oldRecord.role,
-      });
-      if (createOnlyRefusal) {
-        return res
-          .status(createOnlyRefusal.status)
-          .json({ code: createOnlyRefusal.code, message: createOnlyRefusal.message });
-      }
-      const selfRefusal = refuseSelfRoleChange({
-        actorUserId: req.session.userId,
-        actorRole: req.session.currentRole,
-        targetUserId: oldRecord.userId,
-        previousRole: oldRecord.role,
-        nextRole: parsed.role,
-        removing: false,
-      });
-      if (selfRefusal) throw selfRefusal;
-      const effectiveRole = parsed.role ?? oldRecord.role;
-      // Phase 21 (B): the role change and its audit row commit together; the
-      // sessions are invalidated after commit, as before.
-      const role = await db.transaction(async (tx) => {
-        await assertCompanyKeepsAdministrator(tx, {
-          companyId: parsed.companyId ?? oldRecord.companyId,
-          targetRowId: id,
-          targetRole: oldRecord.role,
-          nextRole: effectiveRole,
-        });
-        // Moving an Admin row to another company also removes it from this one.
-        if (parsed.companyId !== undefined && parsed.companyId !== oldRecord.companyId) {
-          await assertCompanyKeepsAdministrator(tx, {
-            companyId: oldRecord.companyId,
-            targetRowId: id,
-            targetRole: oldRecord.role,
-            nextRole: null,
-          });
+        if (parsed.role === "POS" && !parsed.assignedLocationId) {
+          return res.status(400).json({ message: "POS role requires an assigned location" });
         }
-        const updatedRole = await storage.updateUserCompanyRole(id, parsed, tx);
-        if (effectiveRole === ERP_TESTER_ROLE) {
-          await tx
-            .delete(erpUserPageAccess)
-            .where(
-              and(
-                eq(erpUserPageAccess.userId, updatedRole.userId),
-                eq(erpUserPageAccess.companyId, updatedRole.companyId)
+        const existing = await db
+          .select({ id: userCompanyRoles.id })
+          .from(userCompanyRoles)
+          .where(and(eq(userCompanyRoles.userId, parsed.userId), eq(userCompanyRoles.companyId, parsed.companyId)))
+          .limit(1);
+        if (existing.length > 0) {
+          return res
+            .status(409)
+            .json({ message: "This user already has a role in this company. Edit the existing role instead." });
+        }
+        // Phase 21 (B): the role and its audit row commit together.
+        const role = await db.transaction(async (tx) => {
+          const created = await storage.createUserCompanyRole(parsed, tx);
+          if (parsed.role === ERP_TESTER_ROLE) {
+            await tx
+              .insert(erpUserPageAccess)
+              .values(
+                ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
+                  userId: parsed.userId,
+                  companyId: parsed.companyId,
+                  pageKey,
+                }))
               )
-            );
-          await tx.insert(erpUserPageAccess).values(
-            ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
-              userId: updatedRole.userId,
-              companyId: updatedRole.companyId,
-              pageKey,
-            }))
-          );
-        }
-        if (oldRecord) {
-          const changes: Record<string, { old?: unknown; new?: unknown }> = {};
-          for (const key of Object.keys(parsed) as Array<keyof typeof parsed>) {
-            const oldVal = oldRecord[key];
-            const newVal = parsed[key];
-            if (newVal !== undefined && String(oldVal) !== String(newVal)) changes[key] = { old: oldVal, new: newVal };
+              .onConflictDoNothing();
           }
           await logAudit(
             {
               userId: req.user!.id,
               username: req.user!.username || req.session.username || "unknown",
               companyId: req.session.currentCompanyId,
-              action: "update",
+              action: "create",
               tableName: "user_company_roles",
-              recordId: id,
-              recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
-              changes: Object.keys(changes).length > 0 ? changes : null,
+              recordId: created.id,
+              recordIdentifier: `userId:${parsed.userId} role:${parsed.role} company:${parsed.companyId}`,
+              changes: null,
             },
             tx
           );
-        }
-        return updatedRole;
-      });
-      if (oldRecord) await invalidateUserSessions(oldRecord.userId);
-      res.json(role);
-    } catch (error: unknown) {
-      respondRoleAssignmentFailure(req, res, error);
+          return created;
+        });
+        res.status(201).json(role);
+      } catch (error: unknown) {
+        respondRoleAssignmentFailure(req, res, error);
+      }
     }
-  });
+  );
 
-  app.delete("/api/user-company-roles/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
-      if (oldRecord) {
+  app.patch(
+    "/api/user-company-roles/:id",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(updateUserCompanyRoleInput),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const { body: parsed } = validatedInput(req, updateUserCompanyRoleInput);
+        if (parsed.role === "POS" && !parsed.assignedLocationId) {
+          return res.status(400).json({ message: "POS role requires an assigned location" });
+        }
+        const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
+        if (!oldRecord) return res.status(404).json({ message: "Role assignment not found" });
+        const createOnlyRefusal = refuseInactiveCreateOnlyAssignment({
+          requestedRole: parsed.role,
+          previousRole: oldRecord.role,
+        });
+        if (createOnlyRefusal) {
+          return res
+            .status(createOnlyRefusal.status)
+            .json({ code: createOnlyRefusal.code, message: createOnlyRefusal.message });
+        }
         const selfRefusal = refuseSelfRoleChange({
           actorUserId: req.session.userId,
           actorRole: req.session.currentRole,
           targetUserId: oldRecord.userId,
           previousRole: oldRecord.role,
-          nextRole: null,
-          removing: true,
+          nextRole: parsed.role,
+          removing: false,
         });
         if (selfRefusal) throw selfRefusal;
-      }
-      // Phase 21 (B): the delete and its audit row commit together; the
-      // sessions are invalidated after commit, as before.
-      await db.transaction(async (tx) => {
-        if (oldRecord) {
+        const effectiveRole = parsed.role ?? oldRecord.role;
+        // Phase 21 (B): the role change and its audit row commit together; the
+        // sessions are invalidated after commit, as before.
+        const role = await db.transaction(async (tx) => {
           await assertCompanyKeepsAdministrator(tx, {
-            companyId: oldRecord.companyId,
+            companyId: parsed.companyId ?? oldRecord.companyId,
             targetRowId: id,
             targetRole: oldRecord.role,
-            nextRole: null,
+            nextRole: effectiveRole,
           });
-        }
-        await storage.deleteUserCompanyRole(id, tx);
-        if (oldRecord) {
-          await logAudit(
-            {
-              userId: req.user!.id,
-              username: req.user!.username || req.session.username || "unknown",
-              companyId: req.session.currentCompanyId,
-              action: "delete",
-              tableName: "user_company_roles",
-              recordId: id,
-              recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
-              changes: null,
-            },
-            tx
-          );
-        }
-      });
-      if (oldRecord) await invalidateUserSessions(oldRecord.userId);
-      res.status(204).send();
-    } catch (error: unknown) {
-      respondRoleAssignmentFailure(req, res, error);
+          // Moving an Admin row to another company also removes it from this one.
+          if (parsed.companyId !== undefined && parsed.companyId !== oldRecord.companyId) {
+            await assertCompanyKeepsAdministrator(tx, {
+              companyId: oldRecord.companyId,
+              targetRowId: id,
+              targetRole: oldRecord.role,
+              nextRole: null,
+            });
+          }
+          const updatedRole = await storage.updateUserCompanyRole(id, parsed, tx);
+          if (effectiveRole === ERP_TESTER_ROLE) {
+            await tx
+              .delete(erpUserPageAccess)
+              .where(
+                and(
+                  eq(erpUserPageAccess.userId, updatedRole.userId),
+                  eq(erpUserPageAccess.companyId, updatedRole.companyId)
+                )
+              );
+            await tx.insert(erpUserPageAccess).values(
+              ERP_TESTER_PAGE_KEYS.map((pageKey) => ({
+                userId: updatedRole.userId,
+                companyId: updatedRole.companyId,
+                pageKey,
+              }))
+            );
+          }
+          if (oldRecord) {
+            const changes: Record<string, { old?: unknown; new?: unknown }> = {};
+            for (const key of Object.keys(parsed) as Array<keyof typeof parsed>) {
+              const oldVal = oldRecord[key];
+              const newVal = parsed[key];
+              if (newVal !== undefined && String(oldVal) !== String(newVal))
+                changes[key] = { old: oldVal, new: newVal };
+            }
+            await logAudit(
+              {
+                userId: req.user!.id,
+                username: req.user!.username || req.session.username || "unknown",
+                companyId: req.session.currentCompanyId,
+                action: "update",
+                tableName: "user_company_roles",
+                recordId: id,
+                recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
+                changes: Object.keys(changes).length > 0 ? changes : null,
+              },
+              tx
+            );
+          }
+          return updatedRole;
+        });
+        if (oldRecord) await invalidateUserSessions(oldRecord.userId);
+        res.json(role);
+      } catch (error: unknown) {
+        respondRoleAssignmentFailure(req, res, error);
+      }
     }
-  });
+  );
+
+  app.delete(
+    "/api/user-company-roles/:id",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(deleteUserCompanyRoleInput),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const [oldRecord] = await db.select().from(userCompanyRoles).where(eq(userCompanyRoles.id, id)).limit(1);
+        if (oldRecord) {
+          const selfRefusal = refuseSelfRoleChange({
+            actorUserId: req.session.userId,
+            actorRole: req.session.currentRole,
+            targetUserId: oldRecord.userId,
+            previousRole: oldRecord.role,
+            nextRole: null,
+            removing: true,
+          });
+          if (selfRefusal) throw selfRefusal;
+        }
+        // Phase 21 (B): the delete and its audit row commit together; the
+        // sessions are invalidated after commit, as before.
+        await db.transaction(async (tx) => {
+          if (oldRecord) {
+            await assertCompanyKeepsAdministrator(tx, {
+              companyId: oldRecord.companyId,
+              targetRowId: id,
+              targetRole: oldRecord.role,
+              nextRole: null,
+            });
+          }
+          await storage.deleteUserCompanyRole(id, tx);
+          if (oldRecord) {
+            await logAudit(
+              {
+                userId: req.user!.id,
+                username: req.user!.username || req.session.username || "unknown",
+                companyId: req.session.currentCompanyId,
+                action: "delete",
+                tableName: "user_company_roles",
+                recordId: id,
+                recordIdentifier: `userId:${oldRecord.userId} role:${oldRecord.role} company:${oldRecord.companyId}`,
+                changes: null,
+              },
+              tx
+            );
+          }
+        });
+        if (oldRecord) await invalidateUserSessions(oldRecord.userId);
+        res.status(204).send();
+      } catch (error: unknown) {
+        respondRoleAssignmentFailure(req, res, error);
+      }
+    }
+  );
 }

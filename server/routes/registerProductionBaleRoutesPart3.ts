@@ -6,9 +6,17 @@ import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { insertProductionBaleSchema } from "@shared/schema";
 import { getBwipjs } from "./registerProductionBaleRoutesPart1";
+import { validateRequest } from "../lib/validateRequest";
+import {
+  bulkCreateInput,
+  createInput,
+  deleteInput,
+  generateBarcodeInput,
+  scanInput,
+} from "./registerProductionBaleRoutesSchemas";
 
 export function registerProductionBaleRoutesPart3(app: Express) {
-  app.post("/api/production-bales", requireAuth, async (req, res) => {
+  app.post("/api/production-bales", requireAuth, validateRequest(createInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -24,7 +32,7 @@ export function registerProductionBaleRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/production-bales/bulk", requireAuth, async (req, res) => {
+  app.post("/api/production-bales/bulk", requireAuth, validateRequest(bulkCreateInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -61,7 +69,7 @@ export function registerProductionBaleRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/production-bales/scan", requireAuth, async (req, res) => {
+  app.post("/api/production-bales/scan", requireAuth, validateRequest(scanInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -88,7 +96,7 @@ export function registerProductionBaleRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/generate-barcode", requireAuth, async (req, res) => {
+  app.post("/api/generate-barcode", requireAuth, validateRequest(generateBarcodeInput), async (req, res) => {
     try {
       const { text } = req.body;
 
@@ -147,7 +155,7 @@ export function registerProductionBaleRoutesPart3(app: Express) {
     }
   });
 
-  app.delete("/api/production-bales/:id", requireAuth, async (req, res) => {
+  app.delete("/api/production-bales/:id", requireAuth, validateRequest(deleteInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {

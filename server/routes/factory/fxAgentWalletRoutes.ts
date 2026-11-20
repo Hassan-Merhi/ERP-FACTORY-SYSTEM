@@ -5,6 +5,8 @@ import { registerFactoryFxAgentStatementRoutes } from "./fxAgentWalletStatementR
 import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { activateWalletInput, convertWalletInput, rebaselineWalletInput } from "./fxAgentWalletRouteSchemas";
 import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logAudit } from "../helpers/auditWriteAdapter";
@@ -53,73 +55,79 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/fx-agent-wallets", requireAuth, requireRole(...ROLES), async (req: Request, res: Response) => {
-    try {
-      const cid = company(req),
-        accountId = Number(req.body?.ledgerAccountId),
-        date = dateOf(req);
-      if (!cid || !(await fxAgentTablesExist()))
-        return res.status(409).json({ message: "FX wallet SQL migration required" });
-      if (!Number.isSafeInteger(accountId) || accountId <= 0) throw new Error("Invalid ledger account");
-      if (req.body?.confirmUsdSource !== true)
-        throw new Error("Confirm this ledger currently represents USD funds held by the FX agent");
-      const created = await db.transaction(async (tx) => {
-        const accounts = await tx.execute(sql`
+  app.post(
+    "/api/factory/fx-agent-wallets",
+    requireAuth,
+    requireRole(...ROLES),
+    validateRequest(activateWalletInput),
+    async (req: Request, res: Response) => {
+      try {
+        const cid = company(req),
+          accountId = Number(req.body?.ledgerAccountId),
+          date = dateOf(req);
+        if (!cid || !(await fxAgentTablesExist()))
+          return res.status(409).json({ message: "FX wallet SQL migration required" });
+        if (!Number.isSafeInteger(accountId) || accountId <= 0) throw new Error("Invalid ledger account");
+        if (req.body?.confirmUsdSource !== true)
+          throw new Error("Confirm this ledger currently represents USD funds held by the FX agent");
+        const created = await db.transaction(async (tx) => {
+          const accounts = await tx.execute(sql`
           SELECT id, account_type AS type, opening_balance_currency AS "openingCurrency" FROM ledger_accounts
           WHERE company_id = ${cid} AND id = ${accountId} AND deleted_at IS NULL AND active = true
           FOR UPDATE`);
-        const account = accounts.rows[0];
-        if (
-          !account ||
-          [
-            "Income",
-            "Indirect Income",
-            "Expense",
-            "Indirect Expense",
-            "Direct Expense",
-            "Equity",
-            "Profit",
-            "Cash",
-            "Bank",
-          ].includes(String(account.type))
-        )
-          throw new Error("Select an active balance-sheet ledger account");
-        if (account.openingCurrency && String(account.openingCurrency).toUpperCase() !== "USD")
-          throw new Error("Known non-USD opening balance cannot be activated as a USD FX wallet");
-        const existing = await tx.execute(sql`
+          const account = accounts.rows[0];
+          if (
+            !account ||
+            [
+              "Income",
+              "Indirect Income",
+              "Expense",
+              "Indirect Expense",
+              "Direct Expense",
+              "Equity",
+              "Profit",
+              "Cash",
+              "Bank",
+            ].includes(String(account.type))
+          )
+            throw new Error("Select an active balance-sheet ledger account");
+          if (account.openingCurrency && String(account.openingCurrency).toUpperCase() !== "USD")
+            throw new Error("Known non-USD opening balance cannot be activated as a USD FX wallet");
+          const existing = await tx.execute(sql`
           SELECT id FROM factory_fx_agent_wallets WHERE company_id = ${cid} AND ledger_account_id = ${accountId}`);
-        if (existing.rows.length) throw new Error("Account already linked to FX wallet");
-        const linked = await tx.execute(sql`
+          if (existing.rows.length) throw new Error("Account already linked to FX wallet");
+          const linked = await tx.execute(sql`
           SELECT 1 FROM customers WHERE company_id = ${cid} AND ledger_account_id = ${accountId} AND deleted_at IS NULL
           UNION ALL SELECT 1 FROM bank_accounts WHERE company_id = ${cid} AND linked_ledger_id = ${accountId}
           LIMIT 1`);
-        if (linked.rows.length) throw new Error("A linked customer or bank account cannot be made an FX agent");
+          if (linked.rows.length) throw new Error("A linked customer or bank account cannot be made an FX agent");
 
-        // This workflow starts from a known USD asset. Refuse known non-USD
-        // voucher history; it cannot safely be re-denominated as if it were USD.
-        const existingForeign = await tx.execute(sql`
+          // This workflow starts from a known USD asset. Refuse known non-USD
+          // voucher history; it cannot safely be re-denominated as if it were USD.
+          const existingForeign = await tx.execute(sql`
           SELECT 1 FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
           WHERE v.company_id = ${cid} AND ve.ledger_account_id = ${accountId}
             AND v.deleted_at IS NULL AND v.optional = false
             AND COALESCE(v.effective_date, v.voucher_date) <= ${date}::date
             AND ve.transaction_currency IS NOT NULL AND UPPER(ve.transaction_currency) <> 'USD'
           LIMIT 1`);
-        if (existingForeign.rows.length)
-          throw new Error("Existing foreign-currency voucher history needs manual reconciliation before activation");
-        const ledger = await getPartyBalance(tx, { kind: "ledger", companyId: cid, id: accountId, asOf: date });
-        const book = toMoney(ledger?.historicalBaseClosing || 0);
-        if (book.lte(0)) throw new Error("FX agent must hold a positive (debit) USD asset balance");
-        const inserted = await tx.execute(sql`
+          if (existingForeign.rows.length)
+            throw new Error("Existing foreign-currency voucher history needs manual reconciliation before activation");
+          const ledger = await getPartyBalance(tx, { kind: "ledger", companyId: cid, id: accountId, asOf: date });
+          const book = toMoney(ledger?.historicalBaseClosing || 0);
+          if (book.lte(0)) throw new Error("FX agent must hold a positive (debit) USD asset balance");
+          const inserted = await tx.execute(sql`
           INSERT INTO factory_fx_agent_wallets(company_id,ledger_account_id,opening_usd,confirmed_native_usd,activated_on,created_by)
           VALUES (${cid},${accountId},${book.toFixed(6)},true,${date},${req.session.username || "unknown"})
           RETURNING id`);
-        return { walletId: Number(inserted.rows[0].id), openingUsd: book.toFixed(6) };
-      });
-      res.status(201).json(created);
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
+          return { walletId: Number(inserted.rows[0].id), openingUsd: book.toFixed(6) };
+        });
+        res.status(201).json(created);
+      } catch (error) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
   // An unused wallet is just a snapshot. If the USD ledger changed after
   // activation, explicitly restart its baseline rather than mislabeling the
   // difference as EUR or silently ignoring posted vouchers.
@@ -127,6 +135,7 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
     "/api/factory/fx-agent-wallets/:id/rebaseline",
     requireAuth,
     requireRole(...ROLES),
+    validateRequest(rebaselineWalletInput),
     async (req: Request, res: Response) => {
       try {
         const cid = company(req);
@@ -238,6 +247,7 @@ export function registerFactoryFxAgentWalletRoutes(app: Express) {
     "/api/factory/fx-agent-wallets/:id/convert",
     requireAuth,
     requireRole(...ROLES),
+    validateRequest(convertWalletInput),
     async (req: Request, res: Response) => {
       try {
         const cid = company(req),

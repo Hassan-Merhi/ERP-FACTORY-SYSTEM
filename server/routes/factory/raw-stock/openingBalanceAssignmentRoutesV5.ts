@@ -1,8 +1,11 @@
+import { HttpError } from "../../../lib/httpError";
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import Decimal from "decimal.js";
 import { requireAuth } from "../../../auth";
+import { validateRequest } from "../../../lib/validateRequest";
+import { assignToBalesInput } from "./rawStockWriteRouteSchemas";
 import { pool } from "../../../db";
 import { parseId } from "../../../lib/parseId";
 
@@ -22,6 +25,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
   app.post(
     "/api/factory/raw-stock/:rawStockId/assign-to-bales",
     requireAuth,
+    validateRequest(assignToBalesInput),
     async (req: import("express").Request, res: import("express").Response) => {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -89,17 +93,11 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           [companyId, baleIds]
         );
         if (baleResult.rows.length !== baleIds.length) {
-          throw Object.assign(
-            new Error("One or more bales no longer exist, are deleted, or belong to another company"),
-            { statusCode: 409 }
-          );
+          throw new HttpError(409, "One or more bales no longer exist, are deleted, or belong to another company");
         }
         for (const bale of baleResult.rows) {
           if (bale.mix_batch_id != null || bale.status !== "IN_STOCK") {
-            throw Object.assign(
-              new Error(`Bale ${bale.id} is no longer an unlinked IN_STOCK bale`),
-              { statusCode: 409 }
-            );
+            throw new HttpError(409, `Bale ${bale.id} is no longer an unlinked IN_STOCK bale`);
           }
         }
 
@@ -116,27 +114,23 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           );
           const storedRate = supplierResult.rows[0]?.current_raw_material_cost_per_kg_usd;
           if (storedRate == null || new Decimal(storedRate).lt(0)) {
-            throw Object.assign(
-              new Error(
-                "Supplier has no valid persisted authoritative USD raw-material rate. "
-                + "Assignment was not applied because consumption must never create or change that rate."
-              ),
-              { statusCode: 409 }
+            throw new HttpError(
+              409,
+              "Supplier has no valid persisted authoritative USD raw-material rate. " +
+                "Assignment was not applied because consumption must never create or change that rate."
             );
           }
           costPerKgUsd = new Decimal(storedRate);
         } else {
           if (rawStock.cost_per_kg_usd == null) {
-            throw Object.assign(
-              new Error(
-                "Opening-balance direct source has no stored USD cost. Resolve its FX/cost before assigning bales."
-              ),
-              { statusCode: 409 }
+            throw new HttpError(
+              409,
+              "Opening-balance direct source has no stored USD cost. Resolve its FX/cost before assigning bales."
             );
           }
           costPerKgUsd = new Decimal(rawStock.cost_per_kg_usd);
           if (costPerKgUsd.lt(0)) {
-            throw Object.assign(new Error("Opening-balance source has an invalid direct USD cost"), { statusCode: 409 });
+            throw new HttpError(409, "Opening-balance source has an invalid direct USD cost");
           }
         }
 
@@ -145,7 +139,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           new Decimal(0)
         );
         if (totalKg.lte(0)) {
-          throw Object.assign(new Error("Selected bales have no positive weight"), { statusCode: 400 });
+          throw new HttpError(400, "Selected bales have no positive weight");
         }
         const totalCost = totalKg.times(costPerKgUsd);
         const batchCode = `OB-ASSIGN-${rawStockId}-${Date.now()}`;
@@ -205,10 +199,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
             ]
           );
           if (update.rowCount !== 1) {
-            throw Object.assign(
-              new Error(`Bale ${bale.id} changed during assignment`),
-              { statusCode: 409 }
-            );
+            throw new HttpError(409, `Bale ${bale.id} changed during assignment`);
           }
         }
 
@@ -219,15 +210,10 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
              AND company_id = $3
              AND container_id = $4
              AND deleted_at IS NULL`,
-          [
-            totalKg.toDecimalPlaces(3).toFixed(3),
-            rawStockId,
-            companyId,
-            rawStock.container_id,
-          ]
+          [totalKg.toDecimalPlaces(3).toFixed(3), rawStockId, companyId, rawStock.container_id]
         );
         if (rawStockUpdate.rowCount !== 1) {
-          throw Object.assign(new Error("Raw-stock row changed during assignment"), { statusCode: 409 });
+          throw new HttpError(409, "Raw-stock row changed during assignment");
         }
 
         await client.query(

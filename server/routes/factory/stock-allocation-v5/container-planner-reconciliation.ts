@@ -12,6 +12,21 @@ import {
 } from "@shared/containerPlanner";
 import { loadContainerPlannerSource, type PlannerQueryable } from "./container-planner-source";
 import { pruneOverAllocatedPlanAllocations, pruneOverAssignedPlanBales } from "./container-plan-bale-prune";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const reconcilePlanInput = {
+  params: z.strictObject({ planId: stringParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 type PlannerHeaderRow = {
   id: number;
@@ -221,126 +236,130 @@ export function registerV5ContainerPlannerReconciliationRoutes(app: Express): vo
     }
   );
 
-  app.post("/api/factory/v5/container-plans/:planId/reconcile", requireAuth, async (req: Request, res: Response) => {
-    const client = await pool.connect();
-    try {
-      const companyId = companyIdFor(req);
-      const planId = positiveInt(req.params.planId);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (!planId) return res.status(400).json({ message: "Invalid plan id" });
+  app.post(
+    "/api/factory/v5/container-plans/:planId/reconcile",
+    requireAuth,
+    validateRequest(reconcilePlanInput),
+    async (req: Request, res: Response) => {
+      const client = await pool.connect();
+      try {
+        const companyId = companyIdFor(req);
+        const planId = positiveInt(validatedInput(req, reconcilePlanInput).params.planId);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!planId) return res.status(400).json({ message: "Invalid plan id" });
 
-      await client.query("BEGIN");
-      await client.query("SELECT pg_advisory_xact_lock($1, $2)", [731204, companyId]);
+        await client.query("BEGIN");
+        await client.query("SELECT pg_advisory_xact_lock($1, $2)", [731204, companyId]);
 
-      const header = await loadPlanHeader(client, companyId, planId, true);
-      if (!header) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "Container plan not found" });
-      }
-      if (header.status !== "DRAFT") {
-        await client.query("ROLLBACK");
-        return res.status(409).json({ message: "Only draft container plans can be reconciled." });
-      }
+        const header = await loadPlanHeader(client, companyId, planId, true);
+        if (!header) {
+          await client.query("ROLLBACK");
+          return res.status(404).json({ message: "Container plan not found" });
+        }
+        if (header.status !== "DRAFT") {
+          await client.query("ROLLBACK");
+          return res.status(409).json({ message: "Only draft container plans can be reconciled." });
+        }
 
-      const beforeContainers = await loadSavedContainers(client, companyId, planId, true);
-      const sourceRows = await loadContainerPlannerSource(client, companyId);
-      const before = buildContainerPlanReconciliation(sourceRows, beforeContainers, {
-        includeGarbageWipers: Boolean(header.include_garbage_wipers),
-      });
-
-      if (before.lockedConflictTotal > 0) {
-        await client.query("ROLLBACK");
-        return res.status(409).json({
-          code: "CONTAINER_PLAN_LOCKED_STOCK_CONFLICT",
-          message:
-            "Locked container quantities exceed current available stock. Unlock the affected containers before reconciling.",
-          reconciliation: before,
+        const beforeContainers = await loadSavedContainers(client, companyId, planId, true);
+        const sourceRows = await loadContainerPlannerSource(client, companyId);
+        const before = buildContainerPlanReconciliation(sourceRows, beforeContainers, {
+          includeGarbageWipers: Boolean(header.include_garbage_wipers),
         });
-      }
 
-      const capacity = Number(header.capacity_bales);
-      const desiredProducts = desiredUnlockedProducts(before);
-      const totalDesiredUnlocked = desiredProducts.reduce((sum, product) => sum + product.qty, 0);
-      const requiredUnlockedCount =
-        totalDesiredUnlocked > 0 ? Math.ceil(totalDesiredUnlocked / Math.max(capacity, 1)) : 0;
-
-      const lockedContainers = beforeContainers.filter((container) => container.isLocked);
-      const existingUnlocked = beforeContainers
-        .filter((container) => !container.isLocked)
-        .sort((a, b) => a.position - b.position || a.id - b.id);
-
-      const keptUnlocked = existingUnlocked.slice(0, requiredUnlockedCount);
-      const removedUnlocked = existingUnlocked.slice(requiredUnlockedCount);
-      let nextPosition =
-        beforeContainers.length > 0 ? Math.max(...beforeContainers.map((container) => container.position)) + 1 : 0;
-      const addedContainerIds: number[] = [];
-
-      while (keptUnlocked.length < requiredUnlockedCount) {
-        const position = nextPosition;
-        nextPosition += 1;
-        const inserted = await client.query<{ id: number }>(
-          `INSERT INTO factory_container_plan_containers
-               (company_id, plan_id, position, name, capacity_bales, is_locked, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW())
-             RETURNING id`,
-          [companyId, planId, position, `Container ${position + 1}`, capacity]
-        );
-        const id = Number(inserted.rows[0].id);
-        addedContainerIds.push(id);
-        keptUnlocked.push({
-          id,
-          position,
-          name: `Container ${position + 1}`,
-          capacityBales: capacity,
-          isLocked: false,
-          lines: [],
-        });
-      }
-
-      if (removedUnlocked.length > 0) {
-        await client.query(
-          `DELETE FROM factory_container_plan_containers
-             WHERE company_id = $1 AND plan_id = $2 AND id = ANY($3::int[]) AND is_locked = false`,
-          [companyId, planId, removedUnlocked.map((container) => container.id)]
-        );
-      }
-
-      const keptUnlockedIds = keptUnlocked.map((container) => container.id);
-      if (keptUnlockedIds.length > 0) {
-        await client.query(
-          `DELETE FROM factory_container_plan_lines
-             WHERE company_id = $1 AND plan_id = $2 AND plan_container_id = ANY($3::int[])`,
-          [companyId, planId, keptUnlockedIds]
-        );
-
-        const distributed = distributeContainerPlannerProducts(desiredProducts, keptUnlocked.length);
-        if (distributed.totals.some((total) => total > capacity)) {
+        if (before.lockedConflictTotal > 0) {
           await client.query("ROLLBACK");
           return res.status(409).json({
-            message: "The current stock cannot fit inside the available unlocked container capacity.",
+            code: "CONTAINER_PLAN_LOCKED_STOCK_CONFLICT",
+            message:
+              "Locked container quantities exceed current available stock. Unlock the affected containers before reconciling.",
+            reconciliation: before,
           });
         }
 
-        for (let index = 0; index < keptUnlocked.length; index += 1) {
-          const container = keptUnlocked[index];
-          const lines = distributed.products
-            .map((product) => ({
-              articleCode: product.articleCode,
-              productName: product.productName,
-              plannedQty: product.allocations[index] ?? 0,
-            }))
-            .filter((line) => line.plannedQty > 0);
-          await insertPlanLines(client, companyId, planId, container.id, lines);
+        const capacity = Number(header.capacity_bales);
+        const desiredProducts = desiredUnlockedProducts(before);
+        const totalDesiredUnlocked = desiredProducts.reduce((sum, product) => sum + product.qty, 0);
+        const requiredUnlockedCount =
+          totalDesiredUnlocked > 0 ? Math.ceil(totalDesiredUnlocked / Math.max(capacity, 1)) : 0;
+
+        const lockedContainers = beforeContainers.filter((container) => container.isLocked);
+        const existingUnlocked = beforeContainers
+          .filter((container) => !container.isLocked)
+          .sort((a, b) => a.position - b.position || a.id - b.id);
+
+        const keptUnlocked = existingUnlocked.slice(0, requiredUnlockedCount);
+        const removedUnlocked = existingUnlocked.slice(requiredUnlockedCount);
+        let nextPosition =
+          beforeContainers.length > 0 ? Math.max(...beforeContainers.map((container) => container.position)) + 1 : 0;
+        const addedContainerIds: number[] = [];
+
+        while (keptUnlocked.length < requiredUnlockedCount) {
+          const position = nextPosition;
+          nextPosition += 1;
+          const inserted = await client.query<{ id: number }>(
+            `INSERT INTO factory_container_plan_containers
+               (company_id, plan_id, position, name, capacity_bales, is_locked, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW())
+             RETURNING id`,
+            [companyId, planId, position, `Container ${position + 1}`, capacity]
+          );
+          const id = Number(inserted.rows[0].id);
+          addedContainerIds.push(id);
+          keptUnlocked.push({
+            id,
+            position,
+            name: `Container ${position + 1}`,
+            capacityBales: capacity,
+            isLocked: false,
+            lines: [],
+          });
         }
-      }
 
-      // Redistribution changed per-container quotas; release any Phase 4 bale
-      // assignment the new plan can no longer hold.
-      const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
-      const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
+        if (removedUnlocked.length > 0) {
+          await client.query(
+            `DELETE FROM factory_container_plan_containers
+             WHERE company_id = $1 AND plan_id = $2 AND id = ANY($3::int[]) AND is_locked = false`,
+            [companyId, planId, removedUnlocked.map((container) => container.id)]
+          );
+        }
 
-      await client.query(
-        `UPDATE factory_container_plans
+        const keptUnlockedIds = keptUnlocked.map((container) => container.id);
+        if (keptUnlockedIds.length > 0) {
+          await client.query(
+            `DELETE FROM factory_container_plan_lines
+             WHERE company_id = $1 AND plan_id = $2 AND plan_container_id = ANY($3::int[])`,
+            [companyId, planId, keptUnlockedIds]
+          );
+
+          const distributed = distributeContainerPlannerProducts(desiredProducts, keptUnlocked.length);
+          if (distributed.totals.some((total) => total > capacity)) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({
+              message: "The current stock cannot fit inside the available unlocked container capacity.",
+            });
+          }
+
+          for (let index = 0; index < keptUnlocked.length; index += 1) {
+            const container = keptUnlocked[index];
+            const lines = distributed.products
+              .map((product) => ({
+                articleCode: product.articleCode,
+                productName: product.productName,
+                plannedQty: product.allocations[index] ?? 0,
+              }))
+              .filter((line) => line.plannedQty > 0);
+            await insertPlanLines(client, companyId, planId, container.id, lines);
+          }
+        }
+
+        // Redistribution changed per-container quotas; release any Phase 4 bale
+        // assignment the new plan can no longer hold.
+        const releasedBales = await pruneOverAssignedPlanBales(client, companyId, planId);
+        const adjustedAllocations = await pruneOverAllocatedPlanAllocations(client, companyId, planId);
+
+        await client.query(
+          `UPDATE factory_container_plans
            SET source_stock_total = $1,
                source_committed_total = $2,
                source_loading_total = $3,
@@ -348,59 +367,60 @@ export function registerV5ContainerPlannerReconciliationRoutes(app: Express): vo
                revision = revision + 1,
                updated_at = NOW()
            WHERE id = $5 AND company_id = $6`,
-        [
-          before.currentStockTotal,
-          before.currentCommittedTotal,
-          before.currentLoadingTotal,
-          before.currentPlannableTotal,
+          [
+            before.currentStockTotal,
+            before.currentCommittedTotal,
+            before.currentLoadingTotal,
+            before.currentPlannableTotal,
+            planId,
+            companyId,
+          ]
+        );
+
+        const afterContainers = await loadSavedContainers(client, companyId, planId, false);
+        const after = buildContainerPlanReconciliation(sourceRows, afterContainers, {
+          includeGarbageWipers: Boolean(header.include_garbage_wipers),
+        });
+
+        await writePlannerAudit(client, req, companyId, planId, header.name, {
+          reconciliation: {
+            beforeStatus: before.status,
+            afterStatus: after.status,
+            beforeUnplanned: before.unplannedTotal,
+            beforeOverplanned: before.overplannedTotal,
+            lockedContainersPreserved: lockedContainers.length,
+            addedContainers: addedContainerIds.length,
+            removedContainers: removedUnlocked.length,
+            releasedBales,
+            adjustedAllocations,
+            currentPlannableTotal: before.currentPlannableTotal,
+          },
+        });
+
+        const revisionResult = await client.query<{ revision: number }>(
+          `SELECT revision FROM factory_container_plans WHERE id = $1 AND company_id = $2`,
+          [planId, companyId]
+        );
+
+        await client.query("COMMIT");
+        return res.json({
+          success: true,
           planId,
-          companyId,
-        ]
-      );
-
-      const afterContainers = await loadSavedContainers(client, companyId, planId, false);
-      const after = buildContainerPlanReconciliation(sourceRows, afterContainers, {
-        includeGarbageWipers: Boolean(header.include_garbage_wipers),
-      });
-
-      await writePlannerAudit(client, req, companyId, planId, header.name, {
-        reconciliation: {
-          beforeStatus: before.status,
-          afterStatus: after.status,
-          beforeUnplanned: before.unplannedTotal,
-          beforeOverplanned: before.overplannedTotal,
-          lockedContainersPreserved: lockedContainers.length,
+          revision: Number(revisionResult.rows[0]?.revision ?? Number(header.revision) + 1),
           addedContainers: addedContainerIds.length,
           removedContainers: removedUnlocked.length,
           releasedBales,
           adjustedAllocations,
-          currentPlannableTotal: before.currentPlannableTotal,
-        },
-      });
-
-      const revisionResult = await client.query<{ revision: number }>(
-        `SELECT revision FROM factory_container_plans WHERE id = $1 AND company_id = $2`,
-        [planId, companyId]
-      );
-
-      await client.query("COMMIT");
-      return res.json({
-        success: true,
-        planId,
-        revision: Number(revisionResult.rows[0]?.revision ?? Number(header.revision) + 1),
-        addedContainers: addedContainerIds.length,
-        removedContainers: removedUnlocked.length,
-        releasedBales,
-        adjustedAllocations,
-        checkedAt: new Date().toISOString(),
-        reconciliation: after,
-      });
-    } catch (error: unknown) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      logger.error("[V5] container planner reconciliation write error", { error });
-      return res.status(500).json({ message: getErrorMessage(error) });
-    } finally {
-      client.release();
+          checkedAt: new Date().toISOString(),
+          reconciliation: after,
+        });
+      } catch (error: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        logger.error("[V5] container planner reconciliation write error", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
+      } finally {
+        client.release();
+      }
     }
-  });
+  );
 }

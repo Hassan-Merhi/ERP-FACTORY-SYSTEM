@@ -7,7 +7,6 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
-import { parseId } from "../../../../lib/parseId";
 import { getClientDate } from "../../../../lib/dateUtils";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
@@ -26,11 +25,30 @@ import { eq, and, sql } from "drizzle-orm";
 import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { hasLiveFinancialTripTx } from "../../../../services/factory/dispatchTripFinancialGuards";
 import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
+import { z } from "zod";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../../lib/validateRequest";
+
+const forceSyncBaleStatusInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+
+// Clients send no body today; the handler still reads an optional txDate.
+const unfinalizeInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ txDate: z.string().optional() }).optional(),
+} satisfies RequestSchemas;
 
 export function registerOrderUnfinalizeRoutes(app: Express) {
   app.post(
     "/api/factory/customer-orders/:id/force-sync-bale-status",
     requireAuth,
+    validateRequest(forceSyncBaleStatusInput),
     async (req: Request, res: Response) => {
       try {
         const session = req.session;
@@ -42,9 +60,7 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
           return res.status(403).json({ message: "Only admin/owner can force-sync bale statuses" });
         }
 
-        const orderId = parseId(req.params.id);
-
-        if (orderId === null) return res.status(400).json({ message: "Invalid id" });
+        const orderId = validatedInput(req, forceSyncBaleStatusInput).params.id;
         const [order] = await db
           .select()
           .from(customerOrders)
@@ -87,170 +103,179 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
 
   // Export a single customer order to Excel with full bale detail
 
-  app.post("/api/factory/customer-orders/:id/unfinalize", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/customer-orders/:id/unfinalize",
+    requireAuth,
+    validateRequest(unfinalizeInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const orderId = parseId(req.params.id);
+        const orderId = validatedInput(req, unfinalizeInput).params.id;
 
-      if (orderId === null) return res.status(400).json({ message: "Invalid id" });
+        const restoredTo = await db.transaction(async (tx) => {
+          // Locked for the same reason the finalize path locks it: this is the
+          // reversal that removes the receivable and retires the charge vouchers, and
+          // it must not run twice against one invoice. The status re-read after the
+          // lock is what makes the second concurrent revert a no-op error rather than
+          // a second set of deletions.
+          const [order] = await tx
+            .select()
+            .from(customerOrders)
+            .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+            .for("update");
+          if (!order) throw new Error("Order not found");
+          if (order.status !== "FINALIZED") throw new Error("Only FINALIZED orders can be reverted");
+          // A consolidated invoice must never be reverted by a handler that
+          // simply deletes the invoice cache and restores SOLD bales to stock.
+          if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
+            throw new Error(
+              "DISPATCH_FINANCIAL_REVERSAL_REQUIRED: Trip receivables must be handled through the authorized consolidated-invoice reversal workflow."
+            );
+          }
 
-      const restoredTo = await db.transaction(async (tx) => {
-        // Locked for the same reason the finalize path locks it: this is the
-        // reversal that removes the receivable and retires the charge vouchers, and
-        // it must not run twice against one invoice. The status re-read after the
-        // lock is what makes the second concurrent revert a no-op error rather than
-        // a second set of deletions.
-        const [order] = await tx
-          .select()
-          .from(customerOrders)
-          .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
-          .for("update");
-        if (!order) throw new Error("Order not found");
-        if (order.status !== "FINALIZED") throw new Error("Only FINALIZED orders can be reverted");
-        // A consolidated invoice must never be reverted by a handler that
-        // simply deletes the invoice cache and restores SOLD bales to stock.
-        if (await hasLiveFinancialTripTx(tx, companyId, orderId)) {
-          throw new Error("DISPATCH_FINANCIAL_REVERSAL_REQUIRED: Trip receivables must be handled through the authorized consolidated-invoice reversal workflow.");
-        }
+          // New finalizations always persist the authoritative workflow origin.
+          // For legacy finalized rows, loading timestamps are durable evidence
+          // that the order came through Loading; rows without that evidence were
+          // direct Draft invoices. Keep this fallback until all legacy rows have
+          // been backfilled by the migration.
+          const restoreStatus =
+            order.previousStatus === "LOADING" || order.previousStatus === "DRAFT"
+              ? order.previousStatus
+              : order.loadingStartedAt || order.loadingFinalizedAt
+                ? "LOADING"
+                : "DRAFT";
 
-        // New finalizations always persist the authoritative workflow origin.
-        // For legacy finalized rows, loading timestamps are durable evidence
-        // that the order came through Loading; rows without that evidence were
-        // direct Draft invoices. Keep this fallback until all legacy rows have
-        // been backfilled by the migration.
-        const restoreStatus =
-          order.previousStatus === "LOADING" || order.previousStatus === "DRAFT"
-            ? order.previousStatus
-            : order.loadingStartedAt || order.loadingFinalizedAt
-              ? "LOADING"
-              : "DRAFT";
-
-        // Block if any payment has been recorded against this invoice
-        const payments = await tx
-          .select({ id: customerBalances.id })
-          .from(customerBalances)
-          .where(
-            and(
-              eq(customerBalances.companyId, companyId),
-              eq(customerBalances.referenceId, orderId),
-              eq(customerBalances.referenceType, "INVOICE"),
-              eq(customerBalances.transactionType, "PAYMENT")
-            )
-          );
-        if (payments.length > 0) {
-          throw new Error("Cannot revert: this invoice has payments recorded against it. Reverse the payments first.");
-        }
-
-        // Delete the SALE balance entry for this invoice
-        await tx
-          .delete(customerBalances)
-          .where(
-            and(
-              eq(customerBalances.companyId, companyId),
-              eq(customerBalances.referenceId, orderId),
-              eq(customerBalances.referenceType, "INVOICE"),
-              eq(customerBalances.transactionType, "SALE")
-            )
-          );
-
-        // Phase 6: delete charge journal vouchers via FK linkage; fall back to invoice-number
-        // pattern for legacy unbacked rows. After delete, clear the FK on the charge rows so
-        // they can be re-finalized later without dangling references.
-        const linkedChargeRows = await tx
-          .select({ id: customerOrderCharges.id, voucherId: customerOrderCharges.voucherId })
-          .from(customerOrderCharges)
-          .where(and(eq(customerOrderCharges.orderId, orderId), sql`${customerOrderCharges.voucherId} IS NOT NULL`));
-        const linkedVoucherIds = linkedChargeRows.map((r) => r.voucherId).filter((v): v is number => v != null);
-
-        if (linkedVoucherIds.length > 0) {
-          // Wave 16 (A): retired with their lines (they used to be stripped), audited here.
-          await retireVouchersTx(tx, {
-            companyId,
-            voucherIds: linkedVoucherIds,
-            reason: "customer-order-unfinalize",
-            actor: sessionRetirementActor(req),
-          });
-          await tx
-            .update(customerOrderCharges)
-            .set({ voucherId: null })
-            .where(and(eq(customerOrderCharges.orderId, orderId), sql`${customerOrderCharges.voucherId} IS NOT NULL`));
-        }
-
-        // Legacy fallback for charge vouchers that were never FK-linked
-        if (order.invoiceNumber) {
-          const legacyChargeVouchers = await tx
-            .select({ id: vouchers.id })
-            .from(vouchers)
+          // Block if any payment has been recorded against this invoice
+          const payments = await tx
+            .select({ id: customerBalances.id })
+            .from(customerBalances)
             .where(
               and(
-                eq(vouchers.companyId, companyId),
-                eq(vouchers.sourceModule, "FACTORY"),
-                sql`${vouchers.voucherNumber} LIKE ${"CHARGE-" + order.invoiceNumber + "-%"}`
+                eq(customerBalances.companyId, companyId),
+                eq(customerBalances.referenceId, orderId),
+                eq(customerBalances.referenceType, "INVOICE"),
+                eq(customerBalances.transactionType, "PAYMENT")
               )
             );
-          await retireVouchersTx(tx, {
-            companyId,
-            voucherIds: legacyChargeVouchers.map((cv) => cv.id),
-            reason: "customer-order-unfinalize",
-            actor: sessionRetirementActor(req),
-          });
-        }
+          if (payments.length > 0) {
+            throw new Error(
+              "Cannot revert: this invoice has payments recorded against it. Reverse the payments first."
+            );
+          }
 
-        // Revert bales from SOLD → RESERVED_FOR_ORDER (order still exists, just un-finalized)
-        const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
-        for (const b of bales) {
+          // Delete the SALE balance entry for this invoice
           await tx
-            .update(factoryBales)
-            .set({ status: "RESERVED_FOR_ORDER", updatedAt: new Date() })
-            .where(and(eq(factoryBales.id, b.baleId), eq(factoryBales.status, "SOLD")));
-        }
+            .delete(customerBalances)
+            .where(
+              and(
+                eq(customerBalances.companyId, companyId),
+                eq(customerBalances.referenceId, orderId),
+                eq(customerBalances.referenceType, "INVOICE"),
+                eq(customerBalances.transactionType, "SALE")
+              )
+            );
 
-        // Restore the original workflow and preserve the invoice number so the
-        // order remains identifiable and visible after a refresh.
-        await tx
-          .update(customerOrders)
-          .set({
-            status: restoreStatus,
-            updatedAt: new Date(),
-          })
-          .where(eq(customerOrders.id, orderId));
+          // Phase 6: delete charge journal vouchers via FK linkage; fall back to invoice-number
+          // pattern for legacy unbacked rows. After delete, clear the FK on the charge rows so
+          // they can be re-finalized later without dangling references.
+          const linkedChargeRows = await tx
+            .select({ id: customerOrderCharges.id, voucherId: customerOrderCharges.voucherId })
+            .from(customerOrderCharges)
+            .where(and(eq(customerOrderCharges.orderId, orderId), sql`${customerOrderCharges.voucherId} IS NOT NULL`));
+          const linkedVoucherIds = linkedChargeRows.map((r) => r.voucherId).filter((v): v is number => v != null);
 
-        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
-        await syncFactoryInvoiceTx(tx, companyId, orderId);
+          if (linkedVoucherIds.length > 0) {
+            // Wave 16 (A): retired with their lines (they used to be stripped), audited here.
+            await retireVouchersTx(tx, {
+              companyId,
+              voucherIds: linkedVoucherIds,
+              reason: "customer-order-unfinalize",
+              actor: sessionRetirementActor(req),
+            });
+            await tx
+              .update(customerOrderCharges)
+              .set({ voucherId: null })
+              .where(
+                and(eq(customerOrderCharges.orderId, orderId), sql`${customerOrderCharges.voucherId} IS NOT NULL`)
+              );
+          }
 
-        // Daybook entry
-        const [unfCustomer] = await tx
-          .select({ legalName: customers.legalName })
-          .from(customers)
-          .where(eq(customers.id, order.customerId));
-        const unfToday = req.body?.txDate || getClientDate(req);
-        // Remove any previous INVOICE and INVOICE_REVERTED rows so only this revert shows
-        await tx
-          .delete(factoryDaybookEntries)
-          .where(
-            and(
-              eq(factoryDaybookEntries.companyId, companyId),
-              sql`${factoryDaybookEntries.txType} IN ('INVOICE','INVOICE_REVERTED')`,
-              eq(factoryDaybookEntries.referenceId, orderId)
-            )
-          );
-        await writeDaybookEntry(tx, {
-          companyId,
-          txDate: unfToday,
-          txType: "INVOICE_REVERTED",
-          referenceId: orderId,
-          description: `Invoice ${order.invoiceNumber} reverted to ${restoreStatus} – ${unfCustomer?.legalName || "Customer"}`,
+          // Legacy fallback for charge vouchers that were never FK-linked
+          if (order.invoiceNumber) {
+            const legacyChargeVouchers = await tx
+              .select({ id: vouchers.id })
+              .from(vouchers)
+              .where(
+                and(
+                  eq(vouchers.companyId, companyId),
+                  eq(vouchers.sourceModule, "FACTORY"),
+                  sql`${vouchers.voucherNumber} LIKE ${"CHARGE-" + order.invoiceNumber + "-%"}`
+                )
+              );
+            await retireVouchersTx(tx, {
+              companyId,
+              voucherIds: legacyChargeVouchers.map((cv) => cv.id),
+              reason: "customer-order-unfinalize",
+              actor: sessionRetirementActor(req),
+            });
+          }
+
+          // Revert bales from SOLD → RESERVED_FOR_ORDER (order still exists, just un-finalized)
+          const bales = await tx.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
+          for (const b of bales) {
+            await tx
+              .update(factoryBales)
+              .set({ status: "RESERVED_FOR_ORDER", updatedAt: new Date() })
+              .where(and(eq(factoryBales.id, b.baleId), eq(factoryBales.status, "SOLD")));
+          }
+
+          // Restore the original workflow and preserve the invoice number so the
+          // order remains identifiable and visible after a refresh.
+          await tx
+            .update(customerOrders)
+            .set({
+              status: restoreStatus,
+              updatedAt: new Date(),
+            })
+            .where(eq(customerOrders.id, orderId));
+
+          // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+          await syncFactoryInvoiceTx(tx, companyId, orderId);
+
+          // Daybook entry
+          const [unfCustomer] = await tx
+            .select({ legalName: customers.legalName })
+            .from(customers)
+            .where(eq(customers.id, order.customerId));
+          const unfToday = req.body?.txDate || getClientDate(req);
+          // Remove any previous INVOICE and INVOICE_REVERTED rows so only this revert shows
+          await tx
+            .delete(factoryDaybookEntries)
+            .where(
+              and(
+                eq(factoryDaybookEntries.companyId, companyId),
+                sql`${factoryDaybookEntries.txType} IN ('INVOICE','INVOICE_REVERTED')`,
+                eq(factoryDaybookEntries.referenceId, orderId)
+              )
+            );
+          await writeDaybookEntry(tx, {
+            companyId,
+            txDate: unfToday,
+            txType: "INVOICE_REVERTED",
+            referenceId: orderId,
+            description: `Invoice ${order.invoiceNumber} reverted to ${restoreStatus} – ${unfCustomer?.legalName || "Customer"}`,
+          });
+
+          return restoreStatus;
         });
 
-        return restoreStatus;
-      });
-
-      res.json({ message: "Invoice reverted successfully", restoredTo });
-    } catch (error: unknown) {
-      logger.error("Error unfinalizing order:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+        res.json({ message: "Invoice reverted successfully", restoredTo });
+      } catch (error: unknown) {
+        logger.error("Error unfinalizing order:", { error: error });
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

@@ -9,6 +9,26 @@ import { eq, and, asc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import { registerFactoryTransporterRoutesPart1, getCompanyId } from "./registerFactoryTransporterRoutesPart1";
+import {
+  emptyBody,
+  emptyQuery,
+  positiveIntParam,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
+
+const createTransporterInput = {
+  query: emptyQuery,
+  body: z.strictObject({ name: z.string().min(1), phone: z.string().optional(), notes: z.string().optional() }),
+} satisfies RequestSchemas;
+// The transporter id segment is not read; the transaction is found by txId within the company.
+const deleteTransactionInput = {
+  params: z.strictObject({ id: stringParam, txId: positiveIntParam }),
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerFactoryTransporterRoutes(app: Express) {
   // ── LIST all transporters (with balance summary) ──
@@ -104,85 +124,87 @@ export function registerFactoryTransporterRoutes(app: Express) {
   });
 
   // ── CREATE transporter ──
-  app.post("/api/factory/transporters", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/factory/transporters",
+    requireAuth,
+    validateRequest(createTransporterInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { name, phone, notes } = z
-        .object({
-          name: z.string().min(1),
-          phone: z.string().optional(),
-          notes: z.string().optional(),
-        })
-        .parse(req.body);
+        const { name, phone, notes } = validatedInput(req, createTransporterInput).body;
 
-      const code = `TRANS-${name
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, "-")
-        .slice(0, 30)}`;
-      const ledgerAccountId = await getOrCreateLedgerAccount(companyId, code, name, "Transporter Agent");
+        const code = `TRANS-${name
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "-")
+          .slice(0, 30)}`;
+        const ledgerAccountId = await getOrCreateLedgerAccount(companyId, code, name, "Transporter Agent");
 
-      const [created] = await db
-        .insert(factoryTransporters)
-        .values({
-          companyId,
-          name,
-          phone,
-          notes,
-          ledgerAccountId,
-          active: true,
-        })
-        .returning();
+        const [created] = await db
+          .insert(factoryTransporters)
+          .values({
+            companyId,
+            name,
+            phone,
+            notes,
+            ledgerAccountId,
+            active: true,
+          })
+          .returning();
 
-      res.json(created);
-    } catch (e: unknown) {
-      if (e instanceof z.ZodError) return res.status(400).json({ message: e.issues.map((x) => x.message).join(", ") });
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json(created);
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   registerFactoryTransporterRoutesPart1(app);
 
   // ── DELETE a transaction ──
-  app.delete("/api/factory/transporters/:id/transactions/:txId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const txId = parseId(req.params.txId);
-      if (txId === null) return res.status(400).json({ message: "Invalid id" });
+  app.delete(
+    "/api/factory/transporters/:id/transactions/:txId",
+    requireAuth,
+    validateRequest(deleteTransactionInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { txId } = validatedInput(req, deleteTransactionInput).params;
 
-      const [tx] = await db
-        .select()
-        .from(factoryTransporterTransactions)
-        .where(
-          and(eq(factoryTransporterTransactions.id, txId), eq(factoryTransporterTransactions.companyId, companyId))
-        );
-      if (!tx) return res.status(404).json({ message: "Transaction not found" });
+        const [tx] = await db
+          .select()
+          .from(factoryTransporterTransactions)
+          .where(
+            and(eq(factoryTransporterTransactions.id, txId), eq(factoryTransporterTransactions.companyId, companyId))
+          );
+        if (!tx) return res.status(404).json({ message: "Transaction not found" });
 
-      await db.transaction(async (trx) => {
-        // The transaction row has to go first. factory_transporter_transactions
-        // .voucher_id references vouchers.id with ON DELETE RESTRICT, so
-        // deleting the voucher while this row still points at it raises 23503
-        // and the whole request fails — which it did for every transaction that
-        // had a voucher, meaning all of them.
-        await trx.delete(factoryTransporterTransactions).where(eq(factoryTransporterTransactions.id, txId));
-        if (tx.voucherId) {
-          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
-          await retireVouchersTx(trx, {
-            companyId,
-            voucherIds: [tx.voucherId],
-            reason: "factory-transporter-transaction-delete",
-            actor: sessionRetirementActor(req),
-          });
-        }
-      });
+        await db.transaction(async (trx) => {
+          // The transaction row has to go first. factory_transporter_transactions
+          // .voucher_id references vouchers.id with ON DELETE RESTRICT, so
+          // deleting the voucher while this row still points at it raises 23503
+          // and the whole request fails — which it did for every transaction that
+          // had a voucher, meaning all of them.
+          await trx.delete(factoryTransporterTransactions).where(eq(factoryTransporterTransactions.id, txId));
+          if (tx.voucherId) {
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersTx(trx, {
+              companyId,
+              voucherIds: [tx.voucherId],
+              reason: "factory-transporter-transaction-delete",
+              actor: sessionRetirementActor(req),
+            });
+          }
+        });
 
-      res.json({ ok: true });
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+        res.json({ ok: true });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── GET cash/expense accounts for forms ──
   app.get("/api/factory/transporter-accounts", requireAuth, async (req: Request, res: Response) => {

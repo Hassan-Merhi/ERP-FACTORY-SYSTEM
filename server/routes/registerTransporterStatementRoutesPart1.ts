@@ -8,6 +8,7 @@ import { ledgerAccounts } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { parseId } from "../lib/parseId";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { getActiveRecipients, sendWhatsAppFileToChatId, sendWhatsAppTextToChatId } from "../services/whatsappService";
 import { toPositiveInteger } from "@shared/typeGuards";
 import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
@@ -20,6 +21,28 @@ export {
 } from "./registerTransporterStatementRoutesPart1Helpers";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// Shapes only; the handlers parse the ids and value ranges themselves.
+const accountParams = z.strictObject({ accountId: stringParam });
+const saveSettingsInput = {
+  params: accountParams,
+  query: emptyQuery,
+  body: z.strictObject({ paymentTermsDays: z.number() }),
+} satisfies RequestSchemas;
+const saveEntryDueDateInput = {
+  params: z.strictObject({ entryId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({ dueDate: z.string().nullable() }),
+} satisfies RequestSchemas;
+const sendWhatsappInput = {
+  params: accountParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    imageBase64: z.string().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerTransporterStatementRoutesPart1(app: Express) {
   // GET /api/transporter-statement/transporters
@@ -78,90 +101,107 @@ export function registerTransporterStatementRoutesPart1(app: Express) {
   });
 
   // PUT /api/transporter-statement/:accountId/settings
-  app.put("/api/transporter-statement/:accountId/settings", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const accountId = parseId(req.params.accountId);
-      if (accountId === null) return res.status(400).json({ message: "Invalid account ID" });
+  app.put(
+    "/api/transporter-statement/:accountId/settings",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(saveSettingsInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const accountId = parseId(req.params.accountId);
+        if (accountId === null) return res.status(400).json({ message: "Invalid account ID" });
 
-      const { paymentTermsDays } = z
-        .object({
-          paymentTermsDays: z.number().int().min(0).max(365),
-        })
-        .parse(req.body);
+        const { paymentTermsDays } = z
+          .object({
+            paymentTermsDays: z.number().int().min(0).max(365),
+          })
+          .parse(req.body);
 
-      await db.execute(
-        sql`INSERT INTO transporter_payment_settings (company_id, ledger_account_id, payment_terms_days)
+        await db.execute(
+          sql`INSERT INTO transporter_payment_settings (company_id, ledger_account_id, payment_terms_days)
             VALUES (${companyId}, ${accountId}, ${paymentTermsDays})
             ON CONFLICT (company_id, ledger_account_id)
             DO UPDATE SET payment_terms_days = EXCLUDED.payment_terms_days, updated_at = now()`
-      );
+        );
 
-      res.json({ paymentTermsDays });
-    } catch (err: unknown) {
-      res.status(400).json({ message: getErrorMessage(err) });
+        res.json({ paymentTermsDays });
+      } catch (err: unknown) {
+        res.status(400).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // PUT /api/transporter-entry-due-dates/:entryId
-  app.put("/api/transporter-entry-due-dates/:entryId", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const entryId = parseId(req.params.entryId);
-      if (entryId === null) return res.status(400).json({ message: "Invalid entry ID" });
+  app.put(
+    "/api/transporter-entry-due-dates/:entryId",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(saveEntryDueDateInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const entryId = parseId(req.params.entryId);
+        if (entryId === null) return res.status(400).json({ message: "Invalid entry ID" });
 
-      const { dueDate } = z
-        .object({
-          dueDate: z.string().nullable(),
-        })
-        .parse(req.body);
+        const { dueDate } = z
+          .object({
+            dueDate: z.string().nullable(),
+          })
+          .parse(req.body);
 
-      if (dueDate) {
-        await db.execute(
-          sql`INSERT INTO transporter_entry_due_dates (voucher_entry_id, company_id, due_date)
+        if (dueDate) {
+          await db.execute(
+            sql`INSERT INTO transporter_entry_due_dates (voucher_entry_id, company_id, due_date)
               VALUES (${entryId}, ${companyId}, ${dueDate})
               ON CONFLICT (voucher_entry_id)
               DO UPDATE SET due_date = EXCLUDED.due_date, updated_at = now()`
-        );
-      } else {
-        await db.execute(sql`DELETE FROM transporter_entry_due_dates WHERE voucher_entry_id = ${entryId}`);
-      }
+          );
+        } else {
+          await db.execute(sql`DELETE FROM transporter_entry_due_dates WHERE voucher_entry_id = ${entryId}`);
+        }
 
-      res.json({ ok: true, dueDate });
-    } catch (err: unknown) {
-      res.status(400).json({ message: getErrorMessage(err) });
+        res.json({ ok: true, dueDate });
+      } catch (err: unknown) {
+        res.status(400).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // POST /api/transporter-statement/:accountId/send-whatsapp
   // Sends a text summary of the outstanding balance to all active WhatsApp recipients.
-  app.post("/api/transporter-statement/:accountId/send-whatsapp", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const accountId = parseId(req.params.accountId);
-      if (accountId === null) return res.status(400).json({ message: "Invalid account ID" });
+  app.post(
+    "/api/transporter-statement/:accountId/send-whatsapp",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(sendWhatsappInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const accountId = parseId(req.params.accountId);
+        if (accountId === null) return res.status(400).json({ message: "Invalid account ID" });
 
-      const { dateFrom, dateTo, imageBase64 } = z
-        .object({
-          dateFrom: z.string().optional(),
-          dateTo: z.string().optional(),
-          imageBase64: z.string().optional(),
-        })
-        .parse(req.body);
+        const { dateFrom, dateTo, imageBase64 } = z
+          .object({
+            dateFrom: z.string().optional(),
+            dateTo: z.string().optional(),
+            imageBase64: z.string().optional(),
+          })
+          .parse(req.body);
 
-      // Verify account
-      const [account] = await db
-        .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
-        .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)))
-        .limit(1);
-      if (!account) return res.status(404).json({ message: "Account not found" });
+        // Verify account
+        const [account] = await db
+          .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
+          .from(ledgerAccounts)
+          .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)))
+          .limit(1);
+        if (!account) return res.status(404).json({ message: "Account not found" });
 
-      // Fetch all entries (unbounded) for running balance
-      const rawEntries = await db.execute<RawQueryRow<TransporterSummaryRow>>(sql`
+        // Fetch all entries (unbounded) for running balance
+        const rawEntries = await db.execute<RawQueryRow<TransporterSummaryRow>>(sql`
         SELECT ve.id, ve.debit_amount, ve.credit_amount, v.voucher_date
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
@@ -172,109 +212,113 @@ export function registerTransporterStatementRoutesPart1(app: Express) {
         ORDER BY v.voucher_date ASC, ve.id ASC
       `);
 
-      // Fetch paid amounts from allocations
-      const allocRows = await db.execute<RawQueryRow<AllocationTotalRow>>(sql`
+        // Fetch paid amounts from allocations
+        const allocRows = await db.execute<RawQueryRow<AllocationTotalRow>>(sql`
         SELECT credit_entry_id, SUM(allocated_amount) AS paid_amount
         FROM transporter_payment_allocations
         WHERE company_id = ${companyId}
         GROUP BY credit_entry_id
       `);
-      const paidMap = new Map<number, Decimal>();
-      for (const a of allocRows.rows) {
-        const creditEntryId = toPositiveInteger(a.credit_entry_id);
-        if (creditEntryId === undefined) continue;
-        paidMap.set(creditEntryId, toMoney(a.paid_amount as string | number | null));
-      }
-
-      const allRows = rawEntries.rows;
-      const charged: Decimal[] = [];
-      const paidOut: Decimal[] = [];
-      let runningBalance: Decimal = new MoneyDecimal(0);
-      let overdueCount = 0;
-      const now = new Date().toISOString().slice(0, 10);
-
-      for (const row of allRows) {
-        const debit = toMoney(row.debit_amount);
-        const credit = toMoney(row.credit_amount);
-        runningBalance = runningBalance.plus(credit).minus(debit);
-        const inRange = (!dateFrom || row.voucher_date >= dateFrom) && (!dateTo || row.voucher_date <= dateTo);
-        if (inRange) {
-          charged.push(credit);
-          paidOut.push(debit);
+        const paidMap = new Map<number, Decimal>();
+        for (const a of allocRows.rows) {
+          const creditEntryId = toPositiveInteger(a.credit_entry_id);
+          if (creditEntryId === undefined) continue;
+          paidMap.set(creditEntryId, toMoney(a.paid_amount as string | number | null));
         }
-        if (credit.gt(0)) {
-          const paid = paidMap.get(row.id) ?? new MoneyDecimal(0);
-          if (paid.lt(credit.minus(0.005)) && row.voucher_date <= now) overdueCount++;
-        }
-      }
-      const totalCharged = sumMoney(charged);
-      const totalPaid = sumMoney(paidOut);
 
-      const fmt = (n: Decimal) =>
-        n.toDecimalPlaces(2).toNumber().toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const allRows = rawEntries.rows;
+        const charged: Decimal[] = [];
+        const paidOut: Decimal[] = [];
+        let runningBalance: Decimal = new MoneyDecimal(0);
+        let overdueCount = 0;
+        const now = new Date().toISOString().slice(0, 10);
 
-      const periodLine =
-        dateFrom && dateTo
-          ? `Period: ${dateFrom} → ${dateTo}`
-          : dateFrom
-            ? `From: ${dateFrom}`
-            : dateTo
-              ? `To: ${dateTo}`
-              : "All time";
-
-      const message = [
-        `*Transporter Statement*`,
-        `Account: ${account.name}`,
-        periodLine,
-        ``,
-        `Total Charged: ${fmt(totalCharged)}`,
-        `Total Paid:    ${fmt(totalPaid)}`,
-        `*Outstanding:  ${fmt(runningBalance)}*`,
-        overdueCount > 0 ? `⚠️ ${overdueCount} entry/entries overdue` : `All entries current`,
-        ``,
-        `Sent on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}`,
-      ].join("\n");
-
-      const recipients = await getActiveRecipients();
-      if (!recipients.length) {
-        return res.status(400).json({ message: "No active WhatsApp recipients configured" });
-      }
-
-      let sent = 0;
-      let failed = 0;
-      const errors: string[] = [];
-
-      if (imageBase64) {
-        // Send as image
-        const base64Data = String(imageBase64).replace(/^data:image\/\w+;base64,/, "");
-        const buffer = Buffer.from(base64Data, "base64");
-        const fileName = `TransporterStatement_${account.name}_${new Date().toISOString().substring(0, 10)}.png`;
-        for (const r of recipients) {
-          const result = await sendWhatsAppFileToChatId(r.chatId, buffer, fileName, message, "image/png");
-          if (result.success) {
-            sent++;
-          } else {
-            failed++;
-            if (result.error) errors.push(result.error);
+        for (const row of allRows) {
+          const debit = toMoney(row.debit_amount);
+          const credit = toMoney(row.credit_amount);
+          runningBalance = runningBalance.plus(credit).minus(debit);
+          const inRange = (!dateFrom || row.voucher_date >= dateFrom) && (!dateTo || row.voucher_date <= dateTo);
+          if (inRange) {
+            charged.push(credit);
+            paidOut.push(debit);
+          }
+          if (credit.gt(0)) {
+            const paid = paidMap.get(row.id) ?? new MoneyDecimal(0);
+            if (paid.lt(credit.minus(0.005)) && row.voucher_date <= now) overdueCount++;
           }
         }
-      } else {
-        // Fallback: send as text
-        for (const r of recipients) {
-          const result = await sendWhatsAppTextToChatId(r.chatId, message);
-          if (result.success) {
-            sent++;
-          } else {
-            failed++;
-            if (result.error) errors.push(result.error);
+        const totalCharged = sumMoney(charged);
+        const totalPaid = sumMoney(paidOut);
+
+        const fmt = (n: Decimal) =>
+          n
+            .toDecimalPlaces(2)
+            .toNumber()
+            .toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const periodLine =
+          dateFrom && dateTo
+            ? `Period: ${dateFrom} → ${dateTo}`
+            : dateFrom
+              ? `From: ${dateFrom}`
+              : dateTo
+                ? `To: ${dateTo}`
+                : "All time";
+
+        const message = [
+          `*Transporter Statement*`,
+          `Account: ${account.name}`,
+          periodLine,
+          ``,
+          `Total Charged: ${fmt(totalCharged)}`,
+          `Total Paid:    ${fmt(totalPaid)}`,
+          `*Outstanding:  ${fmt(runningBalance)}*`,
+          overdueCount > 0 ? `⚠️ ${overdueCount} entry/entries overdue` : `All entries current`,
+          ``,
+          `Sent on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}`,
+        ].join("\n");
+
+        const recipients = await getActiveRecipients();
+        if (!recipients.length) {
+          return res.status(400).json({ message: "No active WhatsApp recipients configured" });
+        }
+
+        let sent = 0;
+        let failed = 0;
+        const errors: string[] = [];
+
+        if (imageBase64) {
+          // Send as image
+          const base64Data = String(imageBase64).replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64Data, "base64");
+          const fileName = `TransporterStatement_${account.name}_${new Date().toISOString().substring(0, 10)}.png`;
+          for (const r of recipients) {
+            const result = await sendWhatsAppFileToChatId(r.chatId, buffer, fileName, message, "image/png");
+            if (result.success) {
+              sent++;
+            } else {
+              failed++;
+              if (result.error) errors.push(result.error);
+            }
+          }
+        } else {
+          // Fallback: send as text
+          for (const r of recipients) {
+            const result = await sendWhatsAppTextToChatId(r.chatId, message);
+            if (result.success) {
+              sent++;
+            } else {
+              failed++;
+              if (result.error) errors.push(result.error);
+            }
           }
         }
-      }
 
-      res.json({ ok: true, sent, failed, errors });
-    } catch (err: unknown) {
-      logger.error("[TransporterStatement/send-whatsapp]", { error: err });
-      res.status(500).json({ message: getErrorMessage(err) });
+        res.json({ ok: true, sent, failed, errors });
+      } catch (err: unknown) {
+        logger.error("[TransporterStatement/send-whatsapp]", { error: err });
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 }

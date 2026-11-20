@@ -13,48 +13,72 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { buildSupplierProfitRows, type ProfitSourceItem } from "./analysis-core";
 import { getProfitCheckSupplierScope } from "./supplier-scope";
+import { z } from "zod";
+import { emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+const numberish = z.union([z.number(), z.string()]);
+
+// Sent by client/src/pages/supplierprofitcheck/useSupplierProfitCheckModelPart1.ts.
+// The handler keeps its supplierId, sourceType and proformaId checks.
+const analyzeInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    supplierId: numberish.optional(),
+    fromDate: z.string().nullable().optional(),
+    toDate: z.string().nullable().optional(),
+    sourceType: z.string().optional(),
+    proformaId: numberish.nullable().optional(),
+    containerIds: z.array(numberish).optional(),
+    sellPriceSource: z.string().nullable().optional(),
+    locationId: numberish.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
 
 const VALID_SOURCE_TYPES = new Set(["all", "proforma", "otw_containers"]);
 
 export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: RequestHandler) {
-  app.post("/api/supplier-profit-check/analyze", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.post(
+    "/api/supplier-profit-check/analyze",
+    requireAuth,
+    validateRequest(analyzeInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const {
-        supplierId: rawSupplierId,
-        fromDate,
-        toDate,
-        sourceType = "all",
-        proformaId: rawProformaId,
-        containerIds,
-        sellPriceSource,
-        locationId: rawLocationId,
-      } = req.body;
-      const supplierId = Number(rawSupplierId);
-      if (!Number.isInteger(supplierId) || supplierId <= 0) {
-        return res.status(400).json({ message: "supplierId required" });
-      }
-      if (!VALID_SOURCE_TYPES.has(sourceType)) {
-        return res.status(400).json({ message: "Invalid sourceType" });
-      }
-
-      const supplierScope = await getProfitCheckSupplierScope(supplierId, companyId);
-      if (!supplierScope) {
-        return res.status(404).json({ message: "Supplier not found" });
-      }
-
-      let items: ProfitSourceItem[] = [];
-
-      if (sourceType === "proforma") {
-        const proformaId = Number(rawProformaId);
-        if (!Number.isInteger(proformaId) || proformaId <= 0) {
-          return res.status(400).json({ message: "proformaId required" });
+        const {
+          supplierId: rawSupplierId,
+          fromDate,
+          toDate,
+          sourceType = "all",
+          proformaId: rawProformaId,
+          containerIds,
+          sellPriceSource,
+          locationId: rawLocationId,
+        } = req.body;
+        const supplierId = Number(rawSupplierId);
+        if (!Number.isInteger(supplierId) || supplierId <= 0) {
+          return res.status(400).json({ message: "supplierId required" });
+        }
+        if (!VALID_SOURCE_TYPES.has(sourceType)) {
+          return res.status(400).json({ message: "Invalid sourceType" });
         }
 
-        const itemsResult = await pool.query(
-          `
+        const supplierScope = await getProfitCheckSupplierScope(supplierId, companyId);
+        if (!supplierScope) {
+          return res.status(404).json({ message: "Supplier not found" });
+        }
+
+        let items: ProfitSourceItem[] = [];
+
+        if (sourceType === "proforma") {
+          const proformaId = Number(rawProformaId);
+          if (!Number.isInteger(proformaId) || proformaId <= 0) {
+            return res.status(400).json({ message: "proformaId required" });
+          }
+
+          const itemsResult = await pool.query(
+            `
           WITH source_rows AS (
             SELECT
               spl.id AS source_line_id,
@@ -115,23 +139,23 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
           GROUP BY source_rows.group_key
           ORDER BY code, id
         `,
-          [proformaId, companyId, supplierId]
-        );
-        items = itemsResult.rows as ProfitSourceItem[];
-      } else if (sourceType === "otw_containers") {
-        const requestedContainerIds = Array.isArray(containerIds)
-          ? [
-              ...new Set(
-                containerIds.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)
-              ),
-            ]
-          : [];
-        if (requestedContainerIds.length === 0) {
-          return res.status(400).json({ message: "Select at least one OTW container" });
-        }
+            [proformaId, companyId, supplierId]
+          );
+          items = itemsResult.rows as ProfitSourceItem[];
+        } else if (sourceType === "otw_containers") {
+          const requestedContainerIds = Array.isArray(containerIds)
+            ? [
+                ...new Set(
+                  containerIds.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)
+                ),
+              ]
+            : [];
+          if (requestedContainerIds.length === 0) {
+            return res.status(400).json({ message: "Select at least one OTW container" });
+          }
 
-        const scopedContainers = await pool.query(
-          `
+          const scopedContainers = await pool.query(
+            `
           SELECT id
           FROM containers
           WHERE id = ANY($1::int[])
@@ -139,16 +163,16 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
             AND supplier_id = $3
             AND status = 'OTW'
         `,
-          [requestedContainerIds, companyId, supplierId]
-        );
-        if (scopedContainers.rows.length !== requestedContainerIds.length) {
-          return res
-            .status(400)
-            .json({ message: "One or more selected containers are invalid for this supplier/company" });
-        }
+            [requestedContainerIds, companyId, supplierId]
+          );
+          if (scopedContainers.rows.length !== requestedContainerIds.length) {
+            return res
+              .status(400)
+              .json({ message: "One or more selected containers are invalid for this supplier/company" });
+          }
 
-        const itemsResult = await pool.query(
-          `
+          const itemsResult = await pool.query(
+            `
           WITH resolved AS (
             SELECT
               si.id,
@@ -204,19 +228,19 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
             resolved.stock_group_name
           ORDER BY resolved.code, resolved.id
         `,
-          [requestedContainerIds, companyId, supplierId]
-        );
-        items = itemsResult.rows as ProfitSourceItem[];
-      } else {
-        let linkedStockGroupId = supplierScope.stockGroupId;
+            [requestedContainerIds, companyId, supplierId]
+          );
+          items = itemsResult.rows as ProfitSourceItem[];
+        } else {
+          let linkedStockGroupId = supplierScope.stockGroupId;
 
-        // Parent-owned suppliers can carry a stock-group id from the parent
-        // tenant. Map that group to the active company by stable group code;
-        // if no corresponding group exists, use the active company's full item
-        // catalog rather than returning an empty Profit Check.
-        if (linkedStockGroupId && supplierScope.ownerCompanyId !== companyId) {
-          const mappedGroup = await pool.query(
-            `
+          // Parent-owned suppliers can carry a stock-group id from the parent
+          // tenant. Map that group to the active company by stable group code;
+          // if no corresponding group exists, use the active company's full item
+          // catalog rather than returning an empty Profit Check.
+          if (linkedStockGroupId && supplierScope.ownerCompanyId !== companyId) {
+            const mappedGroup = await pool.query(
+              `
             SELECT child.id
             FROM stock_groups parent
             JOIN stock_groups child
@@ -226,14 +250,14 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
               AND parent.company_id = $3
             LIMIT 1
           `,
-            [companyId, linkedStockGroupId, supplierScope.ownerCompanyId]
-          );
-          linkedStockGroupId = mappedGroup.rows[0]?.id ? Number(mappedGroup.rows[0].id) : null;
-        }
+              [companyId, linkedStockGroupId, supplierScope.ownerCompanyId]
+            );
+            linkedStockGroupId = mappedGroup.rows[0]?.id ? Number(mappedGroup.rows[0].id) : null;
+          }
 
-        const itemsResult = linkedStockGroupId
-          ? await pool.query(
-              `
+          const itemsResult = linkedStockGroupId
+            ? await pool.query(
+                `
               SELECT
                 si.id,
                 si.code,
@@ -250,10 +274,10 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
                 AND si.stock_group_id = $2
               ORDER BY si.code, si.id
             `,
-              [companyId, linkedStockGroupId]
-            )
-          : await pool.query(
-              `
+                [companyId, linkedStockGroupId]
+              )
+            : await pool.query(
+                `
               SELECT
                 si.id,
                 si.code,
@@ -269,26 +293,27 @@ export function registerSupplierProfitAnalyzeRoutes(app: Express, requireAuth: R
                 AND si.deleted_at IS NULL
               ORDER BY si.code, si.id
             `,
-              [companyId]
-            );
-        items = itemsResult.rows as ProfitSourceItem[];
+                [companyId]
+              );
+          items = itemsResult.rows as ProfitSourceItem[];
+        }
+
+        if (items.length === 0) return res.json([]);
+
+        const rows = await buildSupplierProfitRows({
+          companyId,
+          supplierId,
+          items,
+          fromDate,
+          toDate,
+          sellPriceSource,
+          locationId: rawLocationId ? Number(rawLocationId) : null,
+        });
+        res.json(rows);
+      } catch (err: unknown) {
+        logger.error("[supplier-profit-check/analyze]", { error: getErrorMessage(err) });
+        res.status(500).json({ message: getErrorMessage(err) });
       }
-
-      if (items.length === 0) return res.json([]);
-
-      const rows = await buildSupplierProfitRows({
-        companyId,
-        supplierId,
-        items,
-        fromDate,
-        toDate,
-        sellPriceSource,
-        locationId: rawLocationId ? Number(rawLocationId) : null,
-      });
-      res.json(rows);
-    } catch (err: unknown) {
-      logger.error("[supplier-profit-check/analyze]", { error: getErrorMessage(err) });
-      res.status(500).json({ message: getErrorMessage(err) });
     }
-  });
+  );
 }

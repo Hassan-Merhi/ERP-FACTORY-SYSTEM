@@ -18,6 +18,20 @@ import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { getLoadingPlanKind, mergeNewProformaArticles, usesLiveMasterProforma } from "./proformaPlan";
 import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
 import { canViewBookingInfo } from "./bookingInfo";
+import { z } from "zod";
+import {
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const hiddenInput = {
+  params: idParams,
+  query: emptyQuery,
+  body: z.strictObject({ isHidden: z.boolean() }),
+} satisfies RequestSchemas;
 import { registerOrderProfitabilityRoute } from "./orderProfitabilityRoute";
 
 export function registerOrderCrudRoutesPart2(app: Express) {
@@ -191,23 +205,26 @@ export function registerOrderCrudRoutesPart2(app: Express) {
     }
   });
 
-  app.patch("/api/factory/customer-orders/:id/hidden", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const { isHidden } = req.body;
-      if (typeof isHidden !== "boolean") return res.status(400).json({ message: "isHidden must be boolean" });
-      await db
-        .update(customerOrders)
-        .set({ isHidden })
-        .where(and(eq(customerOrders.id, id), eq(customerOrders.companyId, companyId)));
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  app.patch(
+    "/api/factory/customer-orders/:id/hidden",
+    requireAuth,
+    validateRequest(hiddenInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { id } = validatedInput(req, hiddenInput).params;
+        const { isHidden } = req.body;
+        await db
+          .update(customerOrders)
+          .set({ isHidden })
+          .where(and(eq(customerOrders.id, id), eq(customerOrders.companyId, companyId)));
+        res.json({ success: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   registerOrderProfitabilityRoute(app);
 }

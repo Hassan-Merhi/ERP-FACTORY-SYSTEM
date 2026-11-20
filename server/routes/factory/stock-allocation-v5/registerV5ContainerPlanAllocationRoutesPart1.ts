@@ -16,6 +16,29 @@ import {
   positiveInt,
   writeAllocationAudit,
 } from "./container-plan-allocationsLoadCustomerDemand";
+import { z } from "zod";
+import {
+  emptyQuery,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const numberOrString = z.union([z.number(), z.string()]);
+
+// The handler keeps its required checks; validateContainerAllocation rejects
+// bad lines one by one with its own messages.
+const saveAllocationInput = {
+  params: z.strictObject({ planId: stringParam, containerId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    customerId: numberOrString.optional(),
+    orderId: numberOrString.nullable().optional(),
+    notes: z.string().nullable().optional(),
+    lines: z.array(z.strictObject({ articleCode: z.string().optional(), qty: numberOrString.optional() })).optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerV5ContainerPlanAllocationRoutesPart1(app: Express) {
   // Both sides of Phase 5: container coverage and customer order coverage.
@@ -46,12 +69,14 @@ export function registerV5ContainerPlanAllocationRoutesPart1(app: Express) {
   app.put(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/allocations",
     requireAuth,
+    validateRequest(saveAllocationInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, saveAllocationInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         const customerId = positiveInt(req.body?.customerId);
         const orderId = positiveInt(req.body?.orderId);
         const notes = typeof req.body?.notes === "string" ? req.body.notes.trim().slice(0, 500) : null;

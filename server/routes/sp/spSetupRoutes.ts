@@ -8,93 +8,108 @@ import { requireSpCompany, getSpAccount, SP_ACCOUNTS } from "./spHelpers";
 import { getSpSupplierVoucherLinkGapCount } from "./spSupplierVoucherSync";
 import { loadGoldenCoastAccounts, loadGoldenCoastSettings, loadCompanyAccountNames } from "./spGoldenCoastSetupRoutes";
 import { summarizeGoldenCoastAccountSetup } from "../../services/accounting/goldenCoastPhase2Accounts";
+import { z } from "zod";
+import { validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+import { spWriteFields } from "./spRequestSchemas";
+
+const spSetupInput = {
+  body: z.strictObject({
+    ...spWriteFields,
+  }),
+} satisfies RequestSchemas;
 
 // ── Setup ─────────────────────────────────────────────────────────────────
 
 export function registerSpSetupRoutes(app: Express) {
-  app.post("/api/sp/setup", requireAuth, requireRole("Admin"), async (req: Request, res: Response) => {
-    try {
-      const companyId = await requireSpCompany(req, res);
-      if (!companyId) return;
+  app.post(
+    "/api/sp/setup",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(spSetupInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = await requireSpCompany(req, res);
+        if (!companyId) return;
 
-      const created: string[] = [];
-      const existing: string[] = [];
-      const liveAccountNames = new Set(
-        (
-          await db
-            .select({ name: ledgerAccounts.name })
-            .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)))
-        ).map((account) => account.name)
-      );
+        const created: string[] = [];
+        const existing: string[] = [];
+        const liveAccountNames = new Set(
+          (
+            await db
+              .select({ name: ledgerAccounts.name })
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)))
+          ).map((account) => account.name)
+        );
 
-      for (const acct of SP_ACCOUNTS) {
-        const found = await getSpAccount(companyId, acct.subType);
-        if (!found) {
-          const [codeCollision] = await db
-            .select({ id: ledgerAccounts.id })
-            .from(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, acct.code)))
-            .limit(1);
-          const code = codeCollision ? `${acct.code}-${companyId}` : acct.code;
-          let name = acct.name;
-          if (liveAccountNames.has(name)) {
-            name = `${acct.name} (${acct.code})`;
-            let suffix = 2;
-            while (liveAccountNames.has(name)) {
-              name = `${acct.name} (${acct.code}-${suffix})`;
-              suffix += 1;
+        for (const acct of SP_ACCOUNTS) {
+          const found = await getSpAccount(companyId, acct.subType);
+          if (!found) {
+            const [codeCollision] = await db
+              .select({ id: ledgerAccounts.id })
+              .from(ledgerAccounts)
+              .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, acct.code)))
+              .limit(1);
+            const code = codeCollision ? `${acct.code}-${companyId}` : acct.code;
+            let name = acct.name;
+            if (liveAccountNames.has(name)) {
+              name = `${acct.name} (${acct.code})`;
+              let suffix = 2;
+              while (liveAccountNames.has(name)) {
+                name = `${acct.name} (${acct.code}-${suffix})`;
+                suffix += 1;
+              }
             }
+            await db.insert(ledgerAccounts).values({
+              companyId,
+              code,
+              name,
+              accountType: acct.accountType,
+              subType: acct.subType,
+              isHidden: acct.isHidden,
+              active: true,
+            });
+            liveAccountNames.add(name);
+            created.push(name);
+          } else {
+            existing.push(acct.name);
           }
-          await db.insert(ledgerAccounts).values({
+        }
+
+        // Ensure a default location exists for inventory tracking
+        const locs = await db
+          .select()
+          .from(locations)
+          .where(and(eq(locations.companyId, companyId), isNull(locations.deletedAt)));
+        if (locs.length === 0) {
+          await db.insert(locations).values({
             companyId,
-            code,
-            name,
-            accountType: acct.accountType,
-            subType: acct.subType,
-            isHidden: acct.isHidden,
+            code: "SP-WH-001",
+            name: "Main Warehouse",
             active: true,
           });
-          liveAccountNames.add(name);
-          created.push(name);
-        } else {
-          existing.push(acct.name);
+          created.push("Default location: Main Warehouse");
         }
-      }
 
-      // Ensure a default location exists for inventory tracking
-      const locs = await db
-        .select()
-        .from(locations)
-        .where(and(eq(locations.companyId, companyId), isNull(locations.deletedAt)));
-      if (locs.length === 0) {
-        await db.insert(locations).values({
-          companyId,
-          code: "SP-WH-001",
-          name: "Main Warehouse",
-          active: true,
+        // Wave 16 (A): setup reports supplier links that differ; it no longer
+        // rewrites posted vouchers. They are repaired through the Owner
+        // preview/apply (/api/sp/admin/supplier-voucher-links/plan and /apply).
+        // The link trigger itself is part of the migrated schema.
+        const supplierVoucherLinkGapCount = await getSpSupplierVoucherLinkGapCount(companyId);
+
+        res.json({
+          created,
+          existing,
+          repairedSupplierVoucherLinks: 0,
+          supplierVoucherLinkGapCount,
+          requiredAccountCount: SP_ACCOUNTS.length,
+          message: created.length > 0 ? "Setup complete" : "Already configured",
         });
-        created.push("Default location: Main Warehouse");
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      // Wave 16 (A): setup reports supplier links that differ; it no longer
-      // rewrites posted vouchers. They are repaired through the Owner
-      // preview/apply (/api/sp/admin/supplier-voucher-links/plan and /apply).
-      // The link trigger itself is part of the migrated schema.
-      const supplierVoucherLinkGapCount = await getSpSupplierVoucherLinkGapCount(companyId);
-
-      res.json({
-        created,
-        existing,
-        repairedSupplierVoucherLinks: 0,
-        supplierVoucherLinkGapCount,
-        requiredAccountCount: SP_ACCOUNTS.length,
-        message: created.length > 0 ? "Setup complete" : "Already configured",
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/sp/setup/status", requireAuth, async (req: Request, res: Response) => {
     try {

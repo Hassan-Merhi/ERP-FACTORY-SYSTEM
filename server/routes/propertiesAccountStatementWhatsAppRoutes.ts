@@ -4,10 +4,12 @@
  */
 import type { Express, Request, Response } from "express";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { requireAuth, requireRole } from "../auth";
 import { db, pool } from "../db";
 import { companies, ledgerAccounts } from "@shared/schema";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { fetchGreenApiChats, getPosWaSettings, normaliseChatId } from "../services/whatsappService";
 import {
   DEFAULT_PROPERTIES_WA_SCHEDULE,
@@ -15,6 +17,33 @@ import {
 } from "../services/propertiesAccountStatementWhatsApp";
 
 const authorized = [requireAuth, requireRole("Admin", "Owner", "Developer")] as const;
+
+/** scopedAccount() checks the account id; the handler checks the dates and the request id. */
+const sendStatementInput = {
+  params: z.strictObject({ accountId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    requestId: z.union([z.string(), z.number()]).optional(),
+    startDate: z.string().nullable().optional(),
+    endDate: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+/** The handler checks the recipient, time, days and timezone and keeps its messages. */
+const saveScheduleInput = {
+  params: z.strictObject({ accountId: stringParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    chatId: z.string().nullable().optional(),
+    enabled: z.boolean(),
+    frequency: z.enum(["daily", "weekly", "monthly"]),
+    sendTime: z.string(),
+    dayOfWeek: z.union([z.number(), z.string()]),
+    dayOfMonth: z.union([z.number(), z.string()]),
+    timezone: z.string().nullable().optional(),
+    periodMode: z.enum(["current_month", "previous_month"]),
+  }),
+} satisfies RequestSchemas;
 
 async function scopedAccount(req: Request, res: Response) {
   const companyId = Number(req.session.currentCompanyId);
@@ -85,7 +114,7 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
     }
   });
 
-  app.put(prefix, ...authorized, async (req, res) => {
+  app.put(prefix, ...authorized, validateRequest(saveScheduleInput), async (req, res) => {
     try {
       const account = await scopedAccount(req, res);
       if (!account) return;
@@ -173,7 +202,7 @@ export function registerPropertiesAccountStatementWhatsAppRoutes(app: Express): 
     }
   });
 
-  app.post(prefix + "/send", ...authorized, async (req, res) => {
+  app.post(prefix + "/send", ...authorized, validateRequest(sendStatementInput), async (req, res) => {
     try {
       const account = await scopedAccount(req, res);
       if (!account) return;

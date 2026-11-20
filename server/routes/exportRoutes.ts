@@ -4,6 +4,9 @@ import { pool } from "../db";
 import { logger } from "../lib/logger";
 import { fetchAllCompanies } from "../services/export-data";
 import { registerExportRoutesStep1, registerExportRoutesStep2 } from "./registerExportRoutesStep2";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+const cleanupStuckRunsInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerExportRoutes(app: Express) {
   const { guard } = registerExportRoutesStep1(app);
@@ -29,9 +32,13 @@ function registerExportRoutesStep3(
   // ── Force-cleanup stuck export runs ─────────────────────────────────────────
   // Marks ALL 'running' rows as failed regardless of age. The UI only shows the
   // button when a run has been running >5 min client-side, so this is safe.
-  app.post("/api/export/cleanup-stuck-runs", guard, async (_req: Request, res: Response) => {
-    try {
-      const r = await pool.query(`
+  app.post(
+    "/api/export/cleanup-stuck-runs",
+    guard,
+    validateRequest(cleanupStuckRunsInput),
+    async (_req: Request, res: Response) => {
+      try {
+        const r = await pool.query(`
         UPDATE daily_export_runs
            SET status         = 'failed',
                finished_at    = NOW(),
@@ -39,14 +46,15 @@ function registerExportRoutesStep3(
          WHERE status = 'running'
         RETURNING id, run_type
       `);
-      const count = r.rowCount ?? 0;
-      logger.info(`[ExportRun] Manual dismiss: cleared ${count} stuck run(s)`);
-      res.json({ cleared: count, ids: r.rows.map((x) => x.id) });
-    } catch (e: unknown) {
-      logger.error("[ExportRun] Manual dismiss failed:", { error: getErrorMessage(e) });
-      res.status(500).json({ message: getErrorMessage(e) });
+        const count = r.rowCount ?? 0;
+        logger.info(`[ExportRun] Manual dismiss: cleared ${count} stuck run(s)`);
+        res.json({ cleared: count, ids: r.rows.map((x) => x.id) });
+      } catch (e: unknown) {
+        logger.error("[ExportRun] Manual dismiss failed:", { error: getErrorMessage(e) });
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── Backup status ───────────────────────────────────────────────────────────
 

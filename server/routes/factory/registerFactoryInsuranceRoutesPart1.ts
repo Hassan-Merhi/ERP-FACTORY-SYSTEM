@@ -5,6 +5,8 @@ import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { extraChargeInput, importPreviewInput } from "./factoryInsuranceRouteSchemas";
 import { insuranceMembers, ledgerAccounts } from "@shared/schema";
 import { postBalancedVoucherTx, PostingValidationError } from "../../services/accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
@@ -26,6 +28,7 @@ export function registerFactoryInsuranceRoutesPart1(app: Express) {
     requireAuth,
     requireNonPOS,
     requireFactoryTabAccess("factory/payroll-hub", "hide_tab_payrollhub_insurance"),
+    validateRequest(extraChargeInput),
     async (req: Request, res: Response) => {
       const parsed = insuranceExtraChargeSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -147,6 +150,7 @@ export function registerFactoryInsuranceRoutesPart1(app: Express) {
     privilegedMutationRateLimit,
     requireAuth,
     spreadsheetUpload.single("file"),
+    validateRequest(importPreviewInput),
     async (req: Request, res: Response) => {
       try {
         resolveRequestCompanyId(req);

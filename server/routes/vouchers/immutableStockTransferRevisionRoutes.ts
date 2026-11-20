@@ -2,6 +2,15 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { requireActionAccess } from "../../lib/permissionMiddleware";
+import {
+  emptyBody,
+  emptyQuery,
+  positiveIntParam,
+  stringParam,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
 import { logger } from "../../lib/logger";
 import { logAudit } from "../_helpers";
 import type { DbTransaction } from "../../db";
@@ -21,25 +30,50 @@ import {
   captureStockTransferRevisionTx,
 } from "../../services/inventory/stockTransferWorkflowCapture";
 
+const revisionItemSchema = z.object({
+  stockItemId: z.coerce.number().int().positive(),
+  stockItemName: z.string().min(1),
+  sourceLocationId: z.coerce.number().int().positive(),
+  sourceLocationName: z.string().optional().nullable(),
+  originalQuantity: z.coerce.number().nonnegative(),
+  newQuantity: z.coerce.number().nonnegative(),
+  delta: z.coerce.number().optional(),
+});
+
 const revisionSchema = z.object({
   note: z.string().optional().nullable(),
   optional: z.boolean().optional().default(false),
-  items: z
-    .array(
-      z.object({
-        stockItemId: z.coerce.number().int().positive(),
-        stockItemName: z.string().min(1),
-        sourceLocationId: z.coerce.number().int().positive(),
-        sourceLocationName: z.string().optional().nullable(),
-        originalQuantity: z.coerce.number().nonnegative(),
-        newQuantity: z.coerce.number().nonnegative(),
-        delta: z.coerce.number().optional(),
-      })
-    )
-    .min(1),
+  items: z.array(revisionItemSchema).min(1),
 });
 
 const rejectionSchema = z.object({ reason: z.string().trim().max(1000).optional().nullable() });
+
+// The handlers still parse (and coerce) with the schemas above; these reject unknown fields first.
+const revisionIdParams = z.strictObject({ id: positiveIntParam });
+const createRevisionInput = {
+  params: z.strictObject({ transferId: positiveIntParam }),
+  query: emptyQuery,
+  body: revisionSchema.extend({ items: z.array(revisionItemSchema.strict()).min(1) }).strict(),
+} satisfies RequestSchemas;
+const approveRevisionInput = { params: revisionIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const rejectRevisionInput = {
+  params: revisionIdParams,
+  query: emptyQuery,
+  body: z.union([z.undefined(), rejectionSchema.strict()]),
+} satisfies RequestSchemas;
+// Revisions are immutable: these two answer 409 whatever they are sent.
+const immutableRevisionParams = z.strictObject({ id: stringParam });
+const setRevisionOptionalInput = {
+  params: immutableRevisionParams,
+  query: emptyQuery,
+  // sent by client/src/pages/stock-transfer-order/RevisionHistoryPanel.tsx; not used
+  body: z.union([z.undefined(), z.strictObject({ optional: z.unknown().optional() })]),
+} satisfies RequestSchemas;
+const deleteRevisionInput = {
+  params: immutableRevisionParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 function userId(req: Request): string {
   return String(req.user?.id ?? req.session.userId ?? "").trim();
@@ -177,100 +211,102 @@ async function auditRevision(
  * lifecycle while preserving the existing public endpoint paths.
  */
 export function registerImmutableStockTransferRevisionRoutes(app: Express) {
-  app.post("/api/stock-transfers/:transferId/revisions", requireAuth, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const transferId = Number(req.params.transferId);
-      if (!Number.isInteger(transferId) || transferId <= 0) {
-        return res.status(400).json({ message: "Transfer ID is required" });
-      }
-      const actorId = userId(req);
-      if (!actorId) return res.status(401).json({ message: "User session is required" });
+  app.post(
+    "/api/stock-transfers/:transferId/revisions",
+    requireAuth,
+    validateRequest(createRevisionInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { transferId } = validatedInput(req, createRevisionInput).params;
+        const actorId = userId(req);
+        if (!actorId) return res.status(401).json({ message: "User session is required" });
 
-      const parsed = revisionSchema.parse(req.body);
-      const role = req.user?.role ?? req.session.currentRole;
-      if (role === "POS" && parsed.optional !== true) {
-        return res.status(403).json({ message: "POS users may only submit revisions for admin review" });
-      }
-      const assignedLocationId =
-        role === "POS" ? Number(req.user?.assignedLocationId ?? req.session.currentLocationId ?? 0) || null : null;
-      if (role === "POS" && !assignedLocationId) {
-        return res.status(403).json({ message: "POS user has no assigned source location" });
-      }
+        const parsed = revisionSchema.parse(req.body);
+        const role = req.user?.role ?? req.session.currentRole;
+        if (role === "POS" && parsed.optional !== true) {
+          return res.status(403).json({ message: "POS users may only submit revisions for admin review" });
+        }
+        const assignedLocationId =
+          role === "POS" ? Number(req.user?.assignedLocationId ?? req.session.currentLocationId ?? 0) || null : null;
+        if (role === "POS" && !assignedLocationId) {
+          return res.status(403).json({ message: "POS user has no assigned source location" });
+        }
 
-      const result = await createImmutableStockTransferRevision(
-        {
-          companyId,
-          transferId,
-          userId: actorId,
-          note: parsed.note,
-          pending: parsed.optional,
-          sourceLocationIdLimit: assignedLocationId,
-          items: parsed.items.map((item) => ({
-            stockItemId: item.stockItemId,
-            stockItemName: item.stockItemName,
-            sourceLocationId: item.sourceLocationId,
-            sourceLocationName: item.sourceLocationName,
-            originalQuantity: item.originalQuantity,
-            newQuantity: item.newQuantity,
-          })),
-        },
-        async (tx, written) => {
-          // Factory LAN server: the revision is recorded for the cloud in this transaction.
-          await captureStockTransferRevisionTx(req, tx, written, {
-            note: parsed.note ?? null,
+        const result = await createImmutableStockTransferRevision(
+          {
+            companyId,
+            transferId,
+            userId: actorId,
+            note: parsed.note,
             pending: parsed.optional,
             sourceLocationIdLimit: assignedLocationId,
             items: parsed.items.map((item) => ({
               stockItemId: item.stockItemId,
               stockItemName: item.stockItemName,
               sourceLocationId: item.sourceLocationId,
-              sourceLocationName: item.sourceLocationName ?? null,
+              sourceLocationName: item.sourceLocationName,
               originalQuantity: item.originalQuantity,
               newQuantity: item.newQuantity,
             })),
-          });
-          await auditRevision(
-            req,
-            companyId,
-            written.revisionId,
-            `transfer-${written.transferId}-revision-${written.revisionNumber}`,
-            "create",
-            {
-              revisionNumber: { new: written.revisionNumber },
-              status: { new: written.status },
-              note: { new: parsed.note?.trim() || null },
-              itemCount: { new: written.itemCount },
-              route: {
-                new: `${written.sourceLocationName} -> ${written.destinationLocationName}`,
+          },
+          async (tx, written) => {
+            // Factory LAN server: the revision is recorded for the cloud in this transaction.
+            await captureStockTransferRevisionTx(req, tx, written, {
+              note: parsed.note ?? null,
+              pending: parsed.optional,
+              sourceLocationIdLimit: assignedLocationId,
+              items: parsed.items.map((item) => ({
+                stockItemId: item.stockItemId,
+                stockItemName: item.stockItemName,
+                sourceLocationId: item.sourceLocationId,
+                sourceLocationName: item.sourceLocationName ?? null,
+                originalQuantity: item.originalQuantity,
+                newQuantity: item.newQuantity,
+              })),
+            });
+            await auditRevision(
+              req,
+              companyId,
+              written.revisionId,
+              `transfer-${written.transferId}-revision-${written.revisionNumber}`,
+              "create",
+              {
+                revisionNumber: { new: written.revisionNumber },
+                status: { new: written.status },
+                note: { new: parsed.note?.trim() || null },
+                itemCount: { new: written.itemCount },
+                route: {
+                  new: `${written.sourceLocationName} -> ${written.destinationLocationName}`,
+                },
+                items: { new: revisionItemsForAudit(written.items) },
               },
-              items: { new: revisionItemsForAudit(written.items) },
-            },
-            tx
-          );
+              tx
+            );
+          }
+        );
+
+        queueRevisedTransferWhatsApp(result);
+
+        return res.status(201).json({
+          id: result.revisionId,
+          transferId: result.transferId,
+          revisionNumber: result.revisionNumber,
+          status: result.status,
+          optional: result.optional,
+          sourceLocationName: result.sourceLocationName,
+          destinationLocationName: result.destinationLocationName,
+          items: result.items,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ message: "Invalid revision data", errors: error.issues });
         }
-      );
-
-      queueRevisedTransferWhatsApp(result);
-
-      return res.status(201).json({
-        id: result.revisionId,
-        transferId: result.transferId,
-        revisionNumber: result.revisionNumber,
-        status: result.status,
-        optional: result.optional,
-        sourceLocationName: result.sourceLocationName,
-        destinationLocationName: result.destinationLocationName,
-        items: result.items,
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid revision data", errors: error.issues });
+        return sendError(res, error, "Create");
       }
-      return sendError(res, error, "Create");
     }
-  });
+  );
 
   app.get("/api/stock-transfers/by-voucher/:voucherId/revisions", requireAuth, async (req, res) => {
     try {
@@ -307,14 +343,12 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireActionAccess("act_transfer_stock"),
+    validateRequest(approveRevisionInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const revisionId = Number(req.params.id);
-        if (!Number.isInteger(revisionId) || revisionId <= 0) {
-          return res.status(400).json({ message: "Revision ID is required" });
-        }
+        const revisionId = validatedInput(req, approveRevisionInput).params.id;
         const actorId = userId(req);
         if (!actorId) return res.status(401).json({ message: "User session is required" });
 
@@ -359,14 +393,12 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
     requireAuth,
     requireNonPOS,
     requireActionAccess("act_transfer_stock"),
+    validateRequest(rejectRevisionInput),
     async (req, res) => {
       try {
         const companyId = req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const revisionId = Number(req.params.id);
-        if (!Number.isInteger(revisionId) || revisionId <= 0) {
-          return res.status(400).json({ message: "Revision ID is required" });
-        }
+        const revisionId = validatedInput(req, rejectRevisionInput).params.id;
         const actorId = userId(req);
         if (!actorId) return res.status(401).json({ message: "User session is required" });
         const parsed = rejectionSchema.parse(req.body ?? {});
@@ -407,17 +439,29 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
     }
   );
 
-  app.patch("/api/stock-transfer-revisions/:id/optional", requireAuth, requireNonPOS, (_req, res) => {
-    return res.status(409).json({
-      message: "Revision status is immutable. Approve or reject the pending revision instead.",
-      code: "STOCK_TRANSFER_REVISION_IMMUTABLE",
-    });
-  });
+  app.patch(
+    "/api/stock-transfer-revisions/:id/optional",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(setRevisionOptionalInput),
+    (_req, res) => {
+      return res.status(409).json({
+        message: "Revision status is immutable. Approve or reject the pending revision instead.",
+        code: "STOCK_TRANSFER_REVISION_IMMUTABLE",
+      });
+    }
+  );
 
-  app.delete("/api/stock-transfer-revisions/:id", requireAuth, requireNonPOS, (_req, res) => {
-    return res.status(409).json({
-      message: "Revision history is immutable and cannot be deleted.",
-      code: "STOCK_TRANSFER_REVISION_IMMUTABLE",
-    });
-  });
+  app.delete(
+    "/api/stock-transfer-revisions/:id",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(deleteRevisionInput),
+    (_req, res) => {
+      return res.status(409).json({
+        message: "Revision history is immutable and cannot be deleted.",
+        code: "STOCK_TRANSFER_REVISION_IMMUTABLE",
+      });
+    }
+  );
 }

@@ -19,6 +19,16 @@ import { eq, and, sql } from "drizzle-orm";
 import { hasIntercompanyTradesTable } from "../../lib/intercompanyTradeAvailability";
 import { containerDetailVisibilityCondition } from "../../lib/containerDetailVisibilityCondition";
 import { registerContainerCrudRoutesPart1 } from "./registerContainerCrudRoutesPart1";
+import {
+  emptyBody,
+  emptyQuery,
+  idParams,
+  validateRequest,
+  validatedInput,
+  type RequestSchemas,
+} from "../../lib/validateRequest";
+
+const deleteContainerInput = { params: idParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerContainerCrudRoutes(app: Express) {
   registerContainerCrudRoutesPart1(app);
@@ -122,58 +132,60 @@ export function registerContainerCrudRoutes(app: Express) {
 
   // Offload container to location (ERP only — SP companies must use /api/sp/offload)
 
-  app.delete("/api/containers/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid container ID" });
-      }
+  app.delete(
+    "/api/containers/:id",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(deleteContainerInput),
+    async (req, res) => {
+      try {
+        const { id } = validatedInput(req, deleteContainerInput).params;
 
-      const existingContainer = await storage.getContainerById(id);
-      if (!existingContainer) {
-        return res.status(404).json({ message: "Container not found" });
-      }
-
-      // Verify container belongs to current company
-      if (existingContainer.companyId !== req.session.currentCompanyId) {
-        return res.status(403).json({
-          message: "Access denied: Container belongs to a different company",
-        });
-      }
-
-      // Phase 21 (B): the delete audit is written on the deletion's transaction.
-      await storage.deleteContainer(
-        id,
-        {
-          userId: req.session.userId ?? "unknown",
-          username: req.session.username || "unknown",
-        },
-        async (tx) => {
-          await logAudit(
-            {
-              userId: req.session.userId!,
-              username: req.session.username || "unknown",
-              companyId: req.session.currentCompanyId!,
-              action: "delete",
-              tableName: "containers",
-              recordId: existingContainer.id,
-              recordIdentifier: existingContainer.containerNumber || `Container #${id}`,
-              changes: {
-                containerNumber: { old: existingContainer.containerNumber },
-                status: { old: existingContainer.status },
-                importDate: { old: existingContainer.importDate },
-              },
-            },
-            tx
-          );
+        const existingContainer = await storage.getContainerById(id);
+        if (!existingContainer) {
+          return res.status(404).json({ message: "Container not found" });
         }
-      );
-      res.json({ message: "Container deleted successfully" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+
+        // Verify container belongs to current company
+        if (existingContainer.companyId !== req.session.currentCompanyId) {
+          return res.status(403).json({
+            message: "Access denied: Container belongs to a different company",
+          });
+        }
+
+        // Phase 21 (B): the delete audit is written on the deletion's transaction.
+        await storage.deleteContainer(
+          id,
+          {
+            userId: req.session.userId ?? "unknown",
+            username: req.session.username || "unknown",
+          },
+          async (tx) => {
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId: req.session.currentCompanyId!,
+                action: "delete",
+                tableName: "containers",
+                recordId: existingContainer.id,
+                recordIdentifier: existingContainer.containerNumber || `Container #${id}`,
+                changes: {
+                  containerNumber: { old: existingContainer.containerNumber },
+                  status: { old: existingContainer.status },
+                  importDate: { old: existingContainer.importDate },
+                },
+              },
+              tx
+            );
+          }
+        );
+        res.json({ message: "Container deleted successfully" });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // Backfill voucher entries for existing POs
 }

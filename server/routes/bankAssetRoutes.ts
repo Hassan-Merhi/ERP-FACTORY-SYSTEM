@@ -1,6 +1,8 @@
 import type { Express } from "express";
+import { z } from "zod";
 import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { emptyBody, emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../lib/validateRequest";
 import { createHash } from "crypto";
 import { db, pool } from "../db";
 import { storage } from "../storage";
@@ -23,6 +25,32 @@ export const FIXED_ASSET_HAS_OPENING_MESSAGE =
 export const FIXED_ASSET_HAS_ENTRIES_CODE = "FIXED_ASSET_HAS_ENTRIES" as const;
 export const FIXED_ASSET_HAS_ENTRIES_MESSAGE =
   "This fixed asset has voucher lines, so it cannot be deleted. Deactivate it instead.";
+
+// The fixed_assets columns as JSON types; the handler still parses with insertFixedAssetSchema.
+const nullableString = z.string().nullable().optional();
+const createFixedAssetInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    // Ignored: the asset always belongs to the active company.
+    companyId: z.number().nullable().optional(),
+    code: z.string(),
+    name: z.string(),
+    category: z.string(),
+    purchaseDate: z.string(),
+    purchaseAmount: z.string(),
+    purchaseNativeAmount: nullableString,
+    purchaseCurrency: nullableString,
+    purchaseHistoricalRate: nullableString,
+    purchaseBaseAmount: nullableString,
+    depreciationMethod: z.string(),
+    usefulLife: z.number().nullable().optional(),
+    openingBalance: nullableString,
+    active: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
+const deleteFixedAssetInput = { params: stringIdParams, query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+// Multipart: the file is read by multer; the parse step takes no form fields.
+const poImportParseInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
 
 export function registerBankAssetRoutes(app: Express) {
   // Bank account master routes first (their registration order is unchanged).
@@ -85,7 +113,7 @@ export function registerBankAssetRoutes(app: Express) {
     }
   });
 
-  app.post("/api/fixed-assets", requireAuth, async (req, res) => {
+  app.post("/api/fixed-assets", requireAuth, validateRequest(createFixedAssetInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -143,157 +171,169 @@ export function registerBankAssetRoutes(app: Express) {
   // code, for the history), refused while the asset has an opening or any
   // voucher line (live or deleted voucher), audited in the same transaction.
   // It was sign-in only and a hard delete with no audit.
-  app.delete("/api/fixed-assets/:id", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid asset ID" });
+  app.delete(
+    "/api/fixed-assets/:id",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    validateRequest(deleteFixedAssetInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseInt(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ message: "Invalid asset ID" });
 
-      const outcome = await db.transaction(async (tx) => {
-        const [asset] = await tx
-          .select()
-          .from(fixedAssets)
-          .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId), isNull(fixedAssets.deletedAt)))
-          .for("update");
-        if (!asset) return { status: 404 as const, body: { message: "Fixed asset not found" } };
-        if (!toMoney(asset.openingBalance).isZero()) {
-          return {
-            status: 409 as const,
-            body: { message: FIXED_ASSET_HAS_OPENING_MESSAGE, code: FIXED_ASSET_HAS_OPENING_CODE },
-          };
-        }
-        const entryCheck = await tx.execute<{ cnt: string } & Record<string, unknown>>(
-          sql`SELECT COUNT(*)::text AS cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
-        );
-        if (Number(entryCheck.rows[0]?.cnt ?? 0) > 0) {
-          return {
-            status: 409 as const,
-            body: { message: FIXED_ASSET_HAS_ENTRIES_MESSAGE, code: FIXED_ASSET_HAS_ENTRIES_CODE },
-          };
-        }
-        const [deleted] = await tx
-          .update(fixedAssets)
-          .set({ deletedAt: new Date(), active: false })
-          .where(eq(fixedAssets.id, id))
-          .returning();
-        await logAudit(
-          {
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "delete",
-            tableName: "fixed_assets",
-            recordId: deleted.id,
-            recordIdentifier: deleted.name,
-            changes: buildAuditChanges(asset, deleted, ["code", "name", "category", "purchaseAmount", "active"]),
-          },
-          tx
-        );
-        return { status: 200 as const, body: { message: "Fixed asset deleted successfully" } };
-      });
-      res.status(outcome.status).json(outcome.body);
-    } catch (error: unknown) {
-      res.status(errorStatus(error, 500)).json({ message: getErrorMessage(error) });
+        const outcome = await db.transaction(async (tx) => {
+          const [asset] = await tx
+            .select()
+            .from(fixedAssets)
+            .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId), isNull(fixedAssets.deletedAt)))
+            .for("update");
+          if (!asset) return { status: 404 as const, body: { message: "Fixed asset not found" } };
+          if (!toMoney(asset.openingBalance).isZero()) {
+            return {
+              status: 409 as const,
+              body: { message: FIXED_ASSET_HAS_OPENING_MESSAGE, code: FIXED_ASSET_HAS_OPENING_CODE },
+            };
+          }
+          const entryCheck = await tx.execute<{ cnt: string } & Record<string, unknown>>(
+            sql`SELECT COUNT(*)::text AS cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
+          );
+          if (Number(entryCheck.rows[0]?.cnt ?? 0) > 0) {
+            return {
+              status: 409 as const,
+              body: { message: FIXED_ASSET_HAS_ENTRIES_MESSAGE, code: FIXED_ASSET_HAS_ENTRIES_CODE },
+            };
+          }
+          const [deleted] = await tx
+            .update(fixedAssets)
+            .set({ deletedAt: new Date(), active: false })
+            .where(eq(fixedAssets.id, id))
+            .returning();
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "delete",
+              tableName: "fixed_assets",
+              recordId: deleted.id,
+              recordIdentifier: deleted.name,
+              changes: buildAuditChanges(asset, deleted, ["code", "name", "category", "purchaseAmount", "active"]),
+            },
+            tx
+          );
+          return { status: 200 as const, body: { message: "Fixed asset deleted successfully" } };
+        });
+        res.status(outcome.status).json(outcome.body);
+      } catch (error: unknown) {
+        res.status(errorStatus(error, 500)).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // PO Import - Parse and Preview Excel
-  app.post("/api/po-import/parse", requireAuth, spreadsheetUpload.single("file"), async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.post(
+    "/api/po-import/parse",
+    requireAuth,
+    spreadsheetUpload.single("file"),
+    validateRequest(poImportParseInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      if (!req.file) {
-        return res.status(400).json({ message: "No file uploaded" });
-      }
+        if (!req.file) {
+          return res.status(400).json({ message: "No file uploaded" });
+        }
 
-      const workbook = await readExcel(req.file.buffer);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const rawData = sheetToJson(worksheet);
+        const workbook = await readExcel(req.file.buffer);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rawData = sheetToJson(worksheet);
 
-      if (rawData.length === 0) {
-        return res.status(400).json({ message: "Excel file is empty" });
-      }
+        if (rawData.length === 0) {
+          return res.status(400).json({ message: "Excel file is empty" });
+        }
 
-      // Calculate file hash for idempotency
-      const fileHash = createHash("md5").update(req.file.buffer).digest("hex");
+        // Calculate file hash for idempotency
+        const fileHash = createHash("md5").update(req.file.buffer).digest("hex");
 
-      // Check if file already imported
-      const existingImport = await storage.getImportLogByHash(fileHash);
-      if (existingImport) {
-        return res.status(400).json({
-          message: "This file has already been imported",
-          importedAt: existingImport.createdAt,
-          containerId: existingImport.containerId,
+        // Check if file already imported
+        const existingImport = await storage.getImportLogByHash(fileHash);
+        if (existingImport) {
+          return res.status(400).json({
+            message: "This file has already been imported",
+            importedAt: existingImport.createdAt,
+            containerId: existingImport.containerId,
+          });
+        }
+
+        // Parse and structure the data. The sheet reader is shared with the
+        // Supplier Partner Excel import, so both company types read the same file
+        // the same way.
+        const parsed = await parsePoImportSheetRows(rawData, {
+          getStockItemByCodeOrAlias: (codeOrAlias) =>
+            storage.getStockItemByCodeOrAlias(codeOrAlias, req.session.currentCompanyId!),
+          allStockItems: await storage.getAllStockItems(req.session.currentCompanyId!),
         });
-      }
 
-      // Parse and structure the data. The sheet reader is shared with the
-      // Supplier Partner Excel import, so both company types read the same file
-      // the same way.
-      const parsed = await parsePoImportSheetRows(rawData, {
-        getStockItemByCodeOrAlias: (codeOrAlias) =>
-          storage.getStockItemByCodeOrAlias(codeOrAlias, req.session.currentCompanyId!),
-        allStockItems: await storage.getAllStockItems(req.session.currentCompanyId!),
-      });
-
-      // Basic structural errors only (validation of item existence happens in validate step)
-      if (!parsed.ok) {
-        if (parsed.kind === "row-errors") {
-          return res.status(400).json({ message: "Validation errors", errors: parsed.errors });
-        }
-        return res.status(400).json({ message: "No valid item rows found" });
-      }
-      const preview = parsed.preview;
-
-      // Exact Factory dispatch PO identities are checked at the very first
-      // upload stage. Changing file names or one worksheet value never
-      // sidesteps a previously recorded truck import receipt.
-      for (const candidate of preview) {
-        const origin = parseFactoryTripPoIdentity(
-          candidate.containerNumber, candidate.items.map(i => i.poNumber)
-        );
-        if (origin.errors.length) {
-          return res.status(400).json({ code: "FD_PO_IDENTITY_INVALID", message: origin.errors.join(" ") });
-        }
-        if (origin.identity) {
-          if (preview.length !== 1) {
-            return res.status(400).json({
-              code: "FD_PO_ONE_TRIP_PER_FILE",
-              message: "One Factory dispatch truck must be imported in its own ERP PO Excel file.",
-            });
+        // Basic structural errors only (validation of item existence happens in validate step)
+        if (!parsed.ok) {
+          if (parsed.kind === "row-errors") {
+            return res.status(400).json({ message: "Validation errors", errors: parsed.errors });
           }
-          const existing = await inspectFactoryTripPoReceipt(
-            req.session.currentCompanyId!, origin.identity
+          return res.status(400).json({ message: "No valid item rows found" });
+        }
+        const preview = parsed.preview;
+
+        // Exact Factory dispatch PO identities are checked at the very first
+        // upload stage. Changing file names or one worksheet value never
+        // sidesteps a previously recorded truck import receipt.
+        for (const candidate of preview) {
+          const origin = parseFactoryTripPoIdentity(
+            candidate.containerNumber,
+            candidate.items.map((i) => i.poNumber)
           );
-          if (existing) {
-            return res.status(409).json({
-              code: "FD_PO_DUPLICATE",
-              message: existing.status === "IMPORTED"
-                ? "This Factory dispatch truck was already imported into ERP; a renamed Excel file is not a new purchase."
-                : "A previous Factory dispatch PO import needs reconciliation before this truck can be retried.",
-            });
+          if (origin.errors.length) {
+            return res.status(400).json({ code: "FD_PO_IDENTITY_INVALID", message: origin.errors.join(" ") });
+          }
+          if (origin.identity) {
+            if (preview.length !== 1) {
+              return res.status(400).json({
+                code: "FD_PO_ONE_TRIP_PER_FILE",
+                message: "One Factory dispatch truck must be imported in its own ERP PO Excel file.",
+              });
+            }
+            const existing = await inspectFactoryTripPoReceipt(req.session.currentCompanyId!, origin.identity);
+            if (existing) {
+              return res.status(409).json({
+                code: "FD_PO_DUPLICATE",
+                message:
+                  existing.status === "IMPORTED"
+                    ? "This Factory dispatch truck was already imported into ERP; a renamed Excel file is not a new purchase."
+                    : "A previous Factory dispatch PO import needs reconciliation before this truck can be retried.",
+              });
+            }
           }
         }
-      }
 
-      res.json({
-        fileHash,
-        fileName: req.file.originalname,
-        rowCount: rawData.length,
-        preview,
-      });
-    } catch (error: unknown) {
-      if (error instanceof FactoryTripPoReceiptError) {
-        return res.status(error.status).json({ code: error.code, message: error.message });
+        res.json({
+          fileHash,
+          fileName: req.file.originalname,
+          rowCount: rawData.length,
+          preview,
+        });
+      } catch (error: unknown) {
+        if (error instanceof FactoryTripPoReceiptError) {
+          return res.status(error.status).json({ code: error.code, message: error.message });
+        }
+        logger.error("PO Import parse error:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-      logger.error("PO Import parse error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // PO Import - Validate data before import
 }

@@ -16,6 +16,8 @@ import {
   privilegedRequestBudget,
 } from "../../middleware/privilegedEndpointSecurity";
 import { stockItemCodeAliases } from "@shared/schema";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import {
   assertNoInventoryCutoverTx,
   sendInventoryCutoverRefusal,
@@ -39,6 +41,36 @@ function importSummary(results: { created: unknown[]; updated: unknown[]; skippe
 
 const locationImportConcurrency = privilegedConcurrencyLimit({ scope: "location-import" });
 
+// The handlers keep their own "Invalid location ID" check on the parsed :locationId.
+const locationParams = z.strictObject({ locationId: stringParam });
+const amount = z.union([z.number(), z.string()]);
+
+// updateCostPricesByBarcode reports an unparseable cost price per row.
+const importCostPricesInput = {
+  params: locationParams,
+  query: emptyQuery,
+  body: z.strictObject({ updates: z.array(z.strictObject({ barcode: z.string(), costPrice: amount })) }),
+} satisfies RequestSchemas;
+
+// planLocationImport answers an unknown importKind with its own refusal.
+const importInventoryInput = {
+  params: locationParams,
+  query: emptyQuery,
+  body: z.strictObject({
+    importKind: z.string().optional(),
+    items: z.array(
+      z.strictObject({
+        Item_barcode: z.string(),
+        stockGroupCode: z.string().optional(),
+        quantity: amount,
+        rate: amount.optional(),
+        value: amount.optional(),
+        code: z.union([z.string(), z.number()]).optional(),
+      })
+    ),
+  }),
+} satisfies RequestSchemas;
+
 export function registerLocationImportRoutes(app: Express) {
   // Update cost prices by barcode for a location
   app.post(
@@ -50,6 +82,7 @@ export function registerLocationImportRoutes(app: Express) {
     privilegedMutationRateLimit,
     locationImportBudget,
     locationImportConcurrency,
+    validateRequest(importCostPricesInput),
     async (req, res) => {
       try {
         const locationId = parseInt(req.params.locationId);
@@ -101,6 +134,7 @@ export function registerLocationImportRoutes(app: Express) {
     privilegedMutationRateLimit,
     locationImportBudget,
     locationImportConcurrency,
+    validateRequest(importInventoryInput),
     async (req, res) => {
       try {
         const locationId = parseInt(req.params.locationId);

@@ -15,6 +15,19 @@ import {
 } from "./registerEmployeeLedgerWasteRoutesPart1";
 import { registerEmployeeLedgerWasteRoutesPart2 } from "./registerEmployeeLedgerWasteRoutesPart2";
 import { registerEmployeeLedgerWasteRoutesPart4 } from "./registerEmployeeLedgerWasteRoutesPart4";
+import {
+  emptyBody,
+  emptyQuery,
+  stringIdParams,
+  validateRequest,
+  type RequestSchemas,
+} from "../../../lib/validateRequest";
+
+const deleteWasteDispatchInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerEmployeeLedgerWasteRoutes(app: Express) {
   registerEmployeeLedgerWasteRoutesPart1(app);
@@ -32,6 +45,7 @@ function registerEmployeeLedgerWasteRoutesPart3(app: Express) {
   app.delete(
     "/api/factory/waste-dispatch/:id",
     requireAuth,
+    validateRequest(deleteWasteDispatchInput),
     async (req: import("express").Request, res: import("express").Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

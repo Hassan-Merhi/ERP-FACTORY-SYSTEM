@@ -10,6 +10,11 @@ import { db } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
 import { sql } from "drizzle-orm";
 import { pn } from "./_helpers";
+import { emptyBody, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// The cutover guard below refuses every request and reads no input. GET and POST
+// are served earlier by the Phase 4 cutover routes, so it answers the other methods.
+const disabledCutoverInput = { body: emptyBody } satisfies RequestSchemas;
 
 export function registerSpMigrationReconciliationRoutes(app: Express) {
   // ── Final reconciliation report ─────────────────────────────────────────
@@ -265,10 +270,15 @@ export function registerSpMigrationReconciliationRoutes(app: Express) {
   // ── HARD GUARD: No cutover endpoint ─────────────────────────────────────
   // This explicitly blocks any attempt to POST to /api/sp/migration/cutover.
   // Phase 5 final migration is not implemented.
-  app.all("/api/sp/migration/cutover", requireAuth, (_req: unknown, res: import("express").Response) => {
-    return res.status(403).json({
-      message: "BLOCKED: Final production migration (cutover) is not available. Phase 5 is disabled.",
-      code: "CUTOVER_DISABLED",
-    });
-  });
+  app.all(
+    "/api/sp/migration/cutover",
+    requireAuth,
+    validateRequest(disabledCutoverInput),
+    (_req: unknown, res: import("express").Response) => {
+      return res.status(403).json({
+        message: "BLOCKED: Final production migration (cutover) is not available. Phase 5 is disabled.",
+        code: "CUTOVER_DISABLED",
+      });
+    }
+  );
 }

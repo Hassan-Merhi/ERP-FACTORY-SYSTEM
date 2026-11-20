@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { requireAuth, requireRole } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
 import { finalizeFxWalletDraft } from "./fxAgentWalletDraftLifecycle";
+import { settleWalletInput } from "./fxAgentWalletRouteSchemas";
 import { registerFactoryFxAgentSettlementRoutesPart1 } from "./registerFactoryFxAgentSettlementRoutesPart1";
 
 /**
@@ -15,6 +17,7 @@ export function registerFactoryFxAgentSettlementRoutes(app: Express) {
     "/api/factory/fx-agent-wallets/:id/settle",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(settleWalletInput),
     settleWalletPayment
   );
 

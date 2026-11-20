@@ -22,6 +22,46 @@ import {
 } from "@shared/schema";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney } from "../lib/money";
+import { z } from "zod";
+import { emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+/** parseInt / parseMoneyInput read numbers and numeric strings. */
+const numberOrString = z.union([z.number(), z.string()]);
+
+const offloadInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    containerId: numberOrString.nullable().optional(),
+    receivedKg: numberOrString.nullable().optional(),
+    costPerKg: numberOrString.nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const createMixBatchInput = {
+  query: emptyQuery,
+  body: z.strictObject({
+    // Checked against the session company by the handler.
+    companyId: numberOrString.nullable().optional(),
+    sources: z
+      .array(z.strictObject({ containerId: numberOrString, weightKg: numberOrString, costPerKg: numberOrString }))
+      .nullable()
+      .optional(),
+    batchSources: z
+      .array(z.strictObject({ sourceBatchId: numberOrString, weightKg: numberOrString }))
+      .nullable()
+      .optional(),
+    name: z.string().nullable().optional(),
+    batchCode: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }),
+} satisfies RequestSchemas;
+
+const addMixBatchSourceInput = {
+  params: z.strictObject({ id: stringParam }),
+  query: emptyQuery,
+  // The handler sets mixBatchId from the path.
+  body: insertMixBatchSourceSchema.omit({ mixBatchId: true }).strict(),
+} satisfies RequestSchemas;
 
 export function registerProductionRawStockRoutes(app: Express) {
   // Production Raw Stock API Routes
@@ -65,7 +105,7 @@ export function registerProductionRawStockRoutes(app: Express) {
     }
   });
 
-  app.post("/api/production-raw-stock/offload", requireAuth, async (req, res) => {
+  app.post("/api/production-raw-stock/offload", requireAuth, validateRequest(offloadInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -189,7 +229,7 @@ export function registerProductionRawStockRoutes(app: Express) {
     }
   });
 
-  app.post("/api/mix-batches", requireAuth, async (req, res) => {
+  app.post("/api/mix-batches", requireAuth, validateRequest(createMixBatchInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       const userId = req.session.userId;
@@ -382,7 +422,7 @@ export function registerProductionRawStockRoutes(app: Express) {
     }
   });
 
-  app.post("/api/mix-batches/:id/sources", requireAuth, async (req, res) => {
+  app.post("/api/mix-batches/:id/sources", requireAuth, validateRequest(addMixBatchSourceInput), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {

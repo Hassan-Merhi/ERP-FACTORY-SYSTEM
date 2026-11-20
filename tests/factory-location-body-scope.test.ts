@@ -54,7 +54,7 @@ describe("factory routes refuse another company's ERP location", () => {
     const responses = [
       await agent.post("/api/factory/stock-entry").send({
         erpLocationId: foreignLocationId,
-        items: [{ productId: 1, weightKg: 10 }],
+        items: [{ productId: 1, weightPerBaleKg: 10 }],
       }),
       await agent.post("/api/factory/bales/import").send({
         erpLocationId: foreignLocationId,

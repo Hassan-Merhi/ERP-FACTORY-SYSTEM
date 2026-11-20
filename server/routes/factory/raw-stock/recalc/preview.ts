@@ -9,6 +9,8 @@ import { requireSessionUserId } from "../../../../lib/sessionUser";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { requireAuth, requireRole } from "../../../../auth";
+import { validateRequest } from "../../../../lib/validateRequest";
+import { mixBatchesPreviewInput, recalcApplyInput } from "../rawStockWriteRouteSchemas";
 import {
   getRawStockRecalcPreview,
   applyRawStockRecalc,
@@ -59,6 +61,7 @@ export function registerRawStockRecalcPreviewRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/mix-batches-preview",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(mixBatchesPreviewInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -90,6 +93,7 @@ export function registerRawStockRecalcPreviewRoutes(app: Express) {
     "/api/factory/raw-stock/recalc/apply",
     requireAuth,
     requireRole(...ADMIN_ROLES),
+    validateRequest(recalcApplyInput),
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

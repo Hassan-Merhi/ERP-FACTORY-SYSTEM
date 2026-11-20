@@ -9,6 +9,8 @@ import { db } from "../../db";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { requireAuth, requireRole } from "../../auth";
+import { z } from "zod";
+import { emptyBody, emptyQuery, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { requireSpCompany } from "../sp/spHelpers";
 import { resultRows, firstRow } from "../../lib/queryResult";
 import { logger } from "../../lib/logger";
@@ -85,12 +87,20 @@ const isoDate = (value: unknown): string | null => {
   throw new Error("Invalid date");
 };
 
+// Multipart upload of a single `file`; no form fields are read.
+const spImportExcelInput = { query: emptyQuery, body: emptyBody } satisfies RequestSchemas;
+const spImportUndoInput = {
+  query: emptyQuery,
+  body: z.strictObject({ importId: z.string().optional() }),
+} satisfies RequestSchemas;
+
 export function registerSpGitTrackingImportRoutes(app: Express): void {
   app.post(
     "/api/git/sp-containers/import-excel",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
     (req, res, next) => gitUpload.single("file")(req, res, next),
+    validateRequest(spImportExcelInput),
     async (req, res) => {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;
@@ -209,6 +219,7 @@ export function registerSpGitTrackingImportRoutes(app: Express): void {
     "/api/git/sp-containers/import-excel/undo",
     requireAuth,
     requireRole("Admin", "Owner", "Developer"),
+    validateRequest(spImportUndoInput),
     async (req, res) => {
       const companyId = await requireSpCompany(req, res);
       if (!companyId) return;

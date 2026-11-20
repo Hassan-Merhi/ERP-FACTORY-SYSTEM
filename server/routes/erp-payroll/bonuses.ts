@@ -11,6 +11,8 @@ import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { validateRequest } from "../../lib/validateRequest";
+import { autoCalculateBonusesInput, singleEmployeeAdjustmentInput } from "./payrollWriteSchemas";
 import { postEmployeeVoucherTx } from "./postEmployeeBatch";
 import { erpRequestSourceId, pairLines, sessionPostingActor } from "../../services/accounting/erpVoucherPosting";
 import {
@@ -192,137 +194,110 @@ export function registerPayrollBonusRoutes(app: Express) {
   });
 
   // Payroll - Auto-calculate bonuses server-side (single call instead of N×M client fetches)
-  app.post("/api/payroll/auto-calculate-bonuses", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { startDate, endDate, pctLocationId, pctSourceCompanyId } = req.body;
-      if (!startDate || !endDate) return res.status(400).json({ message: "startDate and endDate are required" });
+  app.post(
+    "/api/payroll/auto-calculate-bonuses",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(autoCalculateBonusesInput),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { startDate, endDate, pctLocationId, pctSourceCompanyId } = req.body;
+        if (!startDate || !endDate) return res.status(400).json({ message: "startDate and endDate are required" });
 
-      // Fetch all active employees
-      const allEmployees = await storage.getAllEmployees(companyId);
-      const activeEmployees = allEmployees.filter((e: Record<string, unknown>) => e.status !== "inactive");
+        // Fetch all active employees
+        const allEmployees = await storage.getAllEmployees(companyId);
+        const activeEmployees = allEmployees.filter((e: Record<string, unknown>) => e.status !== "inactive");
 
-      // Cache sales queries by "companyId|locationId"
-      const salesCache = new Map<string, { totalQuantity: string; totalSalesAmount: string; locationName: string }>();
-      const querySales = async (locId: number, srcCompanyId: number) => {
-        const cacheKey = `${srcCompanyId}|${locId}`;
-        if (salesCache.has(cacheKey)) return salesCache.get(cacheKey)!;
-        const conds = [
-          eq(vouchers.companyId, srcCompanyId),
-          eq(vouchers.locationId, locId),
-          eq(vouchers.voucherType, "Sales"),
-          isNull(vouchers.deletedAt),
-          eq(vouchers.optional, false),
-          eq(vouchers.isCreditSale, false),
-          sql`${vouchers.voucherDate} >= ${startDate}`,
-          sql`${vouchers.voucherDate} <= ${endDate}`,
-        ];
-        const [result] = await db
-          .select({
-            totalSalesAmount: sql<string>`COALESCE(SUM(${salesItems.totalSales}), 0)`,
-            totalQuantity: sql<string>`COALESCE(SUM(${salesItems.quantity}), 0)`,
-          })
-          .from(salesItems)
-          .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-          .where(and(...conds));
-        const [loc] = await db.select({ name: locations.name }).from(locations).where(eq(locations.id, locId)).limit(1);
-        const entry = {
-          totalQuantity: result?.totalQuantity ?? "0",
-          totalSalesAmount: result?.totalSalesAmount ?? "0",
-          locationName: loc?.name ?? "",
-        };
-        salesCache.set(cacheKey, entry);
-        return entry;
-      };
-
-      // Prefetch pct location if provided
-      let pctSales: { totalSalesAmount: string; locationName: string } | null = null;
-      const pctLocId = pctLocationId ? parseInt(String(pctLocationId)) : NaN;
-      if (Number.isInteger(pctLocId)) {
-        try {
-          const [locRow] = await db
-            .select({ companyId: locations.companyId })
+        // Cache sales queries by "companyId|locationId"
+        const salesCache = new Map<string, { totalQuantity: string; totalSalesAmount: string; locationName: string }>();
+        const querySales = async (locId: number, srcCompanyId: number) => {
+          const cacheKey = `${srcCompanyId}|${locId}`;
+          if (salesCache.has(cacheKey)) return salesCache.get(cacheKey)!;
+          const conds = [
+            eq(vouchers.companyId, srcCompanyId),
+            eq(vouchers.locationId, locId),
+            eq(vouchers.voucherType, "Sales"),
+            isNull(vouchers.deletedAt),
+            eq(vouchers.optional, false),
+            eq(vouchers.isCreditSale, false),
+            sql`${vouchers.voucherDate} >= ${startDate}`,
+            sql`${vouchers.voucherDate} <= ${endDate}`,
+          ];
+          const [result] = await db
+            .select({
+              totalSalesAmount: sql<string>`COALESCE(SUM(${salesItems.totalSales}), 0)`,
+              totalQuantity: sql<string>`COALESCE(SUM(${salesItems.quantity}), 0)`,
+            })
+            .from(salesItems)
+            .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
+            .where(and(...conds));
+          const [loc] = await db
+            .select({ name: locations.name })
             .from(locations)
-            .where(eq(locations.id, pctLocId))
+            .where(eq(locations.id, locId))
             .limit(1);
-          const requestedSourceCompanyId = pctSourceCompanyId ? parseInt(String(pctSourceCompanyId)) : null;
-          // A caller-supplied company never widens access: it is honoured only
-          // when the user is already assigned to it.
-          const accessibleCompanyIds = await getAccessibleCompanyIds(String(req.session.userId ?? req.user?.id ?? ""));
-          const explicitSourceCompanyId =
-            requestedSourceCompanyId && accessibleCompanyIds.has(requestedSourceCompanyId)
-              ? requestedSourceCompanyId
-              : null;
-          // The active company keeps priority over the location owner so a
-          // company selling at a location it does not own (GC-LSHI) totals its
-          // own sales instead of the owner's.
-          const sessionCompanyHasSales = !explicitSourceCompanyId && (await hasSalesAtLocation(companyId, pctLocId));
-          const pctCompanyId = resolveBonusSalesCompanyId({
-            explicitSourceCompanyId,
-            sessionCompanyId: companyId,
-            locationOwnerCompanyId: locRow?.companyId ?? null,
-            sessionCompanyHasSales,
-          });
-          pctSales = await querySales(pctLocId, pctCompanyId);
-        } catch {
-          // Failure here is non-fatal and the surrounding flow continues deliberately.
-        }
-      }
+          const entry = {
+            totalQuantity: result?.totalQuantity ?? "0",
+            totalSalesAmount: result?.totalSalesAmount ?? "0",
+            locationName: loc?.name ?? "",
+          };
+          salesCache.set(cacheKey, entry);
+          return entry;
+        };
 
-      const results: Array<{ employeeId: number; amount: string; breakdown: string[] }> = [];
-
-      for (const emp of activeEmployees) {
-        const lines: string[] = [];
-        const subtotals: Decimal[] = [];
-
-        // Per-location bale rates (employee_bale_rates table) — flat $/bale
-        const baleRates = await storage.getEmployeeBaleRates(emp.id, companyId);
-        for (const entry of baleRates) {
-          const rate = toMoney(entry.rate as string);
-          if (!rate.gt(0) || !entry.locationId) continue;
+        // Prefetch pct location if provided
+        let pctSales: { totalSalesAmount: string; locationName: string } | null = null;
+        const pctLocId = pctLocationId ? parseInt(String(pctLocationId)) : NaN;
+        if (Number.isInteger(pctLocId)) {
           try {
-            const srcId = (entry.sourceCompanyId as number | null) ?? companyId;
-            const data = await querySales(entry.locationId as number, srcId);
-            const qty = toMoney(data.totalQuantity);
-            if (qty.gt(0)) {
-              const sub = qty.times(rate);
-              subtotals.push(sub);
-              lines.push(`${qty} bales × $${rate} (${data.locationName}) = $${sub.toFixed(2)}`);
-            }
+            const [locRow] = await db
+              .select({ companyId: locations.companyId })
+              .from(locations)
+              .where(eq(locations.id, pctLocId))
+              .limit(1);
+            const requestedSourceCompanyId = pctSourceCompanyId ? parseInt(String(pctSourceCompanyId)) : null;
+            // A caller-supplied company never widens access: it is honoured only
+            // when the user is already assigned to it.
+            const accessibleCompanyIds = await getAccessibleCompanyIds(
+              String(req.session.userId ?? req.user?.id ?? "")
+            );
+            const explicitSourceCompanyId =
+              requestedSourceCompanyId && accessibleCompanyIds.has(requestedSourceCompanyId)
+                ? requestedSourceCompanyId
+                : null;
+            // The active company keeps priority over the location owner so a
+            // company selling at a location it does not own (GC-LSHI) totals its
+            // own sales instead of the owner's.
+            const sessionCompanyHasSales = !explicitSourceCompanyId && (await hasSalesAtLocation(companyId, pctLocId));
+            const pctCompanyId = resolveBonusSalesCompanyId({
+              explicitSourceCompanyId,
+              sessionCompanyId: companyId,
+              locationOwnerCompanyId: locRow?.companyId ?? null,
+              sessionCompanyHasSales,
+            });
+            pctSales = await querySales(pctLocId, pctCompanyId);
           } catch {
             // Failure here is non-fatal and the surrounding flow continues deliberately.
           }
         }
 
-        // Per-location sales % rates (employee_bale_pct_rates table) — % of sales amount
-        const balePctRates = await storage.getEmployeeBalePctRates(emp.id, companyId);
-        for (const entry of balePctRates) {
-          const pct = toMoney(entry.pct as string);
-          if (!pct.gt(0) || !entry.locationId) continue;
-          try {
-            const srcId = (entry.sourceCompanyId as number | null) ?? companyId;
-            const data = await querySales(entry.locationId as number, srcId);
-            const sales = toMoney(data.totalSalesAmount);
-            if (sales.gt(0)) {
-              const sub = sales.times(pct).div(100);
-              subtotals.push(sub);
-              lines.push(`$${sales.toFixed(2)} sales × ${pct}% (${data.locationName}) = $${sub.toFixed(2)}`);
-            }
-          } catch {
-            // Failure here is non-fatal and the surrounding flow continues deliberately.
-          }
-        }
+        const results: Array<{ employeeId: number; amount: string; breakdown: string[] }> = [];
 
-        // Legacy single bale rate field — only if no per-location rates
-        if (baleRates.length === 0 && emp.balesBonusRate != null && toMoney(emp.balesBonusRate as string).gt(0)) {
-          const locId = emp.salesBonusPctLocationId as number | null;
-          const srcId = (emp.salesBonusPctSourceCompanyId as number | null) ?? companyId;
-          if (locId) {
+        for (const emp of activeEmployees) {
+          const lines: string[] = [];
+          const subtotals: Decimal[] = [];
+
+          // Per-location bale rates (employee_bale_rates table) — flat $/bale
+          const baleRates = await storage.getEmployeeBaleRates(emp.id, companyId);
+          for (const entry of baleRates) {
+            const rate = toMoney(entry.rate as string);
+            if (!rate.gt(0) || !entry.locationId) continue;
             try {
-              const data = await querySales(locId, srcId);
+              const srcId = (entry.sourceCompanyId as number | null) ?? companyId;
+              const data = await querySales(entry.locationId as number, srcId);
               const qty = toMoney(data.totalQuantity);
-              const rate = toMoney(emp.balesBonusRate as string);
               if (qty.gt(0)) {
                 const sub = qty.times(rate);
                 subtotals.push(sub);
@@ -332,126 +307,171 @@ export function registerPayrollBonusRoutes(app: Express) {
               // Failure here is non-fatal and the surrounding flow continues deliberately.
             }
           }
-        }
 
-        // Legacy single-location sales % bonus (emp.salesBonusPct + pctLocationId from UI dropdown)
-        if (pctSales && emp.salesBonusPct != null && toMoney(emp.salesBonusPct as string).gt(0)) {
-          const sales = toMoney(pctSales.totalSalesAmount);
-          const pct = toMoney(emp.salesBonusPct as string);
-          if (sales.gt(0)) {
-            const sub = sales.times(pct).div(100);
-            subtotals.push(sub);
-            lines.push(`$${sales.toFixed(2)} sales × ${pct}% (${pctSales.locationName}) = $${sub.toFixed(2)}`);
+          // Per-location sales % rates (employee_bale_pct_rates table) — % of sales amount
+          const balePctRates = await storage.getEmployeeBalePctRates(emp.id, companyId);
+          for (const entry of balePctRates) {
+            const pct = toMoney(entry.pct as string);
+            if (!pct.gt(0) || !entry.locationId) continue;
+            try {
+              const srcId = (entry.sourceCompanyId as number | null) ?? companyId;
+              const data = await querySales(entry.locationId as number, srcId);
+              const sales = toMoney(data.totalSalesAmount);
+              if (sales.gt(0)) {
+                const sub = sales.times(pct).div(100);
+                subtotals.push(sub);
+                lines.push(`$${sales.toFixed(2)} sales × ${pct}% (${data.locationName}) = $${sub.toFixed(2)}`);
+              }
+            } catch {
+              // Failure here is non-fatal and the surrounding flow continues deliberately.
+            }
+          }
+
+          // Legacy single bale rate field — only if no per-location rates
+          if (baleRates.length === 0 && emp.balesBonusRate != null && toMoney(emp.balesBonusRate as string).gt(0)) {
+            const locId = emp.salesBonusPctLocationId as number | null;
+            const srcId = (emp.salesBonusPctSourceCompanyId as number | null) ?? companyId;
+            if (locId) {
+              try {
+                const data = await querySales(locId, srcId);
+                const qty = toMoney(data.totalQuantity);
+                const rate = toMoney(emp.balesBonusRate as string);
+                if (qty.gt(0)) {
+                  const sub = qty.times(rate);
+                  subtotals.push(sub);
+                  lines.push(`${qty} bales × $${rate} (${data.locationName}) = $${sub.toFixed(2)}`);
+                }
+              } catch {
+                // Failure here is non-fatal and the surrounding flow continues deliberately.
+              }
+            }
+          }
+
+          // Legacy single-location sales % bonus (emp.salesBonusPct + pctLocationId from UI dropdown)
+          if (pctSales && emp.salesBonusPct != null && toMoney(emp.salesBonusPct as string).gt(0)) {
+            const sales = toMoney(pctSales.totalSalesAmount);
+            const pct = toMoney(emp.salesBonusPct as string);
+            if (sales.gt(0)) {
+              const sub = sales.times(pct).div(100);
+              subtotals.push(sub);
+              lines.push(`$${sales.toFixed(2)} sales × ${pct}% (${pctSales.locationName}) = $${sub.toFixed(2)}`);
+            }
+          }
+
+          const total = sumMoney(subtotals);
+          if (total.gt(0)) {
+            results.push({ employeeId: emp.id, amount: total.toFixed(2), breakdown: lines });
           }
         }
 
-        const total = sumMoney(subtotals);
-        if (total.gt(0)) {
-          results.push({ employeeId: emp.id, amount: total.toFixed(2), breakdown: lines });
-        }
+        return res.json({ results });
+      } catch (error: unknown) {
+        logger.error("[/api/payroll/auto-calculate-bonuses]", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      return res.json({ results });
-    } catch (error: unknown) {
-      logger.error("[/api/payroll/auto-calculate-bonuses]", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // Payroll - Employee Bonus
-  app.post("/api/payroll/bonus-employee", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
+  app.post(
+    "/api/payroll/bonus-employee",
+    requireAuth,
+    requireNonPOS,
+    validateRequest(singleEmployeeAdjustmentInput),
+    async (req, res) => {
+      try {
+        if (!req.session.currentCompanyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
 
-      const { employeeId, amount, date, notes } = req.body;
+        const { employeeId, amount, date, notes } = req.body;
 
-      if (!employeeId || !amount || !date) {
-        return res.status(400).json({ message: "Employee, amount, and date are required" });
-      }
+        if (!employeeId || !amount || !date) {
+          return res.status(400).json({ message: "Employee, amount, and date are required" });
+        }
 
-      const parsedBonus = parseMoneyInput(amount);
-      if (!parsedBonus || !parsedBonus.gt(0)) {
-        return res.status(400).json({ message: "Amount must be a positive number" });
-      }
-      const bonusCents = moneyString(parsedBonus);
+        const parsedBonus = parseMoneyInput(amount);
+        if (!parsedBonus || !parsedBonus.gt(0)) {
+          return res.status(400).json({ message: "Amount must be a positive number" });
+        }
+        const bonusCents = moneyString(parsedBonus);
 
-      // Get employee
-      const [employee] = await db
-        .select()
-        .from(employees)
-        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
-      if (!employee) {
-        return res.status(404).json({ message: "Employee not found" });
-      }
+        // Get employee
+        const [employee] = await db
+          .select()
+          .from(employees)
+          .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
+        if (!employee) {
+          return res.status(404).json({ message: "Employee not found" });
+        }
 
-      // Look up the employee's group for per-group bonus expense splitting
-      const bonusDepGroupRows = await db
-        .select({ groupName: employeeGroups.name })
-        .from(employeeGroupMembers)
-        .innerJoin(employeeGroups, eq(employeeGroupMembers.employeeGroupId, employeeGroups.id))
-        .where(
-          and(
-            eq(employeeGroupMembers.employeeId, employee.id),
-            eq(employeeGroups.companyId, req.session.currentCompanyId!),
-            eq(employeeGroups.active, true)
+        // Look up the employee's group for per-group bonus expense splitting
+        const bonusDepGroupRows = await db
+          .select({ groupName: employeeGroups.name })
+          .from(employeeGroupMembers)
+          .innerJoin(employeeGroups, eq(employeeGroupMembers.employeeGroupId, employeeGroups.id))
+          .where(
+            and(
+              eq(employeeGroupMembers.employeeId, employee.id),
+              eq(employeeGroups.companyId, req.session.currentCompanyId!),
+              eq(employeeGroups.active, true)
+            )
           )
-        )
-        .limit(1);
-      const bonusSingleGrp = bonusDepGroupRows[0]?.groupName?.trim() || "__default__";
-      const bonusSingleIsDefault = bonusSingleGrp === "__default__";
-      const bonusSingleCode = bonusSingleIsDefault
-        ? "BONUS_EXPENSE"
-        : `BONUS_EXP_${bonusSingleGrp
-            .toUpperCase()
-            .replace(/[^A-Z0-9]/g, "_")
-            .substring(0, 25)}`;
-      const bonusSingleName = bonusSingleIsDefault ? "Bonus Expense" : `Bonus Expense - ${bonusSingleGrp}`;
+          .limit(1);
+        const bonusSingleGrp = bonusDepGroupRows[0]?.groupName?.trim() || "__default__";
+        const bonusSingleIsDefault = bonusSingleGrp === "__default__";
+        const bonusSingleCode = bonusSingleIsDefault
+          ? "BONUS_EXPENSE"
+          : `BONUS_EXP_${bonusSingleGrp
+              .toUpperCase()
+              .replace(/[^A-Z0-9]/g, "_")
+              .substring(0, 25)}`;
+        const bonusSingleName = bonusSingleIsDefault ? "Bonus Expense" : `Bonus Expense - ${bonusSingleGrp}`;
 
-      const bonusSingleAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
-      let bonusSingleAccount = bonusSingleAccounts.find((a: Record<string, unknown>) => a.code === bonusSingleCode);
-      if (!bonusSingleAccount) {
-        bonusSingleAccount = await storage.createLedgerAccount({
-          companyId: req.session.currentCompanyId!,
-          code: bonusSingleCode,
-          name: bonusSingleName,
-          accountType: "Indirect Expense",
-          openingBalance: "0",
-          active: true,
+        const bonusSingleAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
+        let bonusSingleAccount = bonusSingleAccounts.find((a: Record<string, unknown>) => a.code === bonusSingleCode);
+        if (!bonusSingleAccount) {
+          bonusSingleAccount = await storage.createLedgerAccount({
+            companyId: req.session.currentCompanyId!,
+            code: bonusSingleCode,
+            name: bonusSingleName,
+            accountType: "Indirect Expense",
+            openingBalance: "0",
+            active: true,
+          });
+        }
+
+        // Phase 22 (B): Dr bonus expense / Cr employee through the central engine,
+        // the employee balance moved from the posted lines in the same transaction.
+        const requestSourceId = erpRequestSourceId(req);
+        const voucher = await db.transaction(async (tx) => {
+          const { voucher } = await postEmployeeVoucherTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            voucherType: "Journal",
+            voucherDate: date,
+            description: notes || `Bonus for ${employee.firstName} ${employee.lastName}`,
+            lines: pairLines(
+              { ledgerAccountId: bonusSingleAccount.id },
+              { employeeId: employee.id },
+              bonusCents,
+              "Bonus payment"
+            ),
+            source: { type: "employee-bonus", id: `${employee.id}:${requestSourceId}` },
+            actor: sessionPostingActor(req, "Bonus payment"),
+          });
+          return voucher;
         });
+
+        // Get updated employee balance
+        const [updatedBonusEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
+
+        res.json({
+          voucher,
+          employee: updatedBonusEmployee || employee,
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      // Phase 22 (B): Dr bonus expense / Cr employee through the central engine,
-      // the employee balance moved from the posted lines in the same transaction.
-      const requestSourceId = erpRequestSourceId(req);
-      const voucher = await db.transaction(async (tx) => {
-        const { voucher } = await postEmployeeVoucherTx(tx, {
-          companyId: req.session.currentCompanyId!,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: notes || `Bonus for ${employee.firstName} ${employee.lastName}`,
-          lines: pairLines(
-            { ledgerAccountId: bonusSingleAccount.id },
-            { employeeId: employee.id },
-            bonusCents,
-            "Bonus payment"
-          ),
-          source: { type: "employee-bonus", id: `${employee.id}:${requestSourceId}` },
-          actor: sessionPostingActor(req, "Bonus payment"),
-        });
-        return voucher;
-      });
-
-      // Get updated employee balance
-      const [updatedBonusEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
-
-      res.json({
-        voucher,
-        employee: updatedBonusEmployee || employee,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

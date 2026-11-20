@@ -4,7 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express, Request, Response } from "express";
+import type { Express, NextFunction, Request, Response } from "express";
 import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
@@ -14,6 +14,8 @@ import { eq, and, asc } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { validateRequest } from "../../../lib/validateRequest";
+import { deleteFactoryByIdInput, uploadProductImageInput } from "./factoryProductRouteSchemas";
 
 export function registerFactoryProductImageRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -59,10 +61,21 @@ export function registerFactoryProductImageRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/bale-product-images", requireAuth, (req: Request, res: Response) => {
-    productImageUpload.single("image")(req, res, async (err) => {
+  // Multer runs as middleware so validateRequest sees the parsed form fields.
+  function uploadProductImage(req: Request, res: Response, next: NextFunction) {
+    productImageUpload.single("image")(req, res, (err) => {
+      if (err) return res.status(400).json({ message: getErrorMessage(err) });
+      next();
+    });
+  }
+
+  app.post(
+    "/api/factory/bale-product-images",
+    requireAuth,
+    uploadProductImage,
+    validateRequest(uploadProductImageInput),
+    async (req: Request, res: Response) => {
       try {
-        if (err) return res.status(400).json({ message: getErrorMessage(err) });
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!req.file) return res.status(400).json({ message: "No image uploaded" });
@@ -84,32 +97,37 @@ export function registerFactoryProductImageRoutes(app: Express) {
       } catch (e: unknown) {
         res.status(500).json({ message: getErrorMessage(e) });
       }
-    });
-  });
-
-  app.delete("/api/factory/bale-product-images/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const [img] = await db
-        .select()
-        .from(factoryBaleProductImages)
-        .where(and(eq(factoryBaleProductImages.id, id), eq(factoryBaleProductImages.companyId, companyId)));
-      if (!img) return res.status(404).json({ message: "Image not found" });
-      // Delete physical file
-      const filename = img.url.split("/").pop();
-      if (filename) {
-        const filePath = path.join(process.cwd(), "uploads", "product-images", filename);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      }
-      await db
-        .delete(factoryBaleProductImages)
-        .where(and(eq(factoryBaleProductImages.id, id), eq(factoryBaleProductImages.companyId, companyId)));
-      res.json({ ok: true });
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
     }
-  });
+  );
+
+  app.delete(
+    "/api/factory/bale-product-images/:id",
+    requireAuth,
+    validateRequest(deleteFactoryByIdInput),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
+        const [img] = await db
+          .select()
+          .from(factoryBaleProductImages)
+          .where(and(eq(factoryBaleProductImages.id, id), eq(factoryBaleProductImages.companyId, companyId)));
+        if (!img) return res.status(404).json({ message: "Image not found" });
+        // Delete physical file
+        const filename = img.url.split("/").pop();
+        if (filename) {
+          const filePath = path.join(process.cwd(), "uploads", "product-images", filename);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+        await db
+          .delete(factoryBaleProductImages)
+          .where(and(eq(factoryBaleProductImages.id, id), eq(factoryBaleProductImages.companyId, companyId)));
+        res.json({ ok: true });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
+    }
+  );
 }

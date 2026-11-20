@@ -11,6 +11,23 @@ import {
   type ContainerOffloadLifecycleMode,
 } from "../../services/containers/offload-lifecycle";
 import { offlineReceivingCapture } from "./containerOffloadOfflinePolicy";
+import { z } from "zod";
+import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
+
+// offloadRequestSchema with unknown fields rejected at every depth. The id
+// stays a string: runCentralOffload answers its own 400 for a bad one.
+const { additionalCharges, inventoryCostCorrections, agentChargeLines } = offloadRequestSchema.shape;
+const offloadInput = {
+  params: stringIdParams,
+  query: emptyQuery,
+  body: offloadRequestSchema
+    .extend({
+      additionalCharges: z.array(additionalCharges.unwrap().element.strict()).optional(),
+      inventoryCostCorrections: z.array(inventoryCostCorrections.unwrap().element.strict()).optional(),
+      agentChargeLines: z.array(agentChargeLines.unwrap().element.strict()).optional(),
+    })
+    .strict(),
+} satisfies RequestSchemas;
 
 async function runCentralOffload(req: Request, res: Response, mode: ContainerOffloadLifecycleMode): Promise<void> {
   const startedAt = Date.now();
@@ -114,11 +131,17 @@ async function runCentralOffload(req: Request, res: Response, mode: ContainerOff
 
 /** Register after the concurrency preflight and before the legacy offload routes. */
 export function registerCentralContainerOffloadRoute(app: Express): void {
-  app.post("/api/containers/:id/offload", requireAuth, requireNonPOS, (req, res) => {
+  app.post("/api/containers/:id/offload", requireAuth, requireNonPOS, validateRequest(offloadInput), (req, res) => {
     void runCentralOffload(req, res, "create-or-replace");
   });
 
-  app.patch("/api/containers/:id/offload", requireAuth, requireRole("Admin"), (req, res) => {
-    void runCentralOffload(req, res, "replace-only");
-  });
+  app.patch(
+    "/api/containers/:id/offload",
+    requireAuth,
+    requireRole("Admin"),
+    validateRequest(offloadInput),
+    (req, res) => {
+      void runCentralOffload(req, res, "replace-only");
+    }
+  );
 }

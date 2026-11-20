@@ -24,6 +24,27 @@ import {
 } from "./loadingDispatchAllocationRoutesParsePlan";
 import { readSource } from "./loadingDispatchAllocationRoutesReadSource";
 import { buildOverview } from "./loadingDispatchAllocationRoutesBuildOverview";
+import { z } from "zod";
+import { emptyQuery, positiveIntParam, validateRequest, type RequestSchemas } from "../../../lib/validateRequest";
+
+// No client sends this today. parsePlan keeps its own INVALID_* answers for
+// duplicate codes, negative or fractional quantities and bad bale ids.
+const saveAllocationsInput = {
+  params: z.strictObject({ id: positiveIntParam, dispatchId: positiveIntParam }),
+  query: emptyQuery,
+  body: z.strictObject({
+    lines: z
+      .array(
+        z.strictObject({
+          articleCode: z.union([z.string(), z.number()]).nullable().optional(),
+          expectedQty: z.number().optional(),
+        })
+      )
+      .optional(),
+    baleIds: z.array(z.number()).optional(),
+    autoAssignBales: z.boolean().optional(),
+  }),
+} satisfies RequestSchemas;
 
 export function registerFactoryLoadingDispatchAllocationRoutes(app: Express) {
   app.get(
@@ -57,6 +78,7 @@ export function registerFactoryLoadingDispatchAllocationRoutes(app: Express) {
     "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/allocations",
     requireAuth,
     access,
+    validateRequest(saveAllocationsInput),
     async (req: Request, res: Response) => {
       const state = await getFactoryAccessState(req);
       const orderId = parseId(req.params.id),

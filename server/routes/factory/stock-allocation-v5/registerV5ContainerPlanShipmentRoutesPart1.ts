@@ -19,18 +19,22 @@ import {
   positiveInt,
   toShipmentState,
 } from "./loadShipmentRows";
+import { validateRequest, validatedInput } from "../../../lib/validateRequest";
+import { shipmentStatusInput, updateShipmentInput } from "./registerV5ContainerPlanShipmentRoutesSchemas";
 
 export function registerV5ContainerPlanShipmentRoutesPart1(app: Express) {
   // Carrier, booking, vessel, destination, ETD/ETA.
   app.patch(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/shipment",
     requireAuth,
+    validateRequest(updateShipmentInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, updateShipmentInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         if (!planId || !containerId) return res.status(400).json({ message: "Invalid plan or container id" });
 
@@ -113,12 +117,14 @@ export function registerV5ContainerPlanShipmentRoutesPart1(app: Express) {
   app.post(
     "/api/factory/v5/container-plans/:planId/containers/:containerId/shipment/status",
     requireAuth,
+    validateRequest(shipmentStatusInput),
     async (req: Request, res: Response) => {
       const client = await pool.connect();
       try {
         const companyId = companyIdFor(req);
-        const planId = positiveInt(req.params.planId);
-        const containerId = positiveInt(req.params.containerId);
+        const { params } = validatedInput(req, shipmentStatusInput);
+        const planId = positiveInt(params.planId);
+        const containerId = positiveInt(params.containerId);
         const toStatus = req.body?.toStatus;
         const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) || null : null;
 

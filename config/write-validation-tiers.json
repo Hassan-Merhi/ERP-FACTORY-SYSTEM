@@ -1,0 +1,158 @@
+{
+  "formatVersion": 2,
+  "description": "Risk tiers for scripts/audit-write-validation.mjs. Every write route (method + path) in config/route-manifest.json must have validateRequest in its handler chain; the audit fails on any that does not. The tiers only group the report: the first tier whose prefix matches a route's path owns it.",
+  "tiers": [
+    {
+      "name": "1-vouchers-posting",
+      "prefixes": [
+        "/api/vouchers",
+        "/api/voucher-entries",
+        "/api/accounting",
+        "/api/accounts",
+        "/api/ledger-accounts",
+        "/api/recurring-journals",
+        "/api/fiscal-period",
+        "/api/credit-notes",
+        "/api/intercompany",
+        "/api/inter-company-transfers",
+        "/api/simple-company-transfer",
+        "/api/bank-accounts",
+        "/api/exchange-rates",
+        "/api/fixed-assets",
+        "/api/cost-centers",
+        "/api/insurance",
+        "/api/freight-accounts",
+        "/api/agent-accounts",
+        "/api/transporter-entry-due-dates",
+        "/api/transporter-statement",
+        "/api/fix-",
+        "/api/approvals",
+        "/api/factory/cost-centers",
+        "/api/factory/accounts",
+        "/api/factory/supplier-payments",
+        "/api/factory/supplier-fx-transfers",
+        "/api/factory/fx-",
+        "/api/factory/daybook",
+        "/api/factory/advance-repayments",
+        "/api/factory/freight",
+        "/api/factory/repair-orphaned-vouchers",
+        "/api/factory/agents"
+      ]
+    },
+    {
+      "name": "2-stock-movements",
+      "prefixes": [
+        "/api/stock-",
+        "/api/inventory",
+        "/api/bales",
+        "/api/bale-",
+        "/api/production-bales",
+        "/api/production-raw-stock",
+        "/api/mix-batches",
+        "/api/waste-dispatches",
+        "/api/offloads",
+        "/api/container-loaded-items",
+        "/api/purchase-orders",
+        "/api/po-import",
+        "/api/pending-barcodes",
+        "/api/generate-barcode",
+        "/api/location-price-groups",
+        "/api/factory/raw-stock",
+        "/api/factory/bales",
+        "/api/factory/bale-",
+        "/api/factory/v3",
+        "/api/factory/v5",
+        "/api/factory/stock-",
+        "/api/factory/mix",
+        "/api/factory/waste",
+        "/api/factory/dispatch",
+        "/api/factory/ground-scan-items",
+        "/api/factory/daily-bale-scans",
+        "/api/factory/finalize",
+        "/api/factory/sheets",
+        "/api/factory/pressing",
+        "/api/factory/import",
+        "/api/factory/repair-perkg-prices"
+      ]
+    },
+    {
+      "name": "3-pos",
+      "prefixes": [
+        "/api/pos",
+        "/api/retail",
+        "/api/golden-coast",
+        "/api/credit-sales-import",
+        "/api/container-sales",
+        "/api/factory/pos",
+        "/api/factory/finalized-sale-returns"
+      ]
+    },
+    {
+      "name": "4-payroll",
+      "prefixes": [
+        "/api/payroll",
+        "/api/salary-advances",
+        "/api/employees",
+        "/api/employee-groups",
+        "/api/worker-groups",
+        "/api/erp-worker-docs",
+        "/api/factory/payroll",
+        "/api/factory/workers",
+        "/api/factory/worker-",
+        "/api/factory/employee",
+        "/api/factory/advances",
+        "/api/factory/production-target-bonuses",
+        "/api/factory/attendance",
+        "/api/factory/staff-tracking",
+        "/api/factory/production-position"
+      ]
+    },
+    {
+      "name": "5-settings-admin-auth",
+      "prefixes": [
+        "/api/admin",
+        "/api/auth",
+        "/api/settings",
+        "/api/company-settings",
+        "/api/companies",
+        "/api/users",
+        "/api/user",
+        "/api/me",
+        "/api/sessions",
+        "/api/permissions-v2",
+        "/api/erp-user-",
+        "/api/locations",
+        "/api/language-preference",
+        "/api/system",
+        "/api/dev",
+        "/api/cleanup",
+        "/api/deleted-items",
+        "/api/orphaned-records",
+        "/api/git",
+        "/api/notification-rules",
+        "/api/dashboard-",
+        "/api/snapshot-pinned-accounts",
+        "/api/seasonal",
+        "/api/lookup",
+        "/api/factory/admin",
+        "/api/factory/users",
+        "/api/factory/settings",
+        "/api/factory/account-display-layout",
+        "/api/factory/weekly-report-wa-settings",
+        "/api/factory/automatic-priority-mode"
+      ]
+    },
+    {
+      "name": "6-factory-operations",
+      "prefixes": [
+        "/api/factory/"
+      ]
+    },
+    {
+      "name": "7-other-modules",
+      "prefixes": [
+        "/"
+      ]
+    }
+  ]
+}

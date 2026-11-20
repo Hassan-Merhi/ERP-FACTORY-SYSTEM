@@ -16,6 +16,8 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 
 import { isUniqueViolation, parseOptionalText, parseTripNumber, resolveOrder } from "./loadingDispatchRouteHelpers";
+import { validateRequest } from "../../../lib/validateRequest";
+import { cancelDispatchInput, createDispatchInput, updateDispatchInput } from "./loadingDispatchRoutesSchemas";
 
 const loadingAccess = requireFactoryTabAccess("factory/invoicing", "hide_invoicing_loadings_tab");
 
@@ -104,6 +106,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
     "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId",
     requireAuth,
     loadingAccess,
+    validateRequest(updateDispatchInput),
     async (req, res) => {
       try {
         const scope = await resolveOrder(req, res);
@@ -215,6 +218,7 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
     "/api/factory/customer-orders/:id/loading-dispatches/:dispatchId/cancel",
     requireAuth,
     loadingAccess,
+    validateRequest(cancelDispatchInput),
     async (req, res) => {
       try {
         const scope = await resolveOrder(req, res);
@@ -390,55 +394,60 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
 
   // Phase 1 create endpoint. Serializing by order-row lock assigns unique,
   // gap-safe trip numbers even when multiple dispatchers create at once.
-  app.post("/api/factory/customer-orders/:id/loading-dispatches", requireAuth, loadingAccess, async (req, res) => {
-    try {
-      const scope = await resolveOrder(req, res);
-      if (!scope) return;
-      if (["View Only", "Create Only"].includes(scope.state.role)) {
-        return res.status(403).json({ message: "This Factory role cannot create truck dispatch trips" });
-      }
-      let requestedTripNumber: number | null;
-      let notes: string | null;
+  app.post(
+    "/api/factory/customer-orders/:id/loading-dispatches",
+    requireAuth,
+    loadingAccess,
+    validateRequest(createDispatchInput),
+    async (req, res) => {
       try {
-        // Legacy clients can omit tripNumber and retain automatic numbering.
-        requestedTripNumber = req.body?.tripNumber === undefined ? null : parseTripNumber(req.body.tripNumber);
-        notes = parseOptionalText(req.body?.notes, "notes", 3000);
-      } catch (error) {
-        return res.status(400).json({ message: getErrorMessage(error) });
-      }
+        const scope = await resolveOrder(req, res);
+        if (!scope) return;
+        if (["View Only", "Create Only"].includes(scope.state.role)) {
+          return res.status(403).json({ message: "This Factory role cannot create truck dispatch trips" });
+        }
+        let requestedTripNumber: number | null;
+        let notes: string | null;
+        try {
+          // Legacy clients can omit tripNumber and retain automatic numbering.
+          requestedTripNumber = req.body?.tripNumber === undefined ? null : parseTripNumber(req.body.tripNumber);
+          notes = parseOptionalText(req.body?.notes, "notes", 3000);
+        } catch (error) {
+          return res.status(400).json({ message: getErrorMessage(error) });
+        }
 
-      const actorUserId = String(scope.state.userId);
-      const actorUsername = String(req.session.username || actorUserId);
-      const created = await db.transaction(async (tx) => {
-        // A row lock prevents concurrent trips from receiving the same number.
-        const orderRows = await tx.execute(sql`
+        const actorUserId = String(scope.state.userId);
+        const actorUsername = String(req.session.username || actorUserId);
+        const created = await db.transaction(async (tx) => {
+          // A row lock prevents concurrent trips from receiving the same number.
+          const orderRows = await tx.execute(sql`
           SELECT id, status, container_number AS "containerNumber" FROM customer_orders
            WHERE id = ${scope.orderId} AND company_id = ${scope.state.companyId}
              AND deleted_at IS NULL
            FOR UPDATE
         `);
-        const order = resultRows(orderRows)[0];
-        if (!order) return { code: 404, message: "Loading not found" };
-        if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(String(order.status))) {
-          return { code: 409, message: "Dispatch creation requires an active loading order" };
-        }
+          const order = resultRows(orderRows)[0];
+          if (!order) return { code: 404, message: "Loading not found" };
+          if (!["DRAFT", "LOADING", "PENDING_VERIFICATION"].includes(String(order.status))) {
+            return { code: 409, message: "Dispatch creation requires an active loading order" };
+          }
 
-        const nextRows = await tx.execute(sql`
+          const nextRows = await tx.execute(sql`
           SELECT COALESCE(MAX(dispatch_number), 0) + 1 AS "nextNumber"
             FROM factory_loading_dispatches
            WHERE company_id = ${scope.state.companyId} AND order_id = ${scope.orderId}
         `);
-        const nextNumber = requestedTripNumber ?? Number(resultRows(nextRows)[0]?.nextNumber || 1);
-        const duplicateRows = await tx.execute(sql`
+          const nextNumber = requestedTripNumber ?? Number(resultRows(nextRows)[0]?.nextNumber || 1);
+          const duplicateRows = await tx.execute(sql`
           SELECT id FROM factory_loading_dispatches
            WHERE company_id = ${scope.state.companyId} AND order_id = ${scope.orderId}
              AND dispatch_number = ${nextNumber}
            LIMIT 1
         `);
-        if (resultRows(duplicateRows).length > 0) {
-          return { code: 409, message: "Trip number already exists for this loading" };
-        }
-        const rows = await tx.execute(sql`
+          if (resultRows(duplicateRows).length > 0) {
+            return { code: 409, message: "Trip number already exists for this loading" };
+          }
+          const rows = await tx.execute(sql`
           INSERT INTO factory_loading_dispatches
             (company_id, order_id, container_number_snapshot, dispatch_number, status, notes,
              created_by_user_id, created_by_username)
@@ -449,9 +458,9 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
                     status, truck_plate AS "truckPlate", driver_name AS "driverName",
                     destination, notes, created_at AS "createdAt"
         `);
-        const dispatch = resultRows(rows)[0];
-        if (!dispatch) throw new Error("Dispatch insert returned no record");
-        await tx.execute(sql`
+          const dispatch = resultRows(rows)[0];
+          if (!dispatch) throw new Error("Dispatch insert returned no record");
+          await tx.execute(sql`
           INSERT INTO factory_loading_dispatch_events
             (company_id, order_id, dispatch_id, event_type,
              actor_user_id, actor_username, event_data)
@@ -459,20 +468,21 @@ export function registerFactoryLoadingDispatchRoutes(app: Express): void {
                   'CREATED', ${actorUserId}, ${actorUsername},
                   ${JSON.stringify({ dispatchNumber: nextNumber })}::jsonb)
         `);
-        return { dispatch };
-      });
-      if ("code" in created && typeof created.code === "number") {
-        return res.status(created.code).json({ message: created.message });
+          return { dispatch };
+        });
+        if ("code" in created && typeof created.code === "number") {
+          return res.status(created.code).json({ message: created.message });
+        }
+        if (!("dispatch" in created) || !created.dispatch) {
+          return res.status(500).json({ message: "Dispatch could not be created" });
+        }
+        return res.status(201).json(created.dispatch);
+      } catch (error) {
+        logger.error("Error creating Factory loading dispatch", { error });
+        if (isUniqueViolation(error))
+          return res.status(409).json({ message: "Trip number already exists for this loading" });
+        return res.status(500).json({ message: "Could not create dispatch trip" });
       }
-      if (!("dispatch" in created) || !created.dispatch) {
-        return res.status(500).json({ message: "Dispatch could not be created" });
-      }
-      return res.status(201).json(created.dispatch);
-    } catch (error) {
-      logger.error("Error creating Factory loading dispatch", { error });
-      if (isUniqueViolation(error))
-        return res.status(409).json({ message: "Trip number already exists for this loading" });
-      return res.status(500).json({ message: "Could not create dispatch trip" });
     }
-  });
+  );
 }

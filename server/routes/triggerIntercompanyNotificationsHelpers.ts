@@ -14,6 +14,38 @@ import {
   vouchers,
 } from "@shared/schema";
 import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../lib/validateRequest";
+
+// Ids are stored as given; the configuration-scope middleware already
+// requires them to be positive integers (numbers or numeric strings).
+const linkId = z.union([z.number(), z.string()]);
+const linkFields = {
+  label: z.string().nullable().optional(),
+  sourceCompanyId: linkId.optional(),
+  sourceLedgerAccountId: linkId.optional(),
+  destCompanyId: linkId.optional(),
+  destLedgerAccountId: linkId.optional(),
+  recipientUserIds: z.array(z.string()).optional(),
+};
+const linkParams = z.strictObject({ id: stringParam });
+
+const createLinkInput = {
+  query: emptyQuery,
+  body: z.strictObject(linkFields),
+} satisfies RequestSchemas;
+
+const updateLinkInput = {
+  params: linkParams,
+  query: emptyQuery,
+  body: z.strictObject({ ...linkFields, active: z.boolean().optional() }),
+} satisfies RequestSchemas;
+
+const deleteLinkInput = {
+  params: linkParams,
+  query: emptyQuery,
+  body: emptyBody,
+} satisfies RequestSchemas;
 
 export function registerIntercompanyNotificationRoutesPart1(app: Express) {
   // ── GET /api/intercompany-links ─────────────────────────────────────────────
@@ -101,118 +133,32 @@ export function registerIntercompanyNotificationRoutesPart1(app: Express) {
   });
 
   // ── POST /api/intercompany-links ────────────────────────────────────────────
-  app.post("/api/intercompany-links", requireAuth, requireRole("Admin", "Developer"), async (req, res) => {
-    try {
-      const {
-        label,
-        sourceCompanyId,
-        sourceLedgerAccountId,
-        destCompanyId,
-        destLedgerAccountId,
-        recipientUserIds = [],
-      } = req.body;
-      if (!sourceCompanyId || !sourceLedgerAccountId || !destCompanyId || !destLedgerAccountId) {
-        return res.status(400).json({ message: "Missing required fields" });
-      }
-
-      // Validate recipients belong to the destination company
-      if (Array.isArray(recipientUserIds) && recipientUserIds.length > 0) {
-        const destMembers = await db
-          .select({ userId: userCompanyRoles.userId })
-          .from(userCompanyRoles)
-          .where(
-            and(eq(userCompanyRoles.companyId, destCompanyId), inArray(userCompanyRoles.userId, recipientUserIds))
-          );
-        const validIds = new Set(destMembers.map((r) => r.userId));
-        const invalid = (recipientUserIds as string[]).filter((uid) => !validIds.has(uid));
-        if (invalid.length > 0) {
-          return res
-            .status(400)
-            .json({ message: "Some selected recipients do not have a role in the destination company" });
-        }
-      }
-
-      const [link] = await db
-        .insert(intercompanyAccountLinks)
-        .values({
-          label: label || null,
+  app.post(
+    "/api/intercompany-links",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    validateRequest(createLinkInput),
+    async (req, res) => {
+      try {
+        const {
+          label,
           sourceCompanyId,
           sourceLedgerAccountId,
           destCompanyId,
           destLedgerAccountId,
-          active: true,
-        })
-        .returning();
+          recipientUserIds = [],
+        } = req.body;
+        if (!sourceCompanyId || !sourceLedgerAccountId || !destCompanyId || !destLedgerAccountId) {
+          return res.status(400).json({ message: "Missing required fields" });
+        }
 
-      if (Array.isArray(recipientUserIds) && recipientUserIds.length > 0) {
-        await db
-          .insert(intercompanyLinkRecipients)
-          .values(recipientUserIds.map((uid: string) => ({ linkId: link.id, userId: uid })));
-      }
-
-      res.json(link);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
-    }
-  });
-
-  // ── PUT /api/intercompany-links/:id ─────────────────────────────────────────
-  app.put("/api/intercompany-links/:id", requireAuth, requireRole("Admin", "Developer"), async (req, res) => {
-    try {
-      const linkId = parseInt(req.params.id);
-      if (isNaN(linkId)) return res.status(400).json({ message: "Invalid ID" });
-
-      const {
-        label,
-        sourceCompanyId,
-        sourceLedgerAccountId,
-        destCompanyId,
-        destLedgerAccountId,
-        active,
-        recipientUserIds,
-      } = req.body;
-
-      const linkFields = {
-        ...(label !== undefined ? { label } : {}),
-        ...(sourceCompanyId !== undefined ? { sourceCompanyId } : {}),
-        ...(sourceLedgerAccountId !== undefined ? { sourceLedgerAccountId } : {}),
-        ...(destCompanyId !== undefined ? { destCompanyId } : {}),
-        ...(destLedgerAccountId !== undefined ? { destLedgerAccountId } : {}),
-        ...(active !== undefined ? { active } : {}),
-      };
-
-      let updated: typeof intercompanyAccountLinks.$inferSelect | undefined;
-      if (Object.keys(linkFields).length > 0) {
-        const [row] = await db
-          .update(intercompanyAccountLinks)
-          .set(linkFields)
-          .where(eq(intercompanyAccountLinks.id, linkId))
-          .returning();
-        updated = row;
-        if (!updated) return res.status(404).json({ message: "Link not found" });
-      } else {
-        // Only recipients are being updated — fetch the link for validation below
-        const [row] = await db
-          .select()
-          .from(intercompanyAccountLinks)
-          .where(eq(intercompanyAccountLinks.id, linkId))
-          .limit(1);
-        updated = row;
-        if (!updated) return res.status(404).json({ message: "Link not found" });
-      }
-
-      if (Array.isArray(recipientUserIds)) {
         // Validate recipients belong to the destination company
-        const effectiveDestCompanyId = destCompanyId ?? updated.destCompanyId;
-        if (recipientUserIds.length > 0) {
+        if (Array.isArray(recipientUserIds) && recipientUserIds.length > 0) {
           const destMembers = await db
             .select({ userId: userCompanyRoles.userId })
             .from(userCompanyRoles)
             .where(
-              and(
-                eq(userCompanyRoles.companyId, effectiveDestCompanyId),
-                inArray(userCompanyRoles.userId, recipientUserIds)
-              )
+              and(eq(userCompanyRoles.companyId, destCompanyId), inArray(userCompanyRoles.userId, recipientUserIds))
             );
           const validIds = new Set(destMembers.map((r) => r.userId));
           const invalid = (recipientUserIds as string[]).filter((uid) => !validIds.has(uid));
@@ -222,31 +168,135 @@ export function registerIntercompanyNotificationRoutesPart1(app: Express) {
               .json({ message: "Some selected recipients do not have a role in the destination company" });
           }
         }
-        await db.delete(intercompanyLinkRecipients).where(eq(intercompanyLinkRecipients.linkId, linkId));
-        if (recipientUserIds.length > 0) {
+
+        const [link] = await db
+          .insert(intercompanyAccountLinks)
+          .values({
+            label: label || null,
+            sourceCompanyId,
+            sourceLedgerAccountId,
+            destCompanyId,
+            destLedgerAccountId,
+            active: true,
+          })
+          .returning();
+
+        if (Array.isArray(recipientUserIds) && recipientUserIds.length > 0) {
           await db
             .insert(intercompanyLinkRecipients)
-            .values(recipientUserIds.map((uid: string) => ({ linkId, userId: uid })));
+            .values(recipientUserIds.map((uid: string) => ({ linkId: link.id, userId: uid })));
         }
-      }
 
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+        res.json(link);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
+
+  // ── PUT /api/intercompany-links/:id ─────────────────────────────────────────
+  app.put(
+    "/api/intercompany-links/:id",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    validateRequest(updateLinkInput),
+    async (req, res) => {
+      try {
+        const linkId = parseInt(req.params.id);
+        if (isNaN(linkId)) return res.status(400).json({ message: "Invalid ID" });
+
+        const {
+          label,
+          sourceCompanyId,
+          sourceLedgerAccountId,
+          destCompanyId,
+          destLedgerAccountId,
+          active,
+          recipientUserIds,
+        } = req.body;
+
+        const linkFields = {
+          ...(label !== undefined ? { label } : {}),
+          ...(sourceCompanyId !== undefined ? { sourceCompanyId } : {}),
+          ...(sourceLedgerAccountId !== undefined ? { sourceLedgerAccountId } : {}),
+          ...(destCompanyId !== undefined ? { destCompanyId } : {}),
+          ...(destLedgerAccountId !== undefined ? { destLedgerAccountId } : {}),
+          ...(active !== undefined ? { active } : {}),
+        };
+
+        let updated: typeof intercompanyAccountLinks.$inferSelect | undefined;
+        if (Object.keys(linkFields).length > 0) {
+          const [row] = await db
+            .update(intercompanyAccountLinks)
+            .set(linkFields)
+            .where(eq(intercompanyAccountLinks.id, linkId))
+            .returning();
+          updated = row;
+          if (!updated) return res.status(404).json({ message: "Link not found" });
+        } else {
+          // Only recipients are being updated — fetch the link for validation below
+          const [row] = await db
+            .select()
+            .from(intercompanyAccountLinks)
+            .where(eq(intercompanyAccountLinks.id, linkId))
+            .limit(1);
+          updated = row;
+          if (!updated) return res.status(404).json({ message: "Link not found" });
+        }
+
+        if (Array.isArray(recipientUserIds)) {
+          // Validate recipients belong to the destination company
+          const effectiveDestCompanyId = destCompanyId ?? updated.destCompanyId;
+          if (recipientUserIds.length > 0) {
+            const destMembers = await db
+              .select({ userId: userCompanyRoles.userId })
+              .from(userCompanyRoles)
+              .where(
+                and(
+                  eq(userCompanyRoles.companyId, effectiveDestCompanyId),
+                  inArray(userCompanyRoles.userId, recipientUserIds)
+                )
+              );
+            const validIds = new Set(destMembers.map((r) => r.userId));
+            const invalid = (recipientUserIds as string[]).filter((uid) => !validIds.has(uid));
+            if (invalid.length > 0) {
+              return res
+                .status(400)
+                .json({ message: "Some selected recipients do not have a role in the destination company" });
+            }
+          }
+          await db.delete(intercompanyLinkRecipients).where(eq(intercompanyLinkRecipients.linkId, linkId));
+          if (recipientUserIds.length > 0) {
+            await db
+              .insert(intercompanyLinkRecipients)
+              .values(recipientUserIds.map((uid: string) => ({ linkId, userId: uid })));
+          }
+        }
+
+        res.json(updated);
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
+    }
+  );
 
   // ── DELETE /api/intercompany-links/:id ──────────────────────────────────────
-  app.delete("/api/intercompany-links/:id", requireAuth, requireRole("Admin", "Developer"), async (req, res) => {
-    try {
-      const linkId = parseInt(req.params.id);
-      if (isNaN(linkId)) return res.status(400).json({ message: "Invalid ID" });
-      await db.delete(intercompanyAccountLinks).where(eq(intercompanyAccountLinks.id, linkId));
-      res.json({ success: true });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) });
+  app.delete(
+    "/api/intercompany-links/:id",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    validateRequest(deleteLinkInput),
+    async (req, res) => {
+      try {
+        const linkId = parseInt(req.params.id);
+        if (isNaN(linkId)) return res.status(400).json({ message: "Invalid ID" });
+        await db.delete(intercompanyAccountLinks).where(eq(intercompanyAccountLinks.id, linkId));
+        res.json({ success: true });
+      } catch (err: unknown) {
+        res.status(500).json({ message: getErrorMessage(err) });
+      }
     }
-  });
+  );
 
   // ── GET /api/intercompany-requests/pending-count ────────────────────────────
   // Returns number of pending requests addressed to the logged-in user
