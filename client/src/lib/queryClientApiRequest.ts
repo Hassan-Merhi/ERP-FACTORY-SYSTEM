@@ -2,6 +2,7 @@
 import { offlineError } from "./offline/offlineError";
 import { assertPreparedCompanyMutationStillCurrent } from "./companyCacheScope";
 import { getErrorDetails } from "@shared/errorUtils";
+import { assertCompanyMutationSnapshot, captureCompanyMutationSnapshot } from "./companyCacheScope";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { coldStartReadOnlyActive } from "./offline/coldStartState";
 import { isKnownOffline } from "./offline/connectivityState";
@@ -45,7 +46,9 @@ export async function apiRequest(
     const { captureOfflineWriteForSignedInUser } = await import("./offline/browserCapture");
     return captureOfflineWriteForSignedInUser(queryClient.getQueryData(["/api/auth/me"]), method, url, data);
   }
+  const actionScope = captureCompanyMutationSnapshot(method, new URL(url, "http://localhost").pathname);
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
+  assertCompanyMutationSnapshot(actionScope);
 
   try {
     const res = await fetch(prepared.url, prepared.init);
@@ -54,8 +57,9 @@ export async function apiRequest(
 
     if (!_isRetry && (await isCsrfTokenMismatch(res))) {
       assertPreparedCompanyMutationStillCurrent(prepared.init.headers);
+      assertCompanyMutationSnapshot(actionScope);
       resetCsrfToken();
-      return apiRequest(method, url, data, true);
+      return apiRequest(method, url, data, true, timeoutMs);
     }
 
     await throwIfResNotOk(res);
