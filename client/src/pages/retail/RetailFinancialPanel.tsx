@@ -181,7 +181,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                       ariaLabel={label}
                       placeholder="Select account"
                       className="mt-1 h-9"
-                    />           </Select>
+                    />
                   </div>
                 ))}
                 <div>
@@ -204,7 +204,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                     ariaLabel="Bank account (optional)"
                     placeholder="Use bank clearing ledger"
                     className="mt-1 h-9"
-                  />         </Select>
+                  />
                 </div>
               </div>
             ) : (
