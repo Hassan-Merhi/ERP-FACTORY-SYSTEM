@@ -141,8 +141,8 @@ export function ProductionTargetWeeklyBonusPaymentsPanel(props: { initialDate: s
                 options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
                 value={accountId}
                 onChange={setAccountId}
-                placeholder={"Select Cash / Bank account"}
-                ariaLabel={"Weekly bonus paying account"}
+                placeholder="Select Cash / Bank account"
+                ariaLabel="Weekly bonus paying account"
               />
           </label>
         </div>
