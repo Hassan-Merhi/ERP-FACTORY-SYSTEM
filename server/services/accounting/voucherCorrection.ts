@@ -215,6 +215,27 @@ export async function assertVoucherEditableTx(
   if (voucher.deletedAt) {
     throw new VoucherCorrectionError(409, "VOUCHER_DELETED", VOUCHER_CORRECTION_MESSAGES.deleted, { voucherId });
   }
+  // System FX revaluation lines are base-only: the generic Journal editor
+  // rebuilds lines as USD/IDENTITY, silently manufacturing native USD movements.
+  // Reject ordinary edits/deletion of these engine-owned journals. Repairs must
+  // use a dedicated audited path that preserves the original currency evidence.
+  const fxSource = resultRows<{ id: number }>(
+    await tx.execute(sql`
+      SELECT id FROM accounting_posting_requests
+       WHERE company_id = ${voucher.companyId}
+         AND voucher_id = ${voucherId}
+         AND source_type = 'fx-unrealized-revaluation'
+       LIMIT 1
+    `)
+  )[0];
+  if (fxSource) {
+    throw new VoucherCorrectionError(
+      409,
+      "FX_REVALUATION_VOUCHER_IMMUTABLE",
+      "Automatic FX revaluation vouchers cannot be edited using the general voucher editor. Use the audited FX correction workflow.",
+      { voucherId }
+    );
+  }
   const closedThrough = await companyClosedThroughTx(tx, voucher.companyId);
   if (closedThrough) {
     const dates = [voucher.voucherDate, voucher.effectiveDate, options.newVoucherDate, options.newEffectiveDate]
