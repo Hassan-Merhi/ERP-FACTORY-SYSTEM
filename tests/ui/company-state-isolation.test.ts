@@ -83,6 +83,18 @@ describe("frontend company-state isolation wiring", () => {
     expect(follower).toContain("onTransitionVerified()");
   });
 
+  it("clears global confirmations and toast notices during actual company transitions", () => {
+    const context = source("client/src/contexts/CompanyContext.tsx");
+    const confirmHost = source("client/src/components/ConfirmHost.tsx");
+    const toaster = source("client/src/components/ui/toaster.tsx");
+
+    expect(context).toContain("announceCompanyWorkspaceTransition()");
+    expect(confirmHost).toContain("COMPANY_WORKSPACE_TRANSITION_EVENT");
+    expect(confirmHost).toContain("request.resolve(false)");
+    expect(confirmHost).toContain("request.resolve(null)");
+    expect(toaster).toContain("COMPANY_WORKSPACE_TRANSITION_EVENT, clearAllToasts");
+  });
+
   it("remounts the active workspace when the company identity changes", () => {
     const app = source("client/src/app/AuthenticatedApp.tsx");
 
