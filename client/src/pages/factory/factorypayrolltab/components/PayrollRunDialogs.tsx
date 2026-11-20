@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { FactoryPayrollState } from "../useFactoryPayroll";
 import { PayrollPreviewDialog } from "./PayrollPreviewDialog";
 
@@ -72,21 +72,13 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Cash Account (optional, used at payment)</Label>
-              <Select
+              <UnifiedAccountPicker
+                options={(payroll.cashAccounts ?? []).map((a) => ({ value: String(a.id), name: a.name }))}
                 value={payroll.runForm.cashAccountId}
-                onValueChange={(v) => payroll.setRunForm((f) => ({ ...f, cashAccountId: v }))}
-              >
-                <SelectTrigger data-testid="select-cash-account">
-                  <SelectValue placeholder="Select account (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {payroll.cashAccounts?.map((a) => (
-                    <SelectItem key={a.id} value={String(a.id)}>
-                      {a.name} ({a.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => payroll.setRunForm((f) => ({ ...f, cashAccountId: v }))}
+                placeholder="Select account (optional)"
+                testId="select-cash-account"
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Workers</Label>
