@@ -70,7 +70,7 @@ export function ContainerFormCharges({
             Freight Expense Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
           </Label>
           <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={ledgerAccounts.filter((account) => account.isPostingLeaf !== false).map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
  value={formData.freightAccountId || ""}
  onChange={(val) => setFormData((f) => ({ ...f, freightAccountId: val }))}
  placeholder={"None"}
@@ -140,7 +140,7 @@ export function ContainerFormCharges({
                 <span className="text-xs text-muted-foreground font-normal">(account that paid the freight)</span>
               </Label>
               <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={ledgerAccounts.filter((account) => account.isPostingLeaf !== false).map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
  value={formData.freightOwnAccountId || ""}
  onChange={(val) => setFormData((f) => ({ ...f, freightOwnAccountId: val }))}
  placeholder={"Select account..."}
@@ -213,7 +213,7 @@ export function ContainerFormCharges({
                 </Select>
                 <UnifiedAccountPicker
  key={`acc-${idx}`}
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={ledgerAccounts.filter((account) => account.isPostingLeaf !== false).map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
  value={line.ledgerAccountId || ""}
  onChange={(val) => updateOtherChargeLine(idx, "ledgerAccountId", val)}
  placeholder={"No account"}
