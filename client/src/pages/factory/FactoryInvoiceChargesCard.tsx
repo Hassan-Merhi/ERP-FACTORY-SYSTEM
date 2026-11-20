@@ -214,7 +214,7 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
  onChange={m.setNewChargeLedgerId}
  placeholder={"Ledger account..."}
  testId={"select-new-charge-ledger"}
- className={"text-sm"}
+ className="text-sm"
  />
                     </div>
                     <p className="text-xs text-muted-foreground">Saving will immediately post an accounting voucher.</p>
