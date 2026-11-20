@@ -76,10 +76,16 @@ for (const token of [
 ]) {
   if (!serviceWorker.includes(token)) failures.push(`One-time device refresh contract missing: ${token}`);
 }
-for (const token of ['controllerReloadStarted = true', 'window.location.replace(', 'if (!hadControllerAtStartup)']) {
+// #3373: a replacement worker never reloads the page by itself (unsaved forms,
+// scanner state and pending vouchers survive); the first install is ignored and
+// later updates are announced to the app's update banner instead.
+for (const token of ['if (!hadControllerAtStartup)', 'window.dispatchEvent(new Event("erp:service-worker-updated"))']) {
   if (!serviceWorkerRegistration.includes(token)) {
-    failures.push(`One-time controller refresh contract missing: ${token}`);
+    failures.push(`Service worker update notice contract missing: ${token}`);
   }
+}
+if (serviceWorkerRegistration.includes("window.location.replace(")) {
+  failures.push("Service worker update must not reload the page automatically");
 }
 
 for (const token of [
