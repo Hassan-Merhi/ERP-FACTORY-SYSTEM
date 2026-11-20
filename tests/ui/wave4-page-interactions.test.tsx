@@ -216,7 +216,13 @@ const PAGES: Array<{
     factory: true,
     seedRoutes: { "/whatsapp-preview": () => ({ files: [], defaultMessage: "" }) },
   },
-  { name: "FactoryInvoices", load: () => import("@/pages/factory/FactoryInvoices"), factory: true },
+  {
+    name: "FactoryInvoices",
+    load: () => import("@/pages/factory/FactoryInvoices"),
+    factory: true,
+    // The loading-agent picker lists agent names, not record rows.
+    seedRoutes: { "/api/factory/loading-agents": () => ["Seeded Agent"] },
+  },
   { name: "WasteDispatch", load: () => import("@/pages/factory/WasteDispatch"), factory: true },
   { name: "StockEntryTab", load: () => import("@/pages/factory/bale-stock-entry/StockEntryTab"), factory: true },
   {
