@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { ledgerAccounts } from "@shared/schema";
 import type { DbTransaction } from "../../db";
-import { PostingValidationError } from "./centralPostingEngine";
+import { PostingValidationError } from "./postingValidationError";
 
 /**
  * A posting account is a leaf, not a chart-of-accounts group heading.
@@ -33,7 +33,13 @@ export async function assertPostingLedgerLeavesTx(
   companyId: number,
   accountIds: readonly number[]
 ): Promise<void> {
-  const ids = [...new Set(accountIds)].filter((id) => Number.isInteger(id) && id > 0);
+  if (accountIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+    throw new PostingValidationError(
+      "POSTING_TARGET_ID_INVALID",
+      "Ledger account IDs must be positive integers"
+    );
+  }
+  const ids = [...new Set(accountIds)];
   if (!ids.length) return;
   const valid = await tx
     .select({ id: ledgerAccounts.id })
