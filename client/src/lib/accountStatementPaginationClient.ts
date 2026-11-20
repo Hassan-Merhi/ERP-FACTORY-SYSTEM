@@ -1,3 +1,4 @@
+import { companyReadCacheIdentity } from "./companyCacheScope";
 import {
   resolveFetchUrl as resolveUrl,
   replaceFetchInputUrl as replaceInputUrl,
@@ -34,7 +35,7 @@ let statementSnapshot: AccountStatementPaginationSnapshot | null = null;
 const statementListeners = new Set<() => void>();
 
 export function getAccountStatementPaginationSnapshot(): AccountStatementPaginationSnapshot | null {
-  return statementSnapshot;
+  return statementSnapshot?.key.startsWith(`${companyReadCacheIdentity()}|`) ? statementSnapshot : null;
 }
 
 export function subscribeAccountStatementPagination(listener: () => void): () => void {
