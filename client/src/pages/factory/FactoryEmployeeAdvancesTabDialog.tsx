@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./FactoryEmployeeAdvancesTab.tsx
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,21 +74,13 @@ export function FactoryEmployeeAdvancesTabDialog({
           </div>
           <div>
             <Label>Cash Account (optional)</Label>
-            <Select
-              value={addForm.cashAccountId}
-              onValueChange={(v) => setAddForm((f) => ({ ...f, cashAccountId: v }))}
-            >
-              <SelectTrigger data-testid="select-cash-account">
-                <SelectValue placeholder="Select account" />
-              </SelectTrigger>
-              <SelectContent>
-                {cashAccounts.map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                value={addForm.cashAccountId}
+                onChange={(v) => setAddForm((f) => ({ ...f, cashAccountId: v }))}
+                placeholder="Select account"
+                testId="select-cash-account"
+              />
           </div>
           <div>
             <Label>Notes</Label>
