@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./CostCenterReports.tsx to keep that module under the source-size cap.
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
@@ -254,19 +255,13 @@ export function CostCenterReportsSection4({
       </div>
       <div className="space-y-1">
         <Label>Expense Account</Label>
-        <Select value={accountFilter} onValueChange={(v) => changeFilter(setAccountFilter, v)} disabled={consolidated}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Accounts</SelectItem>
-            {(accounts?.accounts || []).map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>
-                {a.code} — {a.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <UnifiedAccountPicker
+                  options={[{ value: "all", name: "All Accounts" }, ...(accounts?.accounts || []).map((a) => ({ value: String(a.id), name: a.name }))]}
+                  value={accountFilter}
+                  onChange={(v) => changeFilter(setAccountFilter, v)}
+                  placeholder={"All Accounts"}
+                  disabled={consolidated}
+                  />
       </div>
       {isEditor && (
         <div className="space-y-1">
