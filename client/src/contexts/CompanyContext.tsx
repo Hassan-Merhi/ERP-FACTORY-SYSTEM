@@ -7,6 +7,7 @@ import {
   removeCompanySessionQueries,
 } from "@/lib/companyQueryScope";
 import { createCompanySwitchQueue, type CompanySwitchQueue } from "@/lib/companySwitchQueue";
+import { publishCompanySessionCommit, subscribeToCompanySessionChanges } from "@/lib/companySessionSync";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { stableReferenceQueryPolicy } from "@/lib/queryPolicies";
 import { refreshRealtimeSessionScope } from "@/hooks/use-ws-invalidation";
@@ -118,6 +119,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const selectedCompanyRef = useRef<Company | null>(null);
   const lastSyncedCompanyId = useRef<number | null>(null);
   const initialSyncStarted = useRef(false);
+  const externalChangeObservedRef = useRef(false);
   const initialRetryTimer = useRef<number | null>(null);
   const switchQueueRef = useRef<CompanySwitchQueue | null>(null);
 
@@ -197,6 +199,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         resetAuthenticatedUser: !isInitialActivation,
       });
       commitCompanySelection(company, { prefetch: true, serverSynced: true });
+      publishCompanySessionCommit(company.id);
       // The WebSocket's company/user scope is captured when it connects. Since
       // company switching is now SPA-native (no page reload), replace the socket
       // after the server session changes so realtime events follow this company.
@@ -258,6 +261,18 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     void fetchSessionCompany()
       .catch(() => ({ companyId: null }))
       .then(async ({ companyId: sessionCompanyId }) => {
+        if (selectedCompanyRef.current) return;
+        // A confirmed external switch during bootstrap takes precedence over a
+        // saved startup preference. Do not write the session back to an old tab.
+        if (externalChangeObservedRef.current) {
+          const serverCompany = companiesRef.current.find((company) => company.id === sessionCompanyId);
+          if (serverCompany) {
+            await switchQueueRef.current!.enqueue(async () => {
+              if (!selectedCompanyRef.current) adoptServerCompany(serverCompany);
+            });
+            return;
+          }
+        }
         if (sessionCompanyId === target.id) {
           await switchQueueRef.current!.enqueue(async () => {
             adoptServerCompany(target);
@@ -287,55 +302,86 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       });
   }, [adoptServerCompany, companies, initialSyncAttempt, scheduleInitialSyncRetry, selectCompany, selectedCompany]);
 
-  // The company lives in the server session, which every tab of this browser
-  // shares. When another tab switches company, this tab's next request would
-  // carry its old company and be refused (CROSS_COMPANY_ACCESS_DENIED), and the
-  // page would sit on data from a company the session has left. The other
-  // tab's localStorage write (made only after its switch committed) fires a
-  // storage event here; on it, adopt whatever company the session points at
-  // now. A follower never writes the session or localStorage itself, so it
-  // cannot race a newer switch back to an older company, and reading the
-  // session rather than the event value makes the order of events irrelevant.
+  // A company's server session is shared by browser tabs. Notifications only
+  // prompt a fresh server read; their company IDs are never trusted as scope.
+  // Reconcile on focus/pageshow too: browsers may suspend background tabs.
   useEffect(() => {
+    let disposed = false;
+    let inProgress = false;
+    let rerunRequested = false;
     let retryTimer: number | null = null;
+    let debounceTimer: number | null = null;
 
-    const followSession = (attempt: number) => {
-      void switchQueueRef.current!.enqueue(async () => {
-        let sessionCompanyId: number | null;
-        try {
-          ({ companyId: sessionCompanyId } = await fetchSessionCompany());
-        } catch (error: unknown) {
+    const reconcile = (attempt: number) => {
+      if (disposed || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+      if (inProgress) {
+        rerunRequested = true;
+        return;
+      }
+      if (!selectedCompanyRef.current && companiesRef.current.length === 0) return;
+      inProgress = true;
+
+      void (async () => {
+        // Avoid entering the switching/loading state on every harmless focus.
+        const initialSession = await fetchSessionCompany();
+        if (disposed || !initialSession.companyId || initialSession.companyId === selectedCompanyRef.current?.id) return;
+
+        await switchQueueRef.current!.enqueue(async () => {
+          if (disposed) return;
+          // A local or another tab's switch might have completed while this
+          // task waited in the queue. Re-read the authoritative session.
+          const { companyId } = await fetchSessionCompany();
+          if (disposed || !companyId || companyId === selectedCompanyRef.current?.id) return;
+          const company = companiesRef.current.find((candidate) => candidate.id === companyId);
+          if (!company) return;
+
+          await cancelCompanySessionQueries(queryClient);
+          if (disposed) return;
+          removeCompanySessionQueries(queryClient, { resetAuthenticatedUser: true });
+          // Persist even if this was detected on resume rather than via storage;
+          // otherwise a later reload could resurrect the old selection.
+          commitCompanySelection(company, { prefetch: true, serverSynced: true });
+          refreshRealtimeSessionScope();
+        });
+      })()
+        .catch((error: unknown) => {
+          if (disposed) return;
           if (attempt < 3) {
-            retryTimer = window.setTimeout(() => followSession(attempt + 1), 2000);
+            retryTimer = window.setTimeout(() => {
+              retryTimer = null;
+              reconcile(attempt + 1);
+            }, 2000);
           } else {
-            console.error("[Company] Could not read the session company after another tab switched.", error);
+            console.error("[Company] Could not reconcile the shared company session.", error);
           }
-          return;
-        }
-        if (!sessionCompanyId || sessionCompanyId === selectedCompanyRef.current?.id) return;
-        const company = companiesRef.current.find((candidate) => candidate.id === sessionCompanyId);
-        if (!company) return;
-
-        await cancelCompanySessionQueries(queryClient);
-        removeCompanySessionQueries(queryClient, { resetAuthenticatedUser: true });
-        commitCompanySelection(company, { prefetch: true, serverSynced: true, persist: false });
-        refreshRealtimeSessionScope();
-      });
+        })
+        .finally(() => {
+          inProgress = false;
+          if (rerunRequested && !disposed) {
+            rerunRequested = false;
+            reconcile(0);
+          }
+        });
     };
 
-    const followOtherTab = (event: StorageEvent) => {
-      if (event.key !== "selectedCompanyId" || !selectedCompanyRef.current) return;
-      const companyId = parseSavedCompanyId(event.newValue);
-      if (!companyId || companyId === selectedCompanyRef.current.id) return;
+    const onChange = () => {
+      externalChangeObservedRef.current = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = null;
-      followSession(0);
+      // Storage and BroadcastChannel often fire for the same commit.
+      if (debounceTimer !== null) return;
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null;
+        reconcile(0);
+      }, 0);
     };
 
-    window.addEventListener("storage", followOtherTab);
+    const unsubscribe = subscribeToCompanySessionChanges(onChange);
     return () => {
-      window.removeEventListener("storage", followOtherTab);
+      disposed = true;
+      unsubscribe();
       if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
     };
   }, [commitCompanySelection]);
 
