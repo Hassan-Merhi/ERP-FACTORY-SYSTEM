@@ -11,6 +11,7 @@ import { requireAuth } from "../../../auth";
 import { getFactoryAccessState, requireFactoryTabAccess } from "../../../lib/factoryAccessControl";
 import { parseId } from "../../../lib/parseId";
 import { resultRows } from "../../../lib/queryResult";
+import { ledgerPostingLeafCondition } from "../../../services/accounting/postableLedgerAccountPolicy";
 import { logger } from "../../../lib/logger";
 import {
   DispatchFinancialSourceError, loadDispatchTripFinancialSource,
@@ -135,6 +136,7 @@ async function loadAccounts(tx: DbTransaction, companyId: number): Promise<Accou
       FROM ledger_accounts
      WHERE company_id = ${companyId} AND active = TRUE
        AND deleted_at IS NULL AND is_hidden = FALSE
+       AND ${ledgerPostingLeafCondition(companyId)}
      ORDER BY code, name, id
   `));
   return rows.map(a => ({
