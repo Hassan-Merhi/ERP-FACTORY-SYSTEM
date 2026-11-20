@@ -9,7 +9,12 @@ import {
 import { createCompanySwitchQueue, type CompanySwitchQueue } from "@/lib/companySwitchQueue";
 import { publishCompanySessionCommit, type CompanySessionSignal } from "@/lib/companySessionSync";
 import { announceCompanyWorkspaceTransition } from "@/lib/companyWorkspaceEvents";
-import { activateCompanyCacheScope, beginCompanyCacheTransition, resumeCompanyCacheScope } from "@/lib/companyCacheScope";
+import {
+  activateCompanyCacheScope,
+  beginCompanyCacheTransition,
+  rememberVerifiedServerCompanyRevision,
+  resumeCompanyCacheScope,
+} from "@/lib/companyCacheScope";
 import { useCompanySessionFollower } from "@/hooks/useCompanySessionFollower";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { stableReferenceQueryPolicy } from "@/lib/queryPolicies";
@@ -76,6 +81,7 @@ interface CompanyContextType {
 interface CompanyCommitOptions {
   prefetch: boolean;
   serverSynced: boolean;
+  revision?: string | null;
   /** False when another tab already wrote the selection to localStorage. */
   persist?: boolean;
 }
@@ -108,12 +114,22 @@ function parseSavedCompanyId(value: string | null): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-async function switchCompanyOnServer(companyId: number): Promise<boolean> {
+async function switchCompanyOnServer(companyId: number): Promise<{ ok: boolean; revision?: string }> {
   try {
     const response = await apiRequest("POST", "/api/auth/set-company", { companyId });
-    return response.ok;
+    let revision: string | undefined;
+    if (response.ok && typeof response.json === "function") {
+      try {
+        const payload: unknown = await response.json();
+        const value = (payload as { companyRevision?: unknown } | null)?.companyRevision;
+        if (typeof value === "string") revision = value;
+      } catch {
+        // Older servers do not return a revision; use legacy compatibility.
+      }
+    }
+    return { ok: response.ok, revision };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
@@ -153,6 +169,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
   const commitCompanySelection = useCallback((company: Company, options: CompanyCommitOptions) => {
     activateCompanyCacheScope(company.id);
+    if (options.serverSynced) rememberVerifiedServerCompanyRevision(company.id, options.revision);
     setAppTimezone(null);
     lastSyncedCompanyId.current = options.serverSynced ? company.id : null;
     selectedCompanyRef.current = company;
@@ -173,8 +190,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
    * belongs to this user and this company. Just commit the selection.
    */
   const adoptServerCompany = useCallback(
-    (company: Company) => {
-      commitCompanySelection(company, { prefetch: true, serverSynced: true });
+    (company: Company, revision?: string | null) => {
+      commitCompanySelection(company, { prefetch: true, serverSynced: true, revision });
     },
     [commitCompanySelection]
   );
@@ -199,8 +216,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
           return true;
         }
 
-        const ok = await switchCompanyOnServer(company.id);
-        if (!ok) {
+        const switched = await switchCompanyOnServer(company.id);
+        if (!switched.ok) {
           refusedSwitch = true;
           return false;
         }
@@ -208,7 +225,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         removeCompanySessionQueries(queryClient, {
           resetAuthenticatedUser: !isInitialActivation,
         });
-        commitCompanySelection(company, { prefetch: true, serverSynced: true });
+        commitCompanySelection(company, { prefetch: true, serverSynced: true, revision: switched.revision });
         publishCompanySessionCommit(company.id);
         // The WebSocket's company/user scope is captured when it connects. Since
         // company switching is now SPA-native (no page reload), replace the socket
@@ -283,7 +300,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
     void fetchSessionCompany()
       .catch(() => ({ companyId: null }))
-      .then(async ({ companyId: sessionCompanyId }) => {
+      .then(async ({ companyId: sessionCompanyId, companyRevision }) => {
         if (selectedCompanyRef.current) return;
         // A confirmed external switch during bootstrap takes precedence over a
         // saved startup preference. Do not write the session back to an old tab.
@@ -291,14 +308,14 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
           const serverCompany = companiesRef.current.find((company) => company.id === sessionCompanyId);
           if (serverCompany) {
             await switchQueueRef.current!.enqueue(async () => {
-              if (!selectedCompanyRef.current) adoptServerCompany(serverCompany);
+              if (!selectedCompanyRef.current) adoptServerCompany(serverCompany, companyRevision);
             });
             return;
           }
         }
         if (sessionCompanyId === target.id) {
           await switchQueueRef.current!.enqueue(async () => {
-            adoptServerCompany(target);
+            adoptServerCompany(target, companyRevision);
           });
           return;
         }
@@ -325,8 +342,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       });
   }, [adoptServerCompany, companies, initialSyncAttempt, scheduleInitialSyncRetry, selectCompany, selectedCompany]);
 
-  const adoptOtherTabCompany = useCallback((company: Company) => {
-    commitCompanySelection(company, { prefetch: true, serverSynced: true });
+  const adoptOtherTabCompany = useCallback((company: Company, revision?: string | null) => {
+    commitCompanySelection(company, { prefetch: true, serverSynced: true, revision });
     refreshRealtimeSessionScope();
   }, [commitCompanySelection]);
 
@@ -337,8 +354,9 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       signal === "selection" || current === "switching" ? "switching" : "checking"
     );
   }, []);
-  const finishExternalSessionVerification = useCallback(() => {
+  const finishExternalSessionVerification = useCallback((companyId: number, revision?: string | null) => {
     resumeCompanyCacheScope();
+    rememberVerifiedServerCompanyRevision(companyId, revision);
     setExternalSessionState("idle");
   }, []);
 
