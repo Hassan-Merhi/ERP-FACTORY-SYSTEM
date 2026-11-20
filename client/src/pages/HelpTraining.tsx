@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, Search, ShieldCheck, Video } from "lucide-react";
+import { BookOpen, ChevronRight, CirclePlay, Clapperboard, FileText, ShieldCheck, Video } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { SearchField } from "@/components/ui/search-field";
+import { searchAny } from "@shared/searchNormalization";
 import type { TrainingMode, TrainingTopic } from "@/training/trainingCatalog";
 import { usePublishedTrainingMedia } from "@/training/publishedVideos";
 
@@ -29,12 +31,12 @@ export default function HelpTraining({ mode, topics }: Props) {
   } = usePublishedTrainingMedia();
   const visible = topics;
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = search.trim();
     return visible.filter((topic) => {
-      const text = [topic.title, topic.description, topic.category, ...(topic.keywords ?? []), ...(topic.tabs ?? [])]
-        .join(" ")
-        .toLowerCase();
-      return (category === "All topics" || category === topic.category) && (!term || text.includes(term));
+      return (
+        (category === "All topics" || category === topic.category) &&
+        searchAny(term, topic.title, topic.description, topic.category, ...(topic.keywords ?? []), ...(topic.tabs ?? []))
+      );
     });
   }, [visible, search, category]);
   const [selectedId, setSelectedId] = useState("welcome");
@@ -100,17 +102,14 @@ export default function HelpTraining({ mode, topics }: Props) {
           </button>
         ))}
       </div>
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <input
-          aria-label="Search training guides"
-          data-testid="training-search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search pages, workflows, stock, payroll, vouchers..."
-          className="h-10 w-full rounded-lg border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary"
-        />
-      </div>
+      <SearchField
+        aria-label="Search training guides"
+        data-testid="training-search"
+        value={search}
+        onValueChange={setSearch}
+        placeholder="Search pages, workflows, stock, payroll, vouchers..."
+        className="h-10 rounded-lg"
+      />
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
         <nav
