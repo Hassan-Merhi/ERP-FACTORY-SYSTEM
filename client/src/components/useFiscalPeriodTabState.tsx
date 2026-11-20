@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./FiscalPeriodTab.tsx to keep that module under the source-size cap.
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
@@ -8,7 +9,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -251,34 +251,14 @@ export function FiscalPeriodTabCardSection({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Retained Earnings Account *</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  disabled={!isAuthorized || closePeriodMutation.isPending}
-                >
-                  <FormControl>
-                    <SelectTrigger data-testid="select-retained-earnings">
-                      <SelectValue placeholder="Select equity account" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {isLoadingAccounts ? (
-                      <SelectItem value="loading" disabled>
-                        Loading accounts...
-                      </SelectItem>
-                    ) : equityAccounts.length === 0 ? (
-                      <SelectItem value="none" disabled>
-                        No equity accounts found
-                      </SelectItem>
-                    ) : (
-                      equityAccounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id.toString()}>
-                          {account.name} ({account.code})
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <UnifiedAccountPicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={equityAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                    placeholder={isLoadingAccounts ? "Loading accounts..." : "Select equity account"}
+                    disabled={!isAuthorized || closePeriodMutation.isPending || isLoadingAccounts}
+                    testId="select-retained-earnings"
+                  />
                 <FormDescription>Net income will be transferred to this account</FormDescription>
                 <FormMessage />
               </FormItem>
