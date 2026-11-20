@@ -186,6 +186,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       }
 
       const isInitialActivation = selectedCompanyRef.current === null;
+      let refusedSwitch = false;
       if (!isInitialActivation) beginCompanyCacheTransition();
       try {
         await cancelCompanySessionQueries(queryClient);
@@ -200,10 +201,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
 
         const ok = await switchCompanyOnServer(company.id);
         if (!ok) {
-          void queryClient.invalidateQueries({
-            predicate: (query) => isCompanySessionQueryKey(query.queryKey),
-            refetchType: "active",
-          });
+          refusedSwitch = true;
           return false;
         }
 
@@ -230,6 +228,14 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         // A denied switch or transport error must reopen the existing
         // company's read scope without exposing a stale in-flight response.
         resumeCompanyCacheScope();
+        // Do not start recovery reads until the old company's scope is
+        // verified again. They would otherwise fail against transition mode.
+        if (refusedSwitch) {
+          void queryClient.invalidateQueries({
+            predicate: (query) => isCompanySessionQueryKey(query.queryKey),
+            refetchType: "active",
+          });
+        }
       }
     },
     [commitCompanySelection]
