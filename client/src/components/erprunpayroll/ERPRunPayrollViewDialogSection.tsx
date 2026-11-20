@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./ERPRunPayrollViewTabsContentSection.tsx
 import { DollarSign, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useERPRunPayrollViewState } from "./ERPRunPayrollViewSection";
 
@@ -69,24 +69,13 @@ export function ERPRunPayrollViewDialogSection({
 
             <div className="space-y-2">
               <Label>Payment Account (Cash)</Label>
-              <Select value={payAccountId} onValueChange={setPayAccountId}>
-                <SelectTrigger data-testid="select-pay-account">
-                  <SelectValue placeholder="Select cash account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts.length === 0 ? (
-                    <SelectItem value="__none" disabled>
-                      No cash accounts found
-                    </SelectItem>
-                  ) : (
-                    cashAccounts.map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>
-                        {a.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                  options={cashAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
+                  value={payAccountId}
+                  onChange={setPayAccountId}
+                  placeholder={"Select cash account"}
+                  testId={"select-pay-account"}
+                  />
             </div>
 
             {/* Worker breakdown */}
