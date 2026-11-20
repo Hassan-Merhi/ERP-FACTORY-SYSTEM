@@ -226,8 +226,8 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
                 options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
                 value={accountId}
                 onChange={setAccountId}
-                placeholder={"Select paying account"}
-                ariaLabel={"Pay bonus from account"}
+                placeholder="Select paying account"
+                ariaLabel="Pay bonus from account"
               />
             </label>
           </div>
