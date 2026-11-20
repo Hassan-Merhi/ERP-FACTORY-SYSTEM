@@ -1,0 +1,76 @@
+# Phase 6: generate schema manifests against an EMPTY disposable PostgreSQL 18.
+# Removes itself in its verified manifest commit; no application databases used.
+name: Phase 6 One-Time Migration Manifest
+on:
+  push:
+    branches:
+      - feature/unified-search-phase1-20261120
+    paths:
+      - .github/workflows/phase6-migration-manifest-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase6-manifest-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.repository == 'Hassan-Merhi/ERP-FACTORY-SYSTEM' && github.ref == 'refs/heads/feature/unified-search-phase1-20261120'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGSSLMODE: disable
+      ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Harden Runner (audit mode)
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+      - name: Checkout exact branch with full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: feature/unified-search-phase1-20261120
+          fetch-depth: 0
+      - name: Set up Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24.22.2"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --bin-links=true
+      - name: Generate, independently verify, and commit schema manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$ADMIN_URL" in
+            postgresql://postgres:postgres@127.0.0.1:5432/postgres) ;;
+            *) echo "::error::Only local disposable PostgreSQL is permitted"; exit 1 ;;
+          esac
+          node scripts/db/ci-sql.mjs "$ADMIN_URL" "CREATE DATABASE phase6_manifest_generate" "CREATE DATABASE phase6_manifest_verify"
+          DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/phase6_manifest_generate npm run db:manifest
+          DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/phase6_manifest_verify npm run db:manifest:check
+          git diff --check
+          rm .github/workflows/phase6-migration-manifest-once.yml
+          git add migrations/manifest/0001_baseline_schema.tsv migrations/manifest/schema.tsv .github/workflows/phase6-migration-manifest-once.yml
+          git diff --cached --quiet && { echo "::error::No manifest/self-removal changes staged"; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(phase6): verify and refresh disposable PostgreSQL schema manifest"
+          git push origin HEAD:refs/heads/feature/unified-search-phase1-20261120
