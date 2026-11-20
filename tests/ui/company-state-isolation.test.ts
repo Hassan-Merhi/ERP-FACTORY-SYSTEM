@@ -65,6 +65,24 @@ describe("frontend company-state isolation wiring", () => {
     expect(appData).toContain('companyQueryKey("/api/factory/settings", selectedCompanyId)');
   });
 
+  it("gates all company-specific providers and portals before showing old records", () => {
+    const root = source("client/src/App.tsx");
+    const context = source("client/src/contexts/CompanyContext.tsx");
+    const follower = source("client/src/hooks/useCompanySessionFollower.ts");
+
+    expect(root).toContain("function CompanyWorkspaceBoundary(");
+    expect(root).toContain('if (companyLoading || !selectedCompany)');
+    expect(root).toContain('data-testid="company-session-verification-cover"');
+    expect(root).toContain("isCheckingCompanySession && <CompanySessionVerificationCover />");
+    expect(root).toContain('<LocationProvider key={`${user.id}:${selectedCompany.id}`}>');
+    expect(root).toContain("<LegacyQueueRecoveryPanel />");
+    expect(root).toContain("<DeferredAuthenticatedUtilities />");
+    expect(context).toContain('externalSessionState === "switching"');
+    expect(context).toContain('isCheckingCompanySession: externalSessionState === "checking"');
+    expect(follower).toContain('onTransitionStart("selection")');
+    expect(follower).toContain("onTransitionVerified()");
+  });
+
   it("remounts the active workspace when the company identity changes", () => {
     const app = source("client/src/app/AuthenticatedApp.tsx");
 
