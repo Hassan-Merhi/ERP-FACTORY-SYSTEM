@@ -1,11 +1,6 @@
 // Extracted from ./AccountMigration.tsx to keep that module under the source-size cap.
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Check, ChevronsUpDown, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { Company, LedgerAccount } from "@shared/schema";
 
 export interface AccountPreviewItem {
@@ -100,99 +95,42 @@ interface AccountMultiSelectProps {
 }
 
 export function AccountMultiSelect({ accounts, selectedIds, onChange, disabled }: AccountMultiSelectProps) {
-  const [open, setOpen] = useState(false);
-  const selectedSet = new Set(selectedIds);
   const sorted = [...accounts].sort((a, b) => a.name.localeCompare(b.name));
+  const selectedSet = new Set(selectedIds);
 
   function toggle(id: number) {
-    if (selectedSet.has(id)) onChange(selectedIds.filter((x) => x !== id));
+    if (selectedSet.has(id)) onChange(selectedIds.filter((item) => item !== id));
     else onChange([...selectedIds, id]);
   }
 
   return (
     <div className="space-y-2">
-      <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            disabled={disabled}
-            className="w-full justify-between font-normal"
-            data-testid="select-accounts"
-          >
-            <span className="text-muted-foreground">
-              {selectedIds.length === 0
-                ? "Search and select accounts…"
-                : `${selectedIds.length} account${selectedIds.length === 1 ? "" : "s"} selected`}
-            </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[560px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Type account name or code…" />
-            <CommandList className="max-h-80">
-              <CommandEmpty>No accounts found.</CommandEmpty>
-              <CommandGroup>
-                {sorted.map((a) => {
-                  const selected = selectedSet.has(a.id);
-                  return (
-                    <CommandItem
-                      key={a.id}
-                      value={`${a.code} ${a.name} ${a.accountType}`}
-                      onSelect={() => toggle(a.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <div
-                        className={cn(
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
-                          selected ? "bg-primary border-primary" : "border-muted-foreground/40"
-                        )}
-                      >
-                        {selected && <Check className="h-3 w-3 text-primary-foreground" />}
-                      </div>
-                      <span className="flex-1 truncate">{a.name}</span>
-                      <Badge variant="secondary" className="text-xs shrink-0">
-                        {a.accountType}
-                      </Badge>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-          {selectedIds.length > 0 && (
-            <div className="border-t p-2 flex justify-end">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-xs text-muted-foreground"
-                onClick={() => {
-                  onChange([]);
-                  setOpen(false);
-                }}
-              >
-                Clear all
-              </Button>
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-
+      <UnifiedAccountPicker
+        mode="multiple"
+        options={sorted.map((account) => ({ value: String(account.id), name: account.name }))}
+        selectedValues={selectedIds.map(String)}
+        onSelectedValuesChange={(values) => onChange(values.map(Number))}
+        placeholder="Search and select accounts…"
+        searchPlaceholder="Search account name..."
+        contentClassName="w-[min(560px,calc(100vw-2rem))]"
+        testId="select-accounts"
+        disabled={disabled}
+      />
       {selectedIds.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {selectedIds.map((id) => {
-            const acc = accounts.find((a) => a.id === id);
-            if (!acc) return null;
+            const account = accounts.find((candidate) => candidate.id === id);
+            if (!account) return null;
             return (
-              <div key={id} className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm max-w-[240px]">
-                <span className="font-mono text-xs text-muted-foreground shrink-0">{acc.code}</span>
-                <span className="truncate">{acc.name}</span>
+              <div key={id} className="flex max-w-[240px] items-center gap-1 rounded-md bg-muted px-2 py-1 text-sm">
+                <span className="truncate">{account.name}</span>
                 <button
+                  type="button"
                   onClick={() => toggle(id)}
                   className="ml-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                   data-testid={`remove-account-${id}`}
+                  disabled={disabled}
+                  aria-label={`Remove ${account.name}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
