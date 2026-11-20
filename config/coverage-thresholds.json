@@ -2,53 +2,53 @@
   "description": "Coverage floors for the backend and frontend suites. Read by vitest.config.ts, vitest.config.frontend.ts, and scripts/audit-coverage-ratchet.mjs. Global floors sit just below measured coverage (10% of the measured value, capped at 2 points globally and 3 per file), so ordinary churn does not fail CI but deleting tests does. Raise a floor when the ratchet audit reports headroom; never lower one without saying why in the commit message.",
   "backend": {
     "global": {
-      "lines": 86,
-      "statements": 84,
-      "functions": 87,
-      "branches": 76
+      "lines": 87,
+      "statements": 85,
+      "functions": 88,
+      "branches": 78
     },
     "perFile": {
       "server/services/accounting/centralPostingEngine.ts": {
         "lines": 92,
-        "statements": 92,
-        "functions": 97,
-        "branches": 89
+        "statements": 93,
+        "functions": 98,
+        "branches": 90
       },
       "server/services/accounting/voucherPostingService.ts": {
         "lines": 99,
         "statements": 99,
         "functions": 99,
-        "branches": 95
+        "branches": 98
       },
       "server/services/accounting/genericVoucherPosting.ts": {
         "lines": 90,
         "statements": 89,
-        "functions": 97,
-        "branches": 87
+        "functions": 98,
+        "branches": 89
       },
       "server/services/accounting/manualJournalPosting.ts": {
         "lines": 85,
-        "statements": 83,
-        "functions": 97,
-        "branches": 75
+        "statements": 84,
+        "functions": 98,
+        "branches": 77
       },
       "server/services/accounting/paymentReceiptPosting.ts": {
-        "lines": 95,
-        "statements": 95,
-        "functions": 97,
-        "branches": 87
+        "lines": 96,
+        "statements": 96,
+        "functions": 98,
+        "branches": 88
       },
       "server/services/accounting/currencyAmounts.ts": {
-        "lines": 97,
-        "statements": 97,
+        "lines": 98,
+        "statements": 98,
         "functions": 99,
         "branches": 99
       },
       "server/services/accounting/periodLockService.ts": {
-        "lines": 88,
-        "statements": 85,
-        "functions": 97,
-        "branches": 75
+        "lines": 89,
+        "statements": 86,
+        "functions": 98,
+        "branches": 76
       },
       "server/services/accounting/financialCloseService.ts": {
         "lines": 99,
@@ -57,51 +57,51 @@
         "branches": 77
       },
       "server/inventoryHelper.ts": {
-        "lines": 95,
+        "lines": 98,
         "statements": 95,
-        "functions": 97,
+        "functions": 98,
         "branches": 91
       },
       "server/routes/helpers/passwordHelpers.ts": {
-        "lines": 97,
-        "statements": 97,
-        "functions": 97,
-        "branches": 97
+        "lines": 98,
+        "statements": 98,
+        "functions": 98,
+        "branches": 98
       },
       "server/services/security/authorizationPolicy.ts": {
-        "lines": 90,
-        "statements": 90,
-        "functions": 97,
-        "branches": 87
+        "lines": 91,
+        "statements": 91,
+        "functions": 98,
+        "branches": 88
       },
       "server/services/security/companyIsolationPolicy.ts": {
         "lines": 94,
         "statements": 94,
-        "functions": 97,
+        "functions": 98,
         "branches": 87
       },
       "server/services/security/companyRequestScopePolicy.ts": {
-        "lines": 97,
-        "statements": 97,
-        "functions": 97,
-        "branches": 97
+        "lines": 98,
+        "statements": 98,
+        "functions": 98,
+        "branches": 98
       },
       "server/services/security/activeCompanyPermissionPolicy.ts": {
-        "lines": 97,
-        "statements": 97,
-        "functions": 97,
-        "branches": 92
+        "lines": 98,
+        "statements": 98,
+        "functions": 98,
+        "branches": 93
       },
       "server/services/security/privilegedOperationPolicy.ts": {
-        "lines": 94,
-        "statements": 94,
-        "functions": 97,
-        "branches": 91
+        "lines": 95,
+        "statements": 95,
+        "functions": 98,
+        "branches": 92
       },
       "server/services/security/sessionSecurityPolicy.ts": {
-        "lines": 94,
-        "statements": 94,
-        "functions": 97,
+        "lines": 95,
+        "statements": 95,
+        "functions": 98,
         "branches": 92
       },
       "server/services/security/requestCompanyScope.ts": {
@@ -120,7 +120,7 @@
         "lines": 99,
         "statements": 99,
         "functions": 99,
-        "branches": 95
+        "branches": 98
       }
     }
   },

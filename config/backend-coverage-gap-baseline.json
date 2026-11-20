@@ -1,62 +1,62 @@
 {
-  "snapshotNote": "Full local backend coverage run at 05c0c45f (Node 24.22.2, Postgres 16, schema built by npm run db:migrate): 24 shards, 1,797 test files, 13,215 tests, none failing (the Excel appearance suite is pinned to the heliumdb database name and was re-run there; the script-inventory audit trips on local agent worktrees only). Regenerate with scripts/rank-backend-coverage-gaps.mjs after the next full backend coverage run.",
-  "capturedAt": "2026-11-20T15:00:00Z",
-  "sourceSha": "05c0c45f1b4803d87845f00df3374ffb8620a207",
+  "snapshotNote": "Full local backend coverage run at 5ea0d04c (Node 24.22.2, Postgres 16, schema built by npm run db:migrate): 24 shards, 1,867 test files, 13,776 tests. The Excel appearance suite is pinned to the heliumdb database name and was re-run there; one PC-sync change-feed run flaked and passed on re-run; the script-inventory audit trips on local agent worktrees only. Regenerate with scripts/rank-backend-coverage-gaps.mjs after the next full backend coverage run.",
+  "capturedAt": "2026-11-20T20:00:00Z",
+  "sourceSha": "5ea0d04cd2c896ef62e9ea8f9a1064f086a5c327",
   "totalCoverage": {
     "lines": {
-      "total": 140532,
-      "covered": 124314,
+      "total": 140561,
+      "covered": 125705,
       "skipped": 0,
-      "pct": 88.45
+      "pct": 89.43
     },
     "branches": {
-      "total": 120486,
-      "covered": 94225,
+      "total": 120493,
+      "covered": 96516,
       "skipped": 0,
-      "pct": 78.2
+      "pct": 80.1
     }
   },
   "rankingOrder": "uncoveredLines desc, uncoveredBranches desc, path asc",
   "categoryTotals": {
     "Accounting": {
       "files": 610,
-      "uncoveredLines": 2943,
-      "uncoveredBranches": 5389
+      "uncoveredLines": 2676,
+      "uncoveredBranches": 4965
     },
     "Inventory": {
       "files": 453,
-      "uncoveredLines": 2396,
-      "uncoveredBranches": 4034
+      "uncoveredLines": 2124,
+      "uncoveredBranches": 3687
     },
     "Factory": {
       "files": 316,
-      "uncoveredLines": 1948,
-      "uncoveredBranches": 3574
+      "uncoveredLines": 1759,
+      "uncoveredBranches": 3249
     },
     "ERP routes": {
       "files": 369,
-      "uncoveredLines": 2642,
-      "uncoveredBranches": 3833
+      "uncoveredLines": 2471,
+      "uncoveredBranches": 3493
     },
     "Auth/Security": {
       "files": 122,
-      "uncoveredLines": 428,
-      "uncoveredBranches": 862
+      "uncoveredLines": 373,
+      "uncoveredBranches": 794
     },
     "Imports/Exports": {
       "files": 194,
-      "uncoveredLines": 1371,
-      "uncoveredBranches": 1991
+      "uncoveredLines": 1343,
+      "uncoveredBranches": 1826
     },
     "Supplier Partner": {
       "files": 112,
-      "uncoveredLines": 1128,
-      "uncoveredBranches": 1383
+      "uncoveredLines": 1049,
+      "uncoveredBranches": 1309
     },
     "Miscellaneous": {
       "files": 647,
-      "uncoveredLines": 2774,
-      "uncoveredBranches": 4879
+      "uncoveredLines": 2481,
+      "uncoveredBranches": 4379
     }
   },
   "top30": [
@@ -192,19 +192,6 @@
     },
     {
       "rank": 11,
-      "path": "server/routes/sp/spGoldenCoastPhase8FreshStartImportRoute.ts",
-      "category": "Supplier Partner",
-      "uncoveredLines": 43,
-      "lineTotal": 55,
-      "lineCoveragePct": 21.81,
-      "uncoveredBranches": 34,
-      "branchTotal": 40,
-      "branchCoveragePct": 15,
-      "zeroLineCoverage": false,
-      "zeroBranchCoverage": false
-    },
-    {
-      "rank": 12,
       "path": "server/routes/sp/spMigrationPhase2Routes.ts",
       "category": "Supplier Partner",
       "uncoveredLines": 43,
@@ -217,7 +204,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 13,
+      "rank": 12,
       "path": "server/helpers/temporaryExportArchive.ts",
       "category": "Imports/Exports",
       "uncoveredLines": 43,
@@ -230,20 +217,20 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 14,
-      "path": "server/chat/voucherAndStockDrafts.ts",
-      "category": "Accounting",
-      "uncoveredLines": 42,
-      "lineTotal": 48,
-      "lineCoveragePct": 12.5,
-      "uncoveredBranches": 35,
-      "branchTotal": 38,
-      "branchCoveragePct": 7.89,
+      "rank": 13,
+      "path": "server/routes/registerPosImportRoutes.ts",
+      "category": "Imports/Exports",
+      "uncoveredLines": 43,
+      "lineTotal": 171,
+      "lineCoveragePct": 74.85,
+      "uncoveredBranches": 23,
+      "branchTotal": 93,
+      "branchCoveragePct": 75.26,
       "zeroLineCoverage": false,
       "zeroBranchCoverage": false
     },
     {
-      "rank": 15,
+      "rank": 14,
       "path": "server/routes/factory/bale-exports/daily-report.ts",
       "category": "Imports/Exports",
       "uncoveredLines": 42,
@@ -256,7 +243,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 16,
+      "rank": 15,
       "path": "server/routes/whatsappFastSendRoutesSendFileByUrlAttempt.ts",
       "category": "ERP routes",
       "uncoveredLines": 41,
@@ -269,7 +256,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 17,
+      "rank": 16,
       "path": "server/services/rental/rentalPaymentPostingServicePostGroupCore.ts",
       "category": "Miscellaneous",
       "uncoveredLines": 41,
@@ -282,20 +269,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 18,
-      "path": "server/routes/registerPosImportRoutes.ts",
-      "category": "Imports/Exports",
-      "uncoveredLines": 41,
-      "lineTotal": 171,
-      "lineCoveragePct": 76.02,
-      "uncoveredBranches": 23,
-      "branchTotal": 93,
-      "branchCoveragePct": 75.26,
-      "zeroLineCoverage": false,
-      "zeroBranchCoverage": false
-    },
-    {
-      "rank": 19,
+      "rank": 17,
       "path": "server/routes/accounting-integrity/index.ts",
       "category": "Accounting",
       "uncoveredLines": 40,
@@ -308,7 +282,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 20,
+      "rank": 18,
       "path": "server/routes/payroll/worker-statement/repair.ts",
       "category": "Accounting",
       "uncoveredLines": 40,
@@ -321,7 +295,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 21,
+      "rank": 19,
       "path": "server/routes/sp/spGoldenCoastPhase8ContainerOffloadRoutes.ts",
       "category": "Supplier Partner",
       "uncoveredLines": 40,
@@ -334,7 +308,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 22,
+      "rank": 20,
       "path": "server/routes/sp-migration/_helpers.ts",
       "category": "Supplier Partner",
       "uncoveredLines": 40,
@@ -347,7 +321,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 23,
+      "rank": 21,
       "path": "server/routes/factory-intelligence/supplier-score.ts",
       "category": "ERP routes",
       "uncoveredLines": 40,
@@ -360,7 +334,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 24,
+      "rank": 22,
       "path": "server/routes/factory-payroll/_helpers.ts",
       "category": "Accounting",
       "uncoveredLines": 40,
@@ -373,7 +347,7 @@
       "zeroBranchCoverage": true
     },
     {
-      "rank": 25,
+      "rank": 23,
       "path": "server/routes/factory/stock-allocation-v5/restoreCancelledContainerAtomic.ts",
       "category": "Inventory",
       "uncoveredLines": 39,
@@ -386,7 +360,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 26,
+      "rank": 24,
       "path": "server/routes/registerCreditSalesImportRoutesPart2.ts",
       "category": "Imports/Exports",
       "uncoveredLines": 38,
@@ -399,7 +373,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 27,
+      "rank": 25,
       "path": "server/routes/factory/customer-orders/finalize-loading/unfinalize.ts",
       "category": "Factory",
       "uncoveredLines": 38,
@@ -412,7 +386,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 28,
+      "rank": 26,
       "path": "server/routes/containers/containerSalesService.ts",
       "category": "ERP routes",
       "uncoveredLines": 38,
@@ -425,7 +399,7 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 29,
+      "rank": 27,
       "path": "server/services/factory/mixPhase7IntegrityMonitor.ts",
       "category": "Miscellaneous",
       "uncoveredLines": 38,
@@ -438,15 +412,41 @@
       "zeroBranchCoverage": false
     },
     {
-      "rank": 30,
-      "path": "server/routes/containers/containerOffloadLifecycleGuard.ts",
-      "category": "Inventory",
+      "rank": 28,
+      "path": "server/routes/rental/units-contracts/registerRentalGuaranteeRoutesStep3.ts",
+      "category": "ERP routes",
       "uncoveredLines": 37,
-      "lineTotal": 127,
-      "lineCoveragePct": 70.86,
-      "uncoveredBranches": 36,
-      "branchTotal": 87,
-      "branchCoveragePct": 58.62,
+      "lineTotal": 54,
+      "lineCoveragePct": 31.48,
+      "uncoveredBranches": 27,
+      "branchTotal": 34,
+      "branchCoveragePct": 20.58,
+      "zeroLineCoverage": false,
+      "zeroBranchCoverage": false
+    },
+    {
+      "rank": 29,
+      "path": "server/routes/admin/registerUserManagementRoutes.ts",
+      "category": "ERP routes",
+      "uncoveredLines": 36,
+      "lineTotal": 165,
+      "lineCoveragePct": 78.18,
+      "uncoveredBranches": 30,
+      "branchTotal": 88,
+      "branchCoveragePct": 65.9,
+      "zeroLineCoverage": false,
+      "zeroBranchCoverage": false
+    },
+    {
+      "rank": 30,
+      "path": "server/services/factory/historical-replay/read-model/corrections.ts",
+      "category": "Miscellaneous",
+      "uncoveredLines": 36,
+      "lineTotal": 117,
+      "lineCoveragePct": 69.23,
+      "uncoveredBranches": 28,
+      "branchTotal": 80,
+      "branchCoveragePct": 65,
       "zeroLineCoverage": false,
       "zeroBranchCoverage": false
     }
