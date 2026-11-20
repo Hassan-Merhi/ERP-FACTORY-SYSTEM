@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import puppeteer from "puppeteer";
+import pg from "pg";
 
 const baseUrl = process.env.ERP_E2E_BASE_URL || "http://127.0.0.1:5000";
 const timeoutMs = Number(process.env.ERP_E2E_TIMEOUT_MS || 45_000);
@@ -25,6 +26,18 @@ if (!["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
   throw new Error("Phase 6 browser test refuses non-local URLs.");
 }
 if (!username || !password) throw new Error("Phase 6 test credentials are missing.");
+const databaseUrl = new URL(process.env.DATABASE_URL || "postgresql://invalid/invalid");
+if (
+  !["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname) ||
+  databaseUrl.pathname !== "/heliumdb"
+) {
+  throw new Error("Phase 6 refuses any database except the local disposable heliumdb fixture.");
+}
+const pool = new pg.Pool({ connectionString: databaseUrl.toString() });
+async function voucherCount(companyId) {
+  const result = await pool.query("SELECT COUNT(*)::int AS count FROM vouchers WHERE company_id = $1", [companyId]);
+  return result.rows[0].count;
+}
 
 const fixture = JSON.parse(await readFile(fixturePath, "utf8"));
 const { erp, factory } = fixture.companies;
@@ -196,8 +209,12 @@ try {
   });
 
   await record("old company write receives a conflict after another tab switches", async () => {
+    const factoryBefore = await voucherCount(factory);
+    const erpBefore = await voucherCount(erp);
     const result = await scopedWrite(b, factory, factorySession.companyRevision);
     check(result.status === 409 && result.body?.code === "COMPANY_SESSION_CHANGED", "Stale write reached route", result);
+    check((await voucherCount(factory)) === factoryBefore, "Stale write altered Factory vouchers");
+    check((await voucherCount(erp)) === erpBefore, "Stale write altered ERP vouchers");
     return { status: result.status, code: result.body.code };
   });
 
@@ -206,8 +223,10 @@ try {
     await waitForCompany(b, factory);
     const returned = await session(b);
     check(returned.companyRevision !== factorySession.companyRevision, "Server did not rotate company write revision");
+    const factoryBefore = await voucherCount(factory);
     const stale = await scopedWrite(b, factory, factorySession.companyRevision);
     check(stale.status === 409 && stale.body?.code === "COMPANY_SESSION_CHANGED", "Old same-company revision accepted", stale);
+    check((await voucherCount(factory)) === factoryBefore, "Switch-back stale write changed voucher rows");
     return { staleStatus: stale.status };
   });
 
@@ -233,6 +252,7 @@ try {
   report.finishedAt = new Date().toISOString();
   await writeFile(`${reportDir}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
   await browser.close();
+  await pool.end();
 }
 if (report.failures.length) process.exitCode = 1;
 console.log("PHASE6 SUMMARY " + JSON.stringify({ passed: report.cases.filter((entry) => entry.result === "passed").length, failures: report.failures.length }));
