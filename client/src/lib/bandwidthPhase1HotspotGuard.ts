@@ -1,5 +1,10 @@
 import { isAbortError } from "./abortError";
-import { assertCompanyReadSnapshot, captureCompanyReadSnapshot, companyReadCacheIdentity, isCompanyOwnedApiRead } from "./companyCacheScope";
+import {
+  assertCompanyReadSnapshot,
+  captureCompanyReadSnapshot,
+  companyReadCacheIdentity,
+  isCompanyOwnedApiRead,
+} from "./companyCacheScope";
 import { factoryCatalogLanguageCacheVariant } from "./factoryCatalogCacheVariant";
 import {
   BANDWIDTH_INVALIDATION_CHANNEL,
