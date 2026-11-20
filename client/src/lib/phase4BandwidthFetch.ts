@@ -1,3 +1,4 @@
+import { companyReadCacheIdentity, assertCompanyReadSnapshot, captureCompanyReadSnapshot } from "./companyCacheScope";
 import {
   resolveFetchUrl as resolveUrl,
   fetchRequestMethod as requestMethod,
@@ -114,6 +115,8 @@ async function handleDailyList(
   url: URL,
   init: RequestInit | undefined
 ): Promise<Response> {
+  const readSnapshot = captureCompanyReadSnapshot();
+  assertCompanyReadSnapshot(readSnapshot);
   const key = dailyKey(url);
   const cached = dailyCache.get(key);
   const needsReconcile = !cached || Date.now() - cached.reconciledAt >= DAILY_RECONCILE_MS;
@@ -121,6 +124,7 @@ async function handleDailyList(
   if (needsReconcile) {
     const full = await fetchAllPages(originalFetch, url, init);
     if (!full.response.ok) return full.response;
+    assertCompanyReadSnapshot(readSnapshot);
     const rows = mergeRows([], full.rows);
     dailyCache.set(key, { rows, reconciledAt: Date.now() });
     return jsonResponseFrom(full.response, rows);
@@ -129,6 +133,7 @@ async function handleDailyList(
   const maxId = cached.rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0);
   const delta = await fetchAllPages(originalFetch, url, init, maxId || undefined);
   if (!delta.response.ok) return delta.response;
+  assertCompanyReadSnapshot(readSnapshot);
   const rows = mergeRows(cached.rows, delta.rows);
   dailyCache.set(key, { rows, reconciledAt: cached.reconciledAt });
   return jsonResponseFrom(delta.response, rows);
@@ -143,12 +148,15 @@ async function handleProformaSummary(
   url: URL,
   init: RequestInit | undefined
 ): Promise<Response> {
-  const key = url.toString();
+  const readSnapshot = captureCompanyReadSnapshot();
+  assertCompanyReadSnapshot(readSnapshot);
+  const key = `${companyReadCacheIdentity()}|${url.toString()}`;
   const cached = proformaSummaryCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.response.clone();
 
   const raw = await originalFetch(url.toString(), withBypassHeaders(url, init));
   if (!raw.ok) return raw;
+  assertCompanyReadSnapshot(readSnapshot);
   proformaSummaryCache.set(key, { response: raw.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
   return raw;
 }
@@ -161,7 +169,7 @@ function updateDailyCacheFromWrite(pathname: string, method: string, response: R
     if (!match) return;
     const id = Number(match[1]);
     for (const [key, entry] of dailyCache) {
-      if (!key.startsWith("/api/factory/daily-bale-scans?")) continue;
+      if (!key.includes("|/api/factory/daily-bale-scans?")) continue;
       dailyCache.set(key, { ...entry, rows: entry.rows.filter((row) => Number(row.id) !== id) });
     }
     return;
