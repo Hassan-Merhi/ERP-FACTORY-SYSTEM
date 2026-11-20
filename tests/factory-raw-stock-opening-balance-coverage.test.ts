@@ -5,8 +5,9 @@
  *
  * Pinned: a valid supplier-linked assignment links the bales to one
  * completed batch at the persisted supplier rate without changing it; every
- * refusal (including a Supplier Partner cutover lock and a source without a
- * supplier owner) leaves bales, raw stock and mix batches untouched; the
+ * refusal (including a Supplier Partner cutover lock and a container without
+ * a supplier, refused 409 OPENING_BALANCE_SUPPLIER_REQUIRED before the mix
+ * source trigger can refuse it) leaves bales, raw stock and mix batches untouched; the
  * recalculation is a dry run unless { confirm: true }.
  */
 import { describe, expect, it } from "vitest";
@@ -17,7 +18,9 @@ import { invalidateCutoverLockCache } from "../server/routes/sp/spMigrationCutov
 let containerSeq = 0;
 
 interface ObOptions {
+  /** The supplier's persisted USD rate; null leaves it unset. Default 0.5. */
   supplierRate?: string | null;
+  /** false creates a legacy container with no supplier. Default true. */
   withSupplier?: boolean;
   directUsd?: string | null;
   status?: string;
@@ -25,11 +28,15 @@ interface ObOptions {
 
 async function openingBalance(w: FactoryWorld, opts: ObOptions = {}) {
   let supplierId: number | null = null;
-  if (opts.withSupplier) {
+  if (opts.withSupplier !== false) {
     supplierId = await w.one(
       `INSERT INTO factory_suppliers (company_id, name, current_raw_material_cost_per_kg_usd)
        VALUES ($1, $2, $3) RETURNING id`,
-      [w.companyId, `${w.tag} supplier ${++containerSeq}`, opts.supplierRate ?? null]
+      [
+        w.companyId,
+        `${w.tag} supplier ${++containerSeq}`,
+        opts.supplierRate === undefined ? "0.500000" : opts.supplierRate,
+      ]
     );
   }
   const containerId = await w.one(
@@ -106,7 +113,7 @@ describe("POST /api/factory/raw-stock/:id/assign-to-bales refusals", () => {
   it("409s when the supplier has no valid persisted rate", async () => {
     await withFactoryWorld(async (w) => {
       for (const supplierRate of [null, "-1"]) {
-        const { rawStockId } = await openingBalance(w, { withSupplier: true, supplierRate });
+        const { rawStockId } = await openingBalance(w, { supplierRate });
         const b = await bale(w, "10");
         const res = await assign(w, rawStockId, [b]);
         expect(res.status).toBe(409);
@@ -117,26 +124,34 @@ describe("POST /api/factory/raw-stock/:id/assign-to-bales refusals", () => {
     });
   });
 
-  it("409s when a direct source has no or a negative USD cost, 400 for zero-weight bales", async () => {
+  it("409s for a container without a supplier, whatever its direct USD cost, and writes nothing", async () => {
     await withFactoryWorld(async (w) => {
-      const noUsd = await openingBalance(w, { directUsd: null });
       const b1 = await bale(w, "10");
-      const r1 = await assign(w, noUsd.rawStockId, [b1]);
-      expect(r1.status).toBe(409);
-      expect(r1.body.message).toMatch(/Resolve its FX\/cost/);
-      await untouched(w, noUsd.rawStockId, [b1]);
+      for (const directUsd of ["0.500000", null, "-0.1"]) {
+        const legacy = await openingBalance(w, { withSupplier: false, directUsd });
+        const res = await assign(w, legacy.rawStockId, [b1]);
+        expect(res.status).toBe(409);
+        expect(res.body).toMatchObject({ code: "OPENING_BALANCE_SUPPLIER_REQUIRED" });
+        expect(res.body.message).toMatch(/has no supplier/);
+        await untouched(w, legacy.rawStockId, [b1]);
+        await w.q(`UPDATE factory_containers SET status = 'CLOSED' WHERE company_id = $1`, [w.companyId]);
+      }
+      const audit = await w.q(
+        `SELECT id FROM audit_log WHERE company_id = $1 AND action = 'opening_balance_assign_to_bales'`,
+        [w.companyId]
+      );
+      expect(audit).toEqual([]);
+    });
+  });
 
-      const negative = await openingBalance(w, { directUsd: "-0.1" });
-      const r2 = await assign(w, negative.rawStockId, [b1]);
-      expect(r2.status).toBe(409);
-      expect(r2.body.message).toMatch(/invalid direct USD cost/);
-
-      const zeroOk = await openingBalance(w);
+  it("400s for zero-weight bales", async () => {
+    await withFactoryWorld(async (w) => {
+      const ob = await openingBalance(w);
       const empty = await bale(w, "0");
-      const r3 = await assign(w, zeroOk.rawStockId, [empty]);
-      expect(r3.status).toBe(400);
-      expect(r3.body.message).toMatch(/no positive weight/);
-      await untouched(w, zeroOk.rawStockId, [empty]);
+      const res = await assign(w, ob.rawStockId, [empty]);
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/no positive weight/);
+      await untouched(w, ob.rawStockId, [empty]);
     });
   });
 });
@@ -152,7 +167,7 @@ describe("POST /api/factory/raw-stock/:id/assign-to-bales valid request", () => 
 
   it("assigns a supplier-linked source at the persisted rate and records one completed batch", async () => {
     await withFactoryWorld(async (w) => {
-      const ob = await openingBalance(w, { withSupplier: true, supplierRate: "0.500000", directUsd: "9" });
+      const ob = await openingBalance(w, { supplierRate: "0.500000", directUsd: "9" });
       const b1 = await bale(w, "10");
       const b2 = await bale(w, "30");
       const res = await assign(w, ob.rawStockId, [b2, b1]);
@@ -210,23 +225,40 @@ describe("POST /api/factory/raw-stock/:id/assign-to-bales valid request", () => 
     });
   });
 
-  // Known limitation (pinned): a container without a supplier passes the
-  // route's direct-USD-cost checks, but the factory_mix_batch_sources trigger
-  // requires every raw-material source to have a supplier owner, so the
-  // assignment rolls back with 500 and writes nothing.
-  it("rolls back a direct source without a supplier owner and writes nothing", async () => {
+  // A container without a supplier used to pass the route's direct-USD-cost
+  // checks and then fail with 500 when the factory_mix_batch_sources trigger
+  // refused a raw-material source without a supplier owner
+  // (CONTAINER_INVENTORY_SUPPLIER_UNRESOLVED). It is now refused up front.
+  it("refuses a container without a supplier with 409 instead of a trigger 500", async () => {
     await withFactoryWorld(async (w) => {
-      const direct = await openingBalance(w);
+      const legacy = await openingBalance(w, { withSupplier: false });
       const b3 = await bale(w, "8");
-      const res = await assign(w, direct.rawStockId, [b3]);
-      expect(res.status).toBe(500);
-      expect(res.body.message).toMatch(/^CONTAINER_INVENTORY_SUPPLIER_UNRESOLVED/);
-      await untouched(w, direct.rawStockId, [b3]);
-      const audit = await w.q(
-        `SELECT id FROM audit_log WHERE company_id = $1 AND action = 'opening_balance_assign_to_bales'`,
-        [w.companyId]
+      const res = await assign(w, legacy.rawStockId, [b3]);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("OPENING_BALANCE_SUPPLIER_REQUIRED");
+      expect(res.body.message).not.toMatch(/CONTAINER_INVENTORY_SUPPLIER_UNRESOLVED/);
+      await untouched(w, legacy.rawStockId, [b3]);
+
+      // Once the container is given its supplier the same stock assigns cleanly.
+      const supplierId = await w.one(
+        `INSERT INTO factory_suppliers (company_id, name, current_raw_material_cost_per_kg_usd)
+         VALUES ($1, $2, '0.250000') RETURNING id`,
+        [w.companyId, `${w.tag} late supplier`]
       );
-      expect(audit).toEqual([]);
+      await w.q(`UPDATE factory_containers SET supplier_id = $1 WHERE id = $2`, [supplierId, legacy.containerId]);
+      const ok = await assign(w, legacy.rawStockId, [b3]);
+      expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+      const [source] = await w.q(
+        `SELECT supplier_id, inventory_supplier_id, source_type, total_cost::text AS total
+           FROM factory_mix_batch_sources WHERE mix_batch_id = $1`,
+        [ok.body.mixBatchId]
+      );
+      expect(source).toMatchObject({
+        supplier_id: supplierId,
+        inventory_supplier_id: supplierId,
+        source_type: "SUPPLIER_LOCKED_RATE",
+      });
+      expect(Number(source.total)).toBe(2);
     });
   });
 

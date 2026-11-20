@@ -15,9 +15,9 @@ describe("Opening-balance bale assignment safety", () => {
     expect(source).toContain("ORDER BY id\n           FOR UPDATE");
   });
 
-  it("never treats a native-currency direct cost as USD", () => {
-    expect(source).toContain("rawStock.cost_per_kg_usd == null");
-    expect(source).toContain("Resolve its FX/cost before assigning bales");
+  it("refuses a container without a supplier instead of writing an unowned source", () => {
+    expect(source).toContain("OPENING_BALANCE_SUPPLIER_REQUIRED");
+    expect(source).not.toContain("CONTAINER_DIRECT");
     expect(source).not.toContain("cost_per_kg_usd ?? rawStock.cost_per_kg");
   });
 

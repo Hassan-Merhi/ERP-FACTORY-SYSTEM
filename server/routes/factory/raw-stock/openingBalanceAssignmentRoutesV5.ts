@@ -45,13 +45,11 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
         const rawStockResult = await client.query<{
           id: number;
           container_id: number;
-          cost_per_kg_usd: string | null;
           used_kg: string;
           supplier_id: number | null;
         }>(
           `SELECT frs.id,
                   frs.container_id,
-                  frs.cost_per_kg_usd,
                   frs.used_kg,
                   fc.supplier_id
            FROM factory_raw_stock frs
@@ -70,6 +68,20 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           await client.query("ROLLBACK");
           return res.status(404).json({
             message: "Opening-balance raw stock was not found, is deleted, or belongs to another company",
+          });
+        }
+        // Every raw-material mix source needs a supplier that owns the consumed
+        // kg (the factory_mix_source_inventory_supplier_trg trigger enforces it,
+        // see migrations/0001_baseline_schema.sql). Both opening-balance writers
+        // always link a supplier; a container without one is legacy data and
+        // must be given its supplier before its stock can be assigned.
+        const supplierId = rawStock.supplier_id;
+        if (supplierId == null) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({
+            code: "OPENING_BALANCE_SUPPLIER_REQUIRED",
+            message:
+              "This opening-balance container has no supplier. Link its supplier before assigning its stock to bales.",
           });
         }
 
@@ -102,44 +114,26 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           }
         }
 
-        let costPerKgUsd: Decimal;
-        if (rawStock.supplier_id != null) {
-          const supplierResult = await client.query<{
-            current_raw_material_cost_per_kg_usd: string | null;
-          }>(
-            `SELECT current_raw_material_cost_per_kg_usd
-             FROM factory_suppliers
-             WHERE id = $1 AND company_id = $2
-             FOR UPDATE`,
-            [rawStock.supplier_id, companyId]
+        const supplierResult = await client.query<{
+          current_raw_material_cost_per_kg_usd: string | null;
+        }>(
+          `SELECT current_raw_material_cost_per_kg_usd
+           FROM factory_suppliers
+           WHERE id = $1 AND company_id = $2
+           FOR UPDATE`,
+          [supplierId, companyId]
+        );
+        const storedRate = supplierResult.rows[0]?.current_raw_material_cost_per_kg_usd;
+        if (storedRate == null || new Decimal(storedRate).lt(0)) {
+          throw Object.assign(
+            new Error(
+              "Supplier has no valid persisted authoritative USD raw-material rate. " +
+                "Assignment was not applied because consumption must never create or change that rate."
+            ),
+            { statusCode: 409 }
           );
-          const storedRate = supplierResult.rows[0]?.current_raw_material_cost_per_kg_usd;
-          if (storedRate == null || new Decimal(storedRate).lt(0)) {
-            throw Object.assign(
-              new Error(
-                "Supplier has no valid persisted authoritative USD raw-material rate. " +
-                  "Assignment was not applied because consumption must never create or change that rate."
-              ),
-              { statusCode: 409 }
-            );
-          }
-          costPerKgUsd = new Decimal(storedRate);
-        } else {
-          if (rawStock.cost_per_kg_usd == null) {
-            throw Object.assign(
-              new Error(
-                "Opening-balance direct source has no stored USD cost. Resolve its FX/cost before assigning bales."
-              ),
-              { statusCode: 409 }
-            );
-          }
-          costPerKgUsd = new Decimal(rawStock.cost_per_kg_usd);
-          if (costPerKgUsd.lt(0)) {
-            throw Object.assign(new Error("Opening-balance source has an invalid direct USD cost"), {
-              statusCode: 409,
-            });
-          }
         }
+        const costPerKgUsd = new Decimal(storedRate);
 
         const totalKg = baleResult.rows.reduce(
           (sum, bale) => sum.plus(new Decimal(bale.weight_kg || 0)),
@@ -180,8 +174,8 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
           [
             mixBatchId,
             rawStock.container_id,
-            rawStock.supplier_id,
-            rawStock.supplier_id == null ? "CONTAINER_DIRECT" : "SUPPLIER_LOCKED_RATE",
+            supplierId,
+            "SUPPLIER_LOCKED_RATE",
             totalKg.toDecimalPlaces(3).toFixed(3),
             costPerKgUsd.toDecimalPlaces(6).toFixed(6),
             totalCost.toDecimalPlaces(6).toFixed(6),
@@ -244,7 +238,7 @@ export function registerOpeningBalanceAssignmentRoutesV5(app: Express): void {
               baleIds,
               totalKg: totalKg.toDecimalPlaces(3).toFixed(3),
               costPerKgUsd: costPerKgUsd.toDecimalPlaces(6).toFixed(6),
-              supplierId: rawStock.supplier_id,
+              supplierId,
               supplierRateChanged: false,
             }),
           ]
