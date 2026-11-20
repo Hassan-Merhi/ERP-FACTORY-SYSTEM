@@ -144,6 +144,9 @@ if (
     // including raw fetch() calls, so the server can enforce the Factory page/tab
     // that owns the shared endpoint instead of trusting React visibility.
     let effectiveInit = init;
+    // The browser HTTP cache is also URL-keyed and must not reuse an API
+    // representation from an earlier authenticated company session.
+    if (readScope) effectiveInit = { ...effectiveInit, cache: "no-store" };
     const isFactoryUiRequest =
       !!pathname &&
       pathname.startsWith("/api/") &&
