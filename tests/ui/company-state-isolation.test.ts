@@ -59,7 +59,7 @@ describe("frontend company-state isolation wiring", () => {
     const app = source("client/src/app/AuthenticatedApp.tsx");
     const appData = source("client/src/app/useAuthenticatedAppData.ts");
 
-    expect(app).toContain("if (companyLoading || !selectedCompany) return <AppLoadingState />;");
+    expect(app).toContain("if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) return <AppLoadingState />;");
     expect(appData).toContain('companyQueryKey("/api/company-settings", selectedCompanyId)');
     expect(appData).toContain('companyQueryKey("/api/factory/my-access", selectedCompanyId)');
     expect(appData).toContain('companyQueryKey("/api/factory/settings", selectedCompanyId)');
@@ -71,14 +71,14 @@ describe("frontend company-state isolation wiring", () => {
     const follower = source("client/src/hooks/useCompanySessionFollower.ts");
 
     expect(root).toContain("function CompanyWorkspaceBoundary(");
-    expect(root).toContain('if (companyLoading || !selectedCompany)');
+    expect(root).toContain('if (!selectedCompany || (companyLoading && !isCheckingCompanySession))');
     expect(root).toContain('data-testid="company-session-verification-cover"');
     expect(root).toContain("isCheckingCompanySession && <CompanySessionVerificationCover />");
     expect(root).toContain('<LocationProvider key={`${user.id}:${selectedCompany.id}`}>');
     expect(root).toContain("<LegacyQueueRecoveryPanel />");
     expect(root).toContain("<DeferredAuthenticatedUtilities />");
     expect(context).toContain('externalSessionState === "switching"');
-    expect(context).toContain('isCheckingCompanySession: externalSessionState === "checking"');
+    expect(context).toContain('externalSessionState !== "switching" && (externalSessionState === "checking" || isSyncingCompany)');
     expect(follower).toContain('onTransitionStart("selection")');
     expect(follower).toContain("onTransitionVerified()");
   });
