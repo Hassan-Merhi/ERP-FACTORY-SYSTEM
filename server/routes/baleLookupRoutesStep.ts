@@ -8,6 +8,7 @@ import {
   customerOrderBales,
   customerOrders,
   customers,
+  factoryBaleProducts,
   factoryBales,
   factoryWorkers,
   locations,
@@ -32,6 +33,21 @@ export type BaleLookupInfo = Pick<
   | "updatedAt"
   | "deletedAt"
 > & { isInLoadingOrder?: boolean };
+
+/**
+ * factory_bales.product_id and bale_label_prints.product_id both reference
+ * factory_bale_products(id), so resolve the product there and only within the
+ * session company: never another company's (or a legacy bale_products) row
+ * that happens to share the number.
+ */
+async function getCompanyFactoryBaleProduct(productId: number, companyId: number) {
+  const [product] = await db
+    .select()
+    .from(factoryBaleProducts)
+    .where(and(eq(factoryBaleProducts.id, productId), eq(factoryBaleProducts.companyId, companyId)))
+    .limit(1);
+  return product ?? null;
+}
 
 export async function baleLookupRoutesStep({ req, res }: { req: Request; res: Response }) {
   const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
@@ -83,7 +99,7 @@ export async function baleLookupRoutesStep({ req, res }: { req: Request; res: Re
 
     let product = null;
     if (directBale.productId) {
-      product = await storage.getBaleProductById(directBale.productId);
+      product = await getCompanyFactoryBaleProduct(directBale.productId, companyId);
     } else if (directBale.articleCode) {
       product = await storage.getBaleProductByArticleCode(directBale.articleCode, companyId);
     }
@@ -224,7 +240,7 @@ export async function baleLookupRoutesStep({ req, res }: { req: Request; res: Re
   }
 
   const product = labelPrint.productId
-    ? await storage.getBaleProductById(labelPrint.productId)
+    ? await getCompanyFactoryBaleProduct(labelPrint.productId, companyId)
     : await storage.getBaleProductByArticleCode(labelPrint.articleCode, companyId);
 
   // ── Enrich with factory_bales data (stable id first, normalized reference fallback) ──

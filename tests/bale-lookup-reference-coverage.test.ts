@@ -64,15 +64,17 @@ async function order(w: FactoryWorld, status: string, reference: string, baleId:
   return orderId;
 }
 
-/** A factory catalogue product (the table factory_bales.product_id references), with an explicit id. */
-async function factoryProduct(w: FactoryWorld, article: string, id: number) {
+/** A factory catalogue product (the table factory_bales.product_id references), optionally with an explicit id. */
+async function factoryProduct(w: FactoryWorld, article: string, id?: number, companyId = w.companyId) {
   return w.one(
-    `INSERT INTO factory_bale_products (id, company_id, code, name, article_code) VALUES ($1, $2, $3, 'Factory product', $4) RETURNING id`,
-    [id, w.companyId, `${w.tag}P${++seq}`, article]
+    `INSERT INTO factory_bale_products (id, company_id, code, name, article_code)
+     VALUES (COALESCE($1::int, nextval(pg_get_serial_sequence('factory_bale_products', 'id'))::int), $2, $3, 'Factory product', $4)
+     RETURNING id`,
+    [id ?? null, companyId, `${w.tag}P${++seq}`, article]
   );
 }
 
-/** A legacy bale_products row, the table the lookup actually reads products from. */
+/** A legacy bale_products row, which the lookup still uses for the article-code fallback. */
 async function catalogProduct(w: FactoryWorld, article: string, companyId = w.companyId, id?: number) {
   return w.one(
     `INSERT INTO bale_products (id, company_id, code, name, article_code)
@@ -112,9 +114,9 @@ describe("bale lookup without a label print", () => {
     });
   });
 
-  // BUG (pinned): factory_bales.product_id references factory_bale_products, but the
-  // lookup reads bale_products by that id with no company filter. The response
-  // carries whichever bale_products row shares the number, here another company's.
+  // factory_bales.product_id references factory_bale_products: the lookup resolves the
+  // bale's own product in the session company, never a legacy bale_products row
+  // (here another company's) that happens to share the number.
   it("resolves product by id, worker by finalizer and location, and marks a finalized order sold", async () => {
     await withFactoryWorld(async (w) => {
       const productId = await factoryProduct(w, `${w.tag}A1`, explicitId());
@@ -132,11 +134,11 @@ describe("bale lookup without a label print", () => {
       const res = await lookup(w, reference.toLowerCase());
       expect(res.status).toBe(200);
       expect(res.body.labelPrint).toBeNull();
-      expect(res.body.product).toMatchObject({ id: productId, companyId: foreign, articleCode: "FOREIGN-ART" });
+      expect(res.body.product).toMatchObject({ id: productId, companyId: w.companyId, articleCode: `${w.tag}A1` });
       expect(res.body.locationInfo).toMatchObject({ id: w.locationId, name: "Yard" });
       expect(res.body.baleInfo).toMatchObject({
         id: baleId,
-        articleCode: "FOREIGN-ART",
+        articleCode: `${w.tag}A1`,
         status: "SOLD",
         isInLoadingOrder: false,
         workerName: "Amina Worker",
@@ -147,6 +149,20 @@ describe("bale lookup without a label print", () => {
         canViewBookingInfo: true,
       });
       expect(Array.isArray(res.body.auditHistory)).toBe(true);
+    });
+  });
+
+  it("never returns another company's factory product referenced by id", async () => {
+    await withFactoryWorld(async (w) => {
+      const foreign = await otherCompany(w);
+      const foreignProduct = await factoryProduct(w, "FOREIGN-FP", explicitId(), foreign);
+      await catalogProduct(w, "FOREIGN-LEGACY", foreign, foreignProduct);
+      const reference = `${w.tag}-XPROD`;
+      await bale(w, reference, { productId: foreignProduct, article: "BALE-ART" });
+      const res = await lookup(w, reference);
+      expect(res.status).toBe(200);
+      expect(res.body.product).toBeNull();
+      expect(res.body.baleInfo.articleCode).toBe("BALE-ART");
     });
   });
 
@@ -202,7 +218,9 @@ describe("bale lookup without a label print", () => {
 describe("bale lookup with a label print", () => {
   it("names the printing and scanning users and resolves the product", async () => {
     await withFactoryWorld(async (w) => {
-      const productId = await catalogProduct(w, `${w.tag}LP`);
+      const productId = await factoryProduct(w, `${w.tag}LP`, explicitId());
+      await catalogProduct(w, "FOREIGN-LP", await otherCompany(w), productId);
+      const catalogId = await catalogProduct(w, `${w.tag}LP`);
       const reference = `${w.tag}-LABEL`;
       await w.q(
         `INSERT INTO bale_label_prints (company_id, reference_number, article_code, product_id, approx_weight_kg,
@@ -217,7 +235,18 @@ describe("bale lookup with a label print", () => {
         printedByName: w.username,
         scannedByName: null,
       });
-      expect(res.body.product).toMatchObject({ id: productId });
+      expect(res.body.product).toMatchObject({ id: productId, companyId: w.companyId, articleCode: `${w.tag}LP` });
+
+      const foreignRef = `${w.tag}-LABEL3`;
+      const foreignProduct = await factoryProduct(w, "FOREIGN-FP", undefined, await otherCompany(w));
+      await w.q(
+        `INSERT INTO bale_label_prints (company_id, reference_number, article_code, product_id, approx_weight_kg)
+         VALUES ($1, $2, 'NO-SUCH-ART', $3, 25)`,
+        [w.companyId, foreignRef, foreignProduct]
+      );
+      const foreignLabel = await lookup(w, foreignRef);
+      expect(foreignLabel.status).toBe(200);
+      expect(foreignLabel.body.product).toBeNull();
 
       const articleRef = `${w.tag}-LABEL2`;
       await w.q(
@@ -226,7 +255,7 @@ describe("bale lookup with a label print", () => {
       );
       const byArticle = await lookup(w, articleRef);
       expect(byArticle.status).toBe(200);
-      expect(byArticle.body.product).toMatchObject({ id: productId });
+      expect(byArticle.body.product).toMatchObject({ id: catalogId });
     });
   });
 });
