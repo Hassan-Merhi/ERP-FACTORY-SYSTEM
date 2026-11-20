@@ -118,7 +118,6 @@ export function FactoryPendingInvoiceVerifyCardSection({
             testId="select-charge-account"
             searchTestId="input-charge-account-search"
             optionTestId={(id) => `option-account-${id}`}
-            allowClear
           /></Popover>
           {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
