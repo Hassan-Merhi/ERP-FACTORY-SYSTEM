@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./POImport.tsx to keep that module under the source-size cap.
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -239,18 +240,13 @@ export function ErpPOImportCardSection({
                 {freightPaidBy === "parent" && (
                   <div className="space-y-1">
                     <Label>Parent Freight Account *</Label>
-                    <Select value={freightParentAccountId} onValueChange={setFreightParentAccountId}>
-                      <SelectTrigger data-testid="select-freight-parent-account">
-                        <SelectValue placeholder="Select account..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {parentFreightAccounts.map((acc) => (
-                          <SelectItem key={acc.id} value={String(acc.id)}>
-                            {acc.name} {acc.code ? `(${acc.code})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <UnifiedAccountPicker
+                      options={parentFreightAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                      value={freightParentAccountId}
+                      onChange={setFreightParentAccountId}
+                      placeholder="Select account..."
+                      testId="select-freight-parent-account"
+                    />
                   </div>
                 )}
               </div>
