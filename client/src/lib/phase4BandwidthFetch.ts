@@ -161,7 +161,7 @@ async function handleProformaSummary(
   return raw;
 }
 
-function updateDailyCacheFromWrite(pathname: string, method: string, response: Response): void {
+function updateDailyCacheFromWrite(pathname: string, method: string, response: Response, writeScope: string): void {
   if (!response.ok) return;
 
   if (method === "DELETE") {
@@ -169,7 +169,7 @@ function updateDailyCacheFromWrite(pathname: string, method: string, response: R
     if (!match) return;
     const id = Number(match[1]);
     for (const [key, entry] of dailyCache) {
-      if (!key.includes("|/api/factory/daily-bale-scans?")) continue;
+      if (!key.startsWith(`${writeScope}|/api/factory/daily-bale-scans?`)) continue;
       dailyCache.set(key, { ...entry, rows: entry.rows.filter((row) => Number(row.id) !== id) });
     }
     return;
@@ -180,6 +180,7 @@ function updateDailyCacheFromWrite(pathname: string, method: string, response: R
       .clone()
       .json()
       .then((row: DailyScanRow | null) => {
+        if (writeScope !== companyReadCacheIdentity()) return;
         if (!row?.scan_date || !row?.id) return;
         for (const [key, entry] of dailyCache) {
           if (!key.startsWith("/api/factory/daily-bale-scans?")) continue;
@@ -208,9 +209,13 @@ export function installPhase4BandwidthFetch(): void {
     const method = requestMethod(input, init);
 
     if (method !== "GET") {
+      const writeScope = companyReadCacheIdentity();
       const response = await originalFetch(input, init);
+      // A write started under Company A must not update Company B's local
+      // materialized lists after an asynchronous server response.
+      if (writeScope !== companyReadCacheIdentity()) return response;
       if (PROFORMA_WRITE_PATH.test(url.pathname)) clearProformaCaches();
-      updateDailyCacheFromWrite(url.pathname, method, response);
+      updateDailyCacheFromWrite(url.pathname, method, response, writeScope);
       return response;
     }
 
