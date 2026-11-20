@@ -173,12 +173,51 @@ describe("company selection across browser tabs", () => {
     sessionCompanyId = 2;
 
     await act(async () => {
+      window.dispatchEvent(new Event("blur"));
       window.dispatchEvent(new Event("focus"));
     });
 
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
     expect(localStorage.getItem("selectedCompanyId")).toBe("2");
     expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not interrupt active work for duplicate foreground focus and initial pageshow events", async () => {
+    const { result } = await renderOnCompanyOne();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("pageshow")); // not a BFCache restore
+      document.dispatchEvent(new Event("visibilitychange")); // still visible
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(harness.fetchSessionCompany).not.toHaveBeenCalled();
+    expect(result.current.isCheckingCompanySession).toBe(false);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.selectedCompany?.id).toBe(1);
+  });
+
+  it("checks once per genuine background-to-foreground return, without another focus loop", async () => {
+    const { result } = await renderOnCompanyOne();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("blur"));
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("pageshow"));
+    });
+
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(false));
+    expect(result.current.selectedCompany?.id).toBe(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("pageshow"));
+    });
+    expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1);
+    expect(result.current.isCheckingCompanySession).toBe(false);
   });
 
   it("follows a committed switch pulse even if the saved company ID did not change", async () => {
@@ -262,6 +301,7 @@ describe("company selection across browser tabs", () => {
     );
 
     await act(async () => {
+      window.dispatchEvent(new Event("blur"));
       window.dispatchEvent(new Event("focus"));
     });
     expect(result.current.selectedCompany?.id).toBe(1);

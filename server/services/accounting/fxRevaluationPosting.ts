@@ -7,9 +7,11 @@
  * "FX Revaluation Gain/Loss". This replaces the journal that was being
  * entered by hand after each rate change.
  *
- * The figures are exactly those of the monetary FX valuation the reports
- * already show (getMonetaryFxValuation): per account,
- *   adjustment = native balance at the current rate - historical USD book.
+ * The figures come from the monetary FX valuation used by Net Position
+ * (getMonetaryFxValuation): for each account,
+ *   adjustment = rounded current USD translation - rounded posted USD closing.
+ * The six-decimal historical USD basis is retained for diagnostics, but using
+ * it for postings would generate per-account one-cent reporting residues.
  * Each adjusted account gets a base-only line: it carries the account's own
  * foreign currency with a zero native amount, so native balances never move
  * and the account's historical USD basis becomes its current valuation. A
@@ -29,6 +31,8 @@ import { postErpEntriesTx } from "./erpVoucherPosting";
 import { getMonetaryFxValuation, type MonetaryFxValuationRow } from "./monetaryFxValuationService";
 import type { MonetaryFxCategory, MonetaryFxRate } from "./monetaryFxValuationCore";
 import { ensureSystemAccounts } from "./systemAccounts";
+import { findLegacyManualFxConflicts, legacyManualFxConflictReason } from "./legacyManualFxGuard";
+import { postedFxRevaluationAdjustmentUsd } from "./fxRevaluationAmount";
 
 export const FX_REVALUATION_SOURCE_TYPE = "fx-unrealized-revaluation";
 /** The only line kind the database accepts with a base amount and no native amount (migration 0011). */
@@ -117,7 +121,11 @@ export async function postFxRevaluation(input: {
         if (holdsForeign || row.unresolvedOpening || row.unresolvedEntryCount > 0) unresolvedAccounts.push(row.name);
         continue;
       }
-      const adjustment = new Decimal(row.translationDifferenceUsd).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+      // Reports display the posted book in cents. The six-decimal historic
+      // base is diagnostic precision, not the amount to post again. Reconcile
+      // each monetary target to its displayed translated USD balance exactly.
+      if (row.currentTranslatedUsd === null) continue;
+      const adjustment = new Decimal(postedFxRevaluationAdjustmentUsd(row.currentTranslatedUsd, row.bookClosingUsd));
       if (adjustment.abs().lt(ONE_CENT)) continue;
       const currency = adjustmentCurrency(row, rates);
       if (!currency) continue;
@@ -135,6 +143,13 @@ export async function postFxRevaluation(input: {
     const base = { businessDate, netGainUsd: netGain.toFixed(2), lines, unresolvedAccounts };
     if (valuation.baseCurrency !== "USD") {
       return { ...base, status: "skipped", reason: "The company's accounting base currency is not USD." };
+    }
+    // Old manual revaluations posted ordinary USD movements into foreign-currency
+    // cash. Revaluing again would double-count the same loss. Fail closed until
+    // that original journal is reversed and corrected with native-zero entries.
+    const legacyConflicts = await findLegacyManualFxConflicts(db, companyId, businessDate);
+    if (legacyConflicts.length) {
+      return { ...base, status: "skipped", reason: legacyManualFxConflictReason(legacyConflicts) };
     }
     if (!lines.length) return { ...base, status: "nothing_to_post" };
 
@@ -157,7 +172,16 @@ export async function postFxRevaluation(input: {
     const posted = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`fx-unrealized-revaluation:${companyId}`}))`);
       if ((await revaluationCount(tx, companyId)) !== sequence) return null;
+      // Recheck under the posting lock; a manual journal could have appeared
+      // after the preflight valuation. Never post another FX adjustment over it.
+      const conflicts = await findLegacyManualFxConflicts(tx, companyId, businessDate);
+      if (conflicts.length) return { conflictReason: legacyManualFxConflictReason(conflicts) } as const;
       const status = (await ensureSystemAccounts(tx, companyId, ["FX-REVALUATION"]))[0];
+      if (status?.state === "type_differs") {
+        return {
+          conflictReason: `FX Revaluation Gain/Loss account is typed "${status.actualType}" but must be "${status.expectedType}". Review the account before revaluation.`,
+        } as const;
+      }
       if (!status || !("accountId" in status) || !["ok", "created", "reused_by_name"].includes(status.state)) {
         throw new Error("The FX Revaluation Gain/Loss account is unavailable");
       }
@@ -235,10 +259,18 @@ export async function postFxRevaluation(input: {
         },
         tx
       );
-      return voucher.voucher;
+      return { voucher: voucher.voucher } as const;
     });
     if (!posted) continue;
-    return { ...base, status: "posted", voucherId: Number(posted.id), voucherNumber: String(posted.voucherNumber) };
+    if ("conflictReason" in posted) {
+      return { ...base, status: "skipped", reason: posted.conflictReason };
+    }
+    return {
+      ...base,
+      status: "posted",
+      voucherId: Number(posted.voucher.id),
+      voucherNumber: String(posted.voucher.voucherNumber),
+    };
   }
   throw new Error("FX revaluation is being posted by another request. Try again.");
 }
