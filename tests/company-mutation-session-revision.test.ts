@@ -1,4 +1,5 @@
 import express from "express";
+import { readFileSync } from "node:fs";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { browserMutationFailClosedBoundary } from "../server/security/browserMutationBoundary";
@@ -79,10 +80,40 @@ describe("Phase 5 server company mutation scope", () => {
 
   it("keeps untagged legacy clients and explicit global/session endpoints compatible", async () => {
     expect((await request(appForSession(2, revision)).post("/api/vouchers").send({ amount: 1 })).status).toBe(200);
-    expect((await request(appForSession(2, revision)).post("/api/auth/set-company").send({ companyId: 1 })).status).toBe(200);
-    expect((await request(appForSession(2, revision)).post("/api/user-preferences").send({ view: "table" })).status).toBe(200);
+    const companySwitch = await request(appForSession(2, revision)).post("/api/auth/set-company").send({ companyId: 1 });
+    expect(companySwitch.status).toBe(200);
+    const accountPreferences = await request(appForSession(2, revision)).post("/api/user-preferences").send({ view: "table" });
+    expect(accountPreferences.status).toBe(200);
     expect(isCompanyScopedMutation("POST", "/api/auth/set-company")).toBe(false);
     expect(isCompanyScopedMutation("POST", "/api/vouchers")).toBe(true);
+  });
+
+  it("enforces the same check for authenticated same-origin browser writes", async () => {
+    const server = appForSession(2, revision);
+    const stale = await scopedWrite(server, "1", "old-revision")
+      .set("Host", "127.0.0.1")
+      .set("Origin", "http://127.0.0.1")
+      .set("X-CSRF-Token", csrf);
+    expect(stale.status).toBe(409);
+    expect(stale.body.code).toBe("COMPANY_SESSION_CHANGED");
+
+    const valid = await scopedWrite(server, "2", revision)
+      .set("Host", "127.0.0.1")
+      .set("Origin", "http://127.0.0.1")
+      .set("X-CSRF-Token", csrf);
+    expect(valid.status).toBe(200);
+  });
+
+  it("rotates revisions at password login, passkey login and each committed company switch", () => {
+    const companyRoute = readFileSync("server/routes/auth/companyAccessRoutes.ts", "utf8");
+    const sessionRoute = readFileSync("server/routes/auth/registerCompanyAccessRoutesPart1.ts", "utf8");
+    const passwordLogin = readFileSync("server/routes/auth/coreAuthRoutes.ts", "utf8");
+    const passkeyLogin = readFileSync("server/routes/passkeyRoutes.ts", "utf8");
+    expect(companyRoute).toContain("req.session.companyRevision = randomUUID()");
+    expect(companyRoute).toContain("companyRevision: req.session.companyRevision");
+    expect(sessionRoute).toContain("companyRevision: req.session.companyRevision");
+    expect(passwordLogin).toContain("req.session.companyRevision = randomUUID()");
+    expect(passkeyLogin).toContain("req.session.companyRevision = randomUUID()");
   });
 
   it("does not allow a valid company ID to bypass a mismatched revision", () => {
