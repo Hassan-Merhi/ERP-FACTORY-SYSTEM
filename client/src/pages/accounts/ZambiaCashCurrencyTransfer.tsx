@@ -185,6 +185,11 @@ export function ZambiaCashCurrencyTransfer() {
               placeholder="Source cash/bank account"
               ariaLabel="Source cash or bank account"
             />
+            {source && (
+              <p className="text-xs text-muted-foreground" data-testid="zambia-transfer-source-balance">
+                Available {fromCurrency}: {accounts.find((a) => keyForAccount(a) === source)?.nativeBalancesByCurrency[fromCurrency] ?? "0"}
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label>Funds arriving</Label>
