@@ -354,10 +354,12 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       signal === "selection" || current === "switching" ? "switching" : "checking"
     );
   }, []);
-  const finishExternalSessionVerification = useCallback((companyId: number, revision?: string | null) => {
+  const finishExternalSessionVerification = useCallback(() => {
     resumeCompanyCacheScope();
-    rememberVerifiedServerCompanyRevision(companyId, revision);
     setExternalSessionState("idle");
+  }, []);
+  const rememberExternalSessionRevision = useCallback((companyId: number, revision?: string | null) => {
+    rememberVerifiedServerCompanyRevision(companyId, revision);
   }, []);
 
   useCompanySessionFollower({
@@ -367,6 +369,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     externalChangeObservedRef,
     onTransitionStart: beginExternalSessionVerification,
     onTransitionVerified: finishExternalSessionVerification,
+    onVerifiedScope: rememberExternalSessionRevision,
     onAdopt: adoptOtherTabCompany,
   });
 
