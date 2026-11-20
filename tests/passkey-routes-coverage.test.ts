@@ -5,8 +5,8 @@
  * returns a fresh challenge and each verification is scripted per test, so the
  * route's own checks are what is exercised. Refusals first: no session, no or
  * consumed challenge (no replay), failed verifications and origin mismatches
- * thrown by the library - none of which write a credential. Passkey sign-in is
- * pinned at its current, fail-closed behaviour (see the KNOWN BUG note).
+ * thrown by the library - none of which write a credential - then passkey
+ * sign-in end to end.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
@@ -168,35 +168,169 @@ describe("authentication", () => {
       expect(res.body.message).toBe("No challenge in session");
       expect(webauthn.verifyAuthentication).not.toHaveBeenCalled();
     }));
+});
+
+/*
+ * Sign-in end to end. The fake verifyAuthenticationResponse below applies the
+ * library's own checks (challenge, origin, RP ID, signature counter) to the
+ * values the route passes it, so each refusal proves the route handed the
+ * library the right expectations. Every refusal leaves the counter alone and
+ * signs no one in.
+ */
+const RP = { id: "erp.example.test", origin: "https://erp.example.test" };
+
+type Assertion = { challenge: string; origin: string; rpID: string; counter: number };
+type VerifyOptions = {
+  response: { response: Assertion };
+  expectedChallenge: string;
+  expectedOrigin: string[];
+  expectedRPID: string;
+  credential: { id: string; counter: number };
+};
+function libraryVerify(opts: VerifyOptions) {
+  const a = opts.response.response;
+  if (a.challenge !== opts.expectedChallenge) throw new Error("Unexpected authentication response challenge");
+  if (!opts.expectedOrigin.includes(a.origin)) throw new Error("Unexpected authentication response origin");
+  if (a.rpID !== opts.expectedRPID) throw new Error("Unexpected RP ID hash");
+  const stored = Number(opts.credential.counter);
+  if ((a.counter > 0 || stored > 0) && a.counter <= stored) {
+    throw new Error(`Response counter value ${a.counter} was lower than expected ${stored}`);
+  }
+  return { verified: true, authenticationInfo: { newCounter: a.counter, credentialID: opts.credential.id } };
+}
+
+/** An anonymous browser that asked for sign-in options (optionally for a username). */
+async function signInAttempt(username?: string, withOptions = true) {
+  const anon = await anonymous();
+  let challenge = "never-issued";
+  if (withOptions) {
+    const options = await anon.post("/api/auth/passkey/authenticate/options").send(username ? { username } : {});
+    expect(options.status).toBe(200);
+    challenge = options.body.challenge;
+  }
+  const assertion = (id: string, overrides: Partial<Assertion> = {}) => ({
+    id,
+    rawId: id,
+    type: "public-key",
+    response: { challenge, origin: RP.origin, rpID: RP.id, counter: 8, ...overrides },
+  });
+  return { anon, challenge, assertion };
+}
+
+async function addUser(w: FactoryWorld, suffix: string, role: string, active = true) {
+  const [user] = await w.q<{ id: string; username: string }>(
+    `INSERT INTO users (username, password, active) VALUES ($1, 'x', $2) RETURNING id, username`,
+    [`${w.tag.toLowerCase()}_${suffix}`, active]
+  );
+  await w.q(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, $3)`, [
+    user.id,
+    w.companyId,
+    role,
+  ]);
+  return user;
+}
+
+describe("passkey sign-in", () => {
+  beforeEach(() => {
+    process.env.PASSKEY_RP_ID = RP.id;
+    process.env.PASSKEY_ORIGIN = RP.origin;
+    webauthn.verifyAuthentication.mockImplementation(async (opts: VerifyOptions) => libraryVerify(opts));
+  });
+
+  it("signs the credential's owner in, advances the counter and refuses a replay", () =>
+    withFactoryWorld(async (w) => {
+      const key = `${w.tag}-key`;
+      await credential(w, w.userId, key, 7);
+      const { anon, challenge, assertion } = await signInAttempt(w.username);
+      const res = await anon.post("/api/auth/passkey/authenticate/verify").send(assertion(key));
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ id: w.userId, username: w.username, currentRole: "Admin" });
+      expect(res.body).not.toHaveProperty("password");
+      expect(webauthn.verifyAuthentication).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedChallenge: challenge,
+          expectedOrigin: [RP.origin],
+          expectedRPID: RP.id,
+          credential: expect.objectContaining({ id: key, publicKey: new Uint8Array([1, 2, 3, 4]) }),
+        })
+      );
+      expect(await counterOf(w, key)).toBe(8);
+      const me = await anon.get("/api/auth/me");
+      expect(me.status).toBe(200);
+      expect(me.body).toMatchObject({ username: w.username, currentRole: "Admin", currentCompanyId: w.companyId });
+
+      // The fresh session holds no challenge, so the same assertion cannot be replayed.
+      const replay = await anon.post("/api/auth/passkey/authenticate/verify").send(assertion(key, { counter: 9 }));
+      expect(replay.status).toBe(400);
+      expect(replay.body.message).toBe("No challenge in session");
+      expect(await counterOf(w, key)).toBe(8);
+    }));
+
+  it("refuses unknown passkeys, a wrong origin, RP or challenge, a counter regression and a failed check", () =>
+    withFactoryWorld(async (w) => {
+      const key = `${w.tag}-key`;
+      await credential(w, w.userId, key, 7);
+      const cases: { name: string; id?: string; overrides?: Partial<Assertion>; status: number; message: RegExp }[] = [
+        { name: "not registered", id: "not-registered", status: 400, message: /^Passkey not found$/ },
+        { name: "origin", overrides: { origin: "https://evil.example" }, status: 500, message: /origin/ },
+        { name: "rp", overrides: { rpID: "evil.example" }, status: 500, message: /RP ID/ },
+        { name: "stale challenge", overrides: { challenge: "auth-challenge-0" }, status: 500, message: /challenge/ },
+        { name: "same counter", overrides: { counter: 7 }, status: 500, message: /counter value 7/ },
+        { name: "lower counter", overrides: { counter: 3 }, status: 500, message: /counter value 3/ },
+      ];
+      for (const c of cases) {
+        const { anon, assertion } = await signInAttempt(w.username);
+        const res = await anon.post("/api/auth/passkey/authenticate/verify").send(assertion(c.id ?? key, c.overrides));
+        expect(res.status, c.name).toBe(c.status);
+        expect(res.body.message, c.name).toMatch(c.message);
+        expect((await anon.get("/api/auth/me")).status, c.name).toBe(401);
+      }
+      expect(webauthn.verifyAuthentication).toHaveBeenCalledTimes(cases.length - 1);
+
+      webauthn.verifyAuthentication.mockResolvedValueOnce({ verified: false });
+      const failed = await signInAttempt(w.username);
+      const res = await failed.anon.post("/api/auth/passkey/authenticate/verify").send(failed.assertion(key));
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Passkey verification failed");
+      expect((await failed.anon.get("/api/auth/me")).status).toBe(401);
+
+      const noOptions = await signInAttempt(undefined, false);
+      const missing = await noOptions.anon.post("/api/auth/passkey/authenticate/verify").send(noOptions.assertion(key));
+      expect(missing.status).toBe(400);
+      expect(missing.body.message).toBe("No challenge in session");
+      expect(await counterOf(w, key)).toBe(7);
+    }));
+
+  it("refuses an inactive account like the password login does", () =>
+    withFactoryWorld(async (w) => {
+      const user = await addUser(w, "gone", "Manager", false);
+      await credential(w, user.id, `${w.tag}-gone`, 2);
+      const { anon, assertion } = await signInAttempt(user.username);
+      const res = await anon.post("/api/auth/passkey/authenticate/verify").send(assertion(`${w.tag}-gone`));
+      expect(res.status).toBe(403);
+      expect(res.body.message).toBe("Account is inactive");
+      expect(await counterOf(w, `${w.tag}-gone`)).toBe(2);
+      expect((await anon.get("/api/auth/me")).status).toBe(401);
+    }));
 
   /*
-   * KNOWN BUG (server/routes/passkeyRoutes.ts:147): the credential lookup
-   * selects `u.role`, but the users table has no role column (roles live in
-   * user_company_roles). Every passkey sign-in that reaches the lookup fails
-   * with a 500 before the WebAuthn response is verified, so the "Passkey not
-   * found", failed-verification, origin / RP / counter-regression refusals and
-   * the successful sign-in below the lookup cannot run. This pins the current
-   * behaviour: it fails closed - nothing is verified, no counter moves and no
-   * one is signed in. Fix: drop `u.role` from that SELECT.
+   * Not checked by the route: the challenge is not bound to the username the
+   * options were requested for. A browser that asked for user A's options and
+   * answers with user B's passkey is signed in as B (the passkey's owner, whose
+   * authenticator produced the assertion) - never as A. Pinned as-is.
    */
-  it("currently fails every passkey sign-in at the credential lookup, closed", () =>
+  it("signs in the passkey's owner even when the options named another user", () =>
     withFactoryWorld(async (w) => {
-      await credential(w, w.userId, `${w.tag}-key`, 7);
-      const anon = await anonymous();
-      await anon.post("/api/auth/passkey/authenticate/options").send({ username: w.username });
-      webauthn.verifyAuthentication.mockResolvedValue({ verified: true, authenticationInfo: { newCounter: 8 } });
-      for (const id of [`${w.tag}-key`, "not-registered"]) {
-        // The failed statement aborts the surrounding test transaction; a
-        // savepoint per request lets the test keep reading afterwards.
-        await w.q(`SAVEPOINT passkey_probe`);
-        const res = await anon.post("/api/auth/passkey/authenticate/verify").send({ id });
-        await w.q(`ROLLBACK TO SAVEPOINT passkey_probe`);
-        expect(res.status, id).toBe(500);
-        expect(res.body.message).toMatch(/^Failed query:[\s\S]*u\.role/);
-      }
-      expect(webauthn.verifyAuthentication).not.toHaveBeenCalled();
-      expect(await counterOf(w, `${w.tag}-key`)).toBe(7);
-      expect((await anon.get("/api/auth/me")).status).toBe(401);
+      await credential(w, w.userId, `${w.tag}-a`, 1);
+      const other = await addUser(w, "b", "Manager");
+      await credential(w, other.id, `${w.tag}-b`, 1);
+      const { anon, assertion } = await signInAttempt(w.username);
+      const res = await anon.post("/api/auth/passkey/authenticate/verify").send(assertion(`${w.tag}-b`));
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ id: other.id, username: other.username, currentRole: "Manager" });
+      expect((await anon.get("/api/auth/me")).body.username).toBe(other.username);
+      expect(await counterOf(w, `${w.tag}-a`)).toBe(1);
+      expect(await counterOf(w, `${w.tag}-b`)).toBe(8);
     }));
 });
 

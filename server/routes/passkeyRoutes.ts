@@ -144,7 +144,7 @@ export function registerPasskeyRoutes(app: Express) {
 
       const credId = req.body.id;
       const credRow = await db.execute(sql`
-        SELECT pc.*, u.id as uid, u.username, u.role
+        SELECT pc.*, u.id as uid, u.username
         FROM passkey_credentials pc
         JOIN users u ON u.id = pc.user_id
         WHERE pc.credential_id = ${credId}
@@ -181,14 +181,16 @@ export function registerPasskeyRoutes(app: Express) {
         return res.status(400).json({ message: "Passkey verification failed" });
       }
 
+      const userId: string = String(cred.uid);
+      const [userRecord] = await db.select().from(users).where(eq(users.id, userId));
+      if (!userRecord) return res.status(401).json({ message: "User not found" });
+      // Same rule as the password login: an inactive account cannot sign in.
+      if (!userRecord.active) return res.status(403).json({ message: "Account is inactive" });
+
       await db.execute(sql`
         UPDATE passkey_credentials SET counter = ${verification.authenticationInfo.newCounter}
         WHERE credential_id = ${credId}
       `);
-
-      const userId: string = String(cred.uid);
-      const [userRecord] = await db.select().from(users).where(eq(users.id, userId));
-      if (!userRecord) return res.status(401).json({ message: "User not found" });
 
       // Resolve authorization context before session regeneration. The challenge
       // has already been verified, and no authenticated state is written until a
