@@ -343,7 +343,9 @@ export async function apiRequestPrivileged(
   _isRetry = false
 ): Promise<Response> {
   assertCreateOnlyRequestAllowed(method, url);
+  const actionScope = captureCompanyMutationSnapshot(method, new URL(url, "http://localhost").pathname);
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
+  assertCompanyMutationSnapshot(actionScope);
 
   try {
     const res = await fetch(prepared.url, prepared.init);
@@ -354,6 +356,7 @@ export async function apiRequestPrivileged(
     // that keeps rejecting the token turned one approval into an endless request loop.
     if (!_isRetry && (await isCsrfTokenMismatch(res))) {
       assertPreparedCompanyMutationStillCurrent(prepared.init.headers);
+      assertCompanyMutationSnapshot(actionScope);
       resetCsrfToken();
       return apiRequestPrivileged(method, url, data, timeoutMs, true);
     }
