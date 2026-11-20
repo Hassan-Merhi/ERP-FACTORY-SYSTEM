@@ -118,7 +118,7 @@ export function FactoryPendingInvoiceVerifyCardSection({
             testId="select-charge-account"
             searchTestId="input-charge-account-search"
             optionTestId={(id) => `option-account-${id}`}
-          /></Popover>
+          />
           {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
               A ledger account is required so the charge posts to accounting.
