@@ -234,6 +234,7 @@ describe("company selection across browser tabs", () => {
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(result.current.isLoading).toBe(true);
     expect(result.current.isCheckingCompanySession).toBe(false);
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
 
     await act(async () => { resolveSession({ companyId: 2 }); });
     await waitFor(() => {
@@ -255,6 +256,7 @@ describe("company selection across browser tabs", () => {
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(result.current.isCheckingCompanySession).toBe(true);
     expect(result.current.isLoading).toBe(false);
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
 
     await act(async () => { resolveSession({ companyId: 1 }); });
     await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(false));
