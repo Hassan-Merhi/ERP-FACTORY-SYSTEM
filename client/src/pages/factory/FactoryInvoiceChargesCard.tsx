@@ -117,7 +117,7 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                     {isEditingLedger ? (
                       <div className="flex items-center gap-2 print:hidden">
                         <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={m.ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
  value={String(charge.ledgerAccountId ?? "")}
  onChange={(val) => m.updateChargeLedgerMutation.mutate({ chargeId: charge.id, ledgerAccountId: val ? parseInt(val) : null })}
  placeholder={"Select ledger account..."}
@@ -197,7 +197,7 @@ export function FactoryInvoiceChargesCard({ m, v }: { m: FactoryInvoiceDetailPag
                         </SelectContent>
                       </Select>
                       <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={m.ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
  value={m.newChargeLedgerId}
  onChange={m.setNewChargeLedgerId}
  placeholder={"Ledger account..."}
