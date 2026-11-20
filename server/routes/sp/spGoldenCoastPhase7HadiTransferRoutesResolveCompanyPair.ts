@@ -1,11 +1,8 @@
 // Extracted from ./spGoldenCoastPhase7HadiTransferRoutes.ts to keep that module under the source-size cap.
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { companies, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
+import { companies, ledgerAccounts } from "@shared/schema";
 import { db } from "../../db";
 import { releaseDebtEnglish } from "../../i18n/finalCloseoutEnglish";
-import { privilegedRequestBudget } from "../../middleware/privilegedEndpointSecurity";
-import type { CentralPostingResult } from "../../services/accounting/centralPostingEngine";
-import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import {
   getGoldenCoastAccountDefinition,
   type GoldenCoastAccountRole,
@@ -16,18 +13,9 @@ import { getCompanyRequestRuntimeContext } from "../../services/security/company
 import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 import { loadGoldenCoastAccounts } from "./spGoldenCoastSetupRoutes";
 
-export const postingDependencies = createDatabasePostingDependencies();
-
-export const phase7RequestBudget = privilegedRequestBudget({ maxBodyBytes: 16 * 1024, maxCollectionItems: 10 });
-
 export type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type DbLike = typeof db | DatabaseTransaction;
-
-export type PersistedPostingResult = CentralPostingResult<
-  typeof vouchers.$inferSelect,
-  typeof voucherEntries.$inferSelect
->;
 
 export class GoldenCoastPhase7RouteError extends Error {
   readonly code: string;

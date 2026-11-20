@@ -8,6 +8,8 @@ const serviceSource = readModuleFamily(
   new URL("../../services/accounting/goldenCoastPhase7HadiTransfer.ts", import.meta.url)
 );
 
+const phase16GuardSource = readModuleFamily(new URL("./spGoldenCoastPhase16HadiTransferGuard.ts", import.meta.url));
+
 describe("Golden Coast Phase 7 HADI transfer route surface", () => {
   it("registers after the mounted POS-sale route and before the legacy Supplier Partner sales route", () => {
     // Phase 6 supersedes Phase 5 as the mounted POS-sale route; Phase 7 must
@@ -21,20 +23,28 @@ describe("Golden Coast Phase 7 HADI transfer route surface", () => {
     expect(phase7Index).toBeLessThan(legacySalesIndex);
   });
 
-  it("keeps collection/remittance out of POS-role sessions", () => {
-    expect(routeSource).toContain("requireNonPOS");
+  it("keeps the readiness GET out of POS-role sessions", () => {
     expect(routeSource).toContain(
-      'app.post(\n    "/api/sp/golden-coast/phase7/sales-cash-transfer",\n    privilegedMutationRateLimit'
+      'app.get(\n    "/api/sp/golden-coast/phase7/sales-cash-transfer/readiness",\n    privilegedReadRateLimit'
     );
-    expect(routeSource).toContain("phase7RequestBudget");
+    expect(routeSource).toContain("requireNonPOS");
     expect(routeSource).toContain("requireAuth");
-    expect(routeSource).toContain("privilegedReadRateLimit");
+  });
+
+  it("only declares the POST path; the Phase 16 guard, mounted first, answers every POST", () => {
+    expect(routeSource).toContain("app.post(\n    GOLDEN_COAST_PHASE16_LEGACY_HADI_PATH,");
+    expect(routeSource).toContain("res.status(409).json(goldenCoastPhase16LegacyHadiRetiredPayload())");
+    expect(spIndexSource.indexOf("registerSpGoldenCoastPhase16HadiTransferGuard(app);")).toBeLessThan(
+      spIndexSource.indexOf("registerSpGoldenCoastPhase7HadiTransferRoutes(app);")
+    );
+    expect(phase16GuardSource).toContain("res.status(409).json(goldenCoastPhase16LegacyHadiRetiredPayload());");
+    expect(phase16GuardSource).toContain("void handleRemittance(req, res);");
   });
 
   it("inherits sp_sales_create permission and SP audit logging from the shared access-control boundary", () => {
     expect(accessControlSource).toContain('if ((path.includes("sales") || path.includes("sale")) && method !== "GET")');
     expect(accessControlSource).toContain('return "sp_sales_create";');
-    expect(routeSource).toContain('/phase7/sales-cash-transfer"');
+    expect(routeSource).toContain('/phase7/sales-cash-transfer/readiness"');
     expect(spIndexSource.indexOf("registerSpAccessControl(app);")).toBeLessThan(
       spIndexSource.indexOf("registerSpGoldenCoastPhase7HadiTransferRoutes(app);")
     );
@@ -70,7 +80,7 @@ describe("Golden Coast Phase 7 HADI transfer route surface", () => {
     expect(routeSource).toContain("GC_PHASE7_INTERCOMPANY_INVALID");
   });
 
-  it("validates every physical cash/bank account against its owning company and active state", () => {
+  it("lists only active cash/bank accounts of their owning company", () => {
     expect(routeSource).toContain("eq(bankAccounts.companyId, companyId)");
     expect(routeSource).toContain("eq(bankAccounts.active, true)");
     expect(routeSource).toContain("isNull(bankAccounts.deletedAt)");
@@ -90,44 +100,15 @@ describe("Golden Coast Phase 7 HADI transfer route surface", () => {
     expect(routeSource).not.toContain("authorizedCompanyIds.add");
   });
 
-  it("scopes every cross-company read and write with assertTransactionCompanyScope", () => {
+  it("scopes every cross-company read with assertTransactionCompanyScope", () => {
     expect(routeSource).toContain("assertTransactionCompanyScope(tx, pair.hadiCompanyId)");
     expect(routeSource).toContain("assertTransactionCompanyScope(tx, pair.goldenCoastCompanyId)");
-    expect(routeSource).toContain("assertTransactionCompanyScope(tx, markerCompanyId)");
   });
 
-  it("posts both companies through the central posting engine rather than writing vouchers directly", () => {
-    expect(routeSource).toContain("postBalancedVoucherTx");
-    expect(routeSource).toContain("createDatabasePostingDependencies()");
-    expect(routeSource).not.toContain("tx.insert(vouchers)");
-    expect(routeSource).not.toContain("tx.insert(voucherEntries)");
-  });
-
-  it("keeps both sides atomic and serializes competing Phase 7 balance mutations", () => {
-    expect(routeSource).toContain("db.transaction(async (tx) =>");
-    expect(routeSource).toContain("pg_advisory_xact_lock");
-    expect(routeSource).toContain("golden-coast-phase7:${selectedCompany}");
-    expect(routeSource).toContain("golden-coast-phase7:${selectedCompany}:${transfer.clientRequestId}");
-    expect(routeSource).toContain("for (const item of batch.postings)");
-  });
-
-  it("detects a full idempotent replay before mutable balance validation", () => {
-    const digestIndex = routeSource.indexOf("const transferDigest = goldenCoastPhase7TransferDigest");
-    const replayIndex = routeSource.indexOf("const replayed = await findReplayedTransfer");
-    const balanceIndex = routeSource.indexOf("const [gcSalesCashSignedUsd, outstandingHadiCollectionsUsd]");
-
-    expect(digestIndex).toBeGreaterThan(-1);
-    expect(replayIndex).toBeGreaterThan(digestIndex);
-    expect(balanceIndex).toBeGreaterThan(replayIndex);
-    expect(routeSource).toContain("GC_PHASE7_IDEMPOTENCY_CONFLICT");
-    expect(routeSource).toContain("GC_PHASE7_IDEMPOTENCY_INCONSISTENT");
-    expect(routeSource).toContain("accountingPostingRequests");
-  });
-
-  it("requires both cross-company markers for replay rather than accepting a half-posted transfer", () => {
-    expect(routeSource).toContain('{ role: "golden_coast", markerCompanyId: pair.goldenCoastCompanyId }');
-    expect(routeSource).toContain('{ role: "hadi", markerCompanyId: pair.hadiCompanyId }');
-    expect(routeSource).toContain("posted.length !== roles.length");
+  it("only reads: the readiness probe posts and writes nothing", () => {
+    expect(routeSource).not.toContain("postBalancedVoucherTx");
+    expect(routeSource).not.toContain("tx.insert(");
+    expect(routeSource).not.toContain("tx.update(");
   });
 
   it("binds idempotency to the material payload and resolved account routing", () => {
@@ -136,7 +117,6 @@ describe("Golden Coast Phase 7 HADI transfer route surface", () => {
     expect(serviceSource).toContain("goldenCoastCashAccount: transfer.goldenCoastCashAccount");
     expect(serviceSource).toContain("accounts: canonicalAccounts,");
     expect(serviceSource).toContain("GOLDEN_COAST_PHASE7_SOURCE_TYPE");
-    expect(routeSource).toContain("goldenCoastPhase7SourceId(transfer.operation, transferDigest, item.role)");
   });
 
   it("limits remittance to Phase 7 collections instead of the shared raw intercompany balance", () => {

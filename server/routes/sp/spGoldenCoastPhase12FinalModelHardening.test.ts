@@ -16,6 +16,7 @@ const posMutationsSource = readModuleFamily(
   new URL("../../../client/src/pages/pos/hooks/usePosMutations.ts", import.meta.url)
 );
 const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
+const phase16GuardSource = readModuleFamily(new URL("./spGoldenCoastPhase16HadiTransferGuard.ts", import.meta.url));
 
 describe("Golden Coast Phase 12 final accounting-model hardening", () => {
   it("forces every production Golden Coast sale through canonical GC Sales Cash", () => {
@@ -52,7 +53,9 @@ describe("Golden Coast Phase 12 final accounting-model hardening", () => {
     expect(phase7ServiceSource).toContain('operation !== "collect_via_hadi"');
     expect(phase7ServiceSource).toContain("gcSalesCashDebitBalanceUsd");
     expect(phase7RouteSource).toContain("resolveCompanyPair");
-    expect(phase7RouteSource).toContain("postBalancedVoucherTx");
+    // Phase 7's own POST is retired; HADI remittance posts through Phase 16.
+    expect(phase7RouteSource).not.toContain("postBalancedVoucherTx");
+    expect(phase16GuardSource).toContain("postBalancedVoucherTx");
   });
 
   it("keeps direct bank/cash settlement separate from POS sale recognition", () => {
