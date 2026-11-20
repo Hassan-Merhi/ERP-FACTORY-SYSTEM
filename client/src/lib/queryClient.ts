@@ -345,9 +345,9 @@ export async function apiRequestPrivileged(
   assertCreateOnlyRequestAllowed(method, url);
   const actionScope = captureCompanyMutationSnapshot(method, new URL(url, "http://localhost").pathname);
   const prepared = await prepareApiRequest(method, url, data, timeoutMs);
-  assertCompanyMutationSnapshot(actionScope);
 
   try {
+    assertCompanyMutationSnapshot(actionScope);
     const res = await fetch(prepared.url, prepared.init);
 
     clearTimeout(prepared.timeoutId);
