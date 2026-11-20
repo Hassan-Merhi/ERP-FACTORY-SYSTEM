@@ -13,7 +13,6 @@
     "server/routes/sp/spGoldenCoastPhase12FinalModelHardening.test.ts",
     "server/routes/sp/spGoldenCoastPhase3CutoverRoutes.test.ts",
     "server/routes/sp/spGoldenCoastPhase4CutoverFifoRoutes.test.ts",
-    "server/routes/sp/spGoldenCoastPhase5PosSaleRoutes.test.ts",
     "server/routes/sp/spGoldenCoastPhase6PosSaleRoutes.test.ts",
     "server/routes/sp/spGoldenCoastPhase7HadiTransferRoutes.test.ts",
     "server/routes/sp/spGoldenCoastPhase8ContainerOffloadRoutes.test.ts",

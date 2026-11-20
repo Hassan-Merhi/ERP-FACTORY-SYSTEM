@@ -1,10 +1,10 @@
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../../../scripts/lib/readModuleFamily.mjs";
 
 const routeSource = readModuleFamily(new URL("./spGoldenCoastPhase6PosSaleRoutes.ts", import.meta.url));
 const autoHadiSource = readModuleFamily(new URL("./goldenCoastPhase6AutoHadi.ts", import.meta.url));
 const spIndexSource = readModuleFamily(new URL("./index.ts", import.meta.url));
-const phase5RouteSource = readModuleFamily(new URL("./spGoldenCoastPhase5PosSaleRoutes.ts", import.meta.url));
 const phase6ServiceSource = readModuleFamily(
   new URL("../../services/accounting/goldenCoastPhase6SpecialLocationDeduction.ts", import.meta.url)
 );
@@ -14,7 +14,6 @@ describe("Golden Coast Phase 6 POS sale route", () => {
     expect(spIndexSource).toContain("registerSpGoldenCoastPhase6PosSaleRoutes(app);");
     expect(spIndexSource).not.toContain("registerSpGoldenCoastPhase5PosSaleRoutes(app);");
     expect(routeSource).toContain('"/api/sp/golden-coast/phase6/pos-sale"');
-    expect(phase5RouteSource).toContain('"/api/sp/golden-coast/phase5/pos-sale"');
   });
 
   it("keeps FIFO revenue and COGS posting inside one transaction", () => {
@@ -83,8 +82,8 @@ describe("Golden Coast Phase 6 POS sale route", () => {
     expect(autoHadiSource).not.toContain('eq(ledgerAccounts.subType, "gc_owner_capital")');
   });
 
-  it("keeps old Phase 5 code present for history while making it unreachable", () => {
-    expect(phase5RouteSource).toContain("registerSpGoldenCoastPhase5PosSaleRoutes");
+  it("no longer mounts or ships the retired Phase 5 sale route", () => {
     expect(spIndexSource).not.toContain('from "./spGoldenCoastPhase5PosSaleRoutes"');
+    expect(existsSync(new URL("./spGoldenCoastPhase5PosSaleRoutes.ts", import.meta.url))).toBe(false);
   });
 });

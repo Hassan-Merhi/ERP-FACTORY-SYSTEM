@@ -30,7 +30,6 @@ const PRIORITY_ROUTE_FILES = new Set([
   "../server/routes/factory/bales/balesReimportRoutes.ts",
   "../server/routes/factory/docs-users/daybookEditRoutes.ts",
   "../server/routes/stockTransferImportRoutes.ts",
-  "../server/routes/sp/spGoldenCoastPhase5PosSaleRoutes.ts",
   "../server/routes/productionBaleRoutes.ts",
   "../server/routes/factory/customer-orders/pdf-export/loading-status.ts",
   "../server/routes/sp/spMigrationCutoverReadiness.ts",
