@@ -10,7 +10,6 @@ import {
   FileClock,
   MapPin,
   Package,
-  Search,
   Truck,
   UserRound,
 } from "lucide-react";
@@ -19,7 +18,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/export/ReportExportMenu";
 import { exportFileName } from "@/lib/exportFile";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { searchAny } from "@shared/searchNormalization";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -85,9 +85,8 @@ export default function POSContainerDetail() {
 
   const filteredItems = useMemo(() => {
     if (!data) return [];
-    const normalized = search.trim().toLowerCase();
-    if (!normalized) return data.items;
-    return data.items.filter((item) => `${item.itemCode} ${item.itemName}`.toLowerCase().includes(normalized));
+    if (!search.trim()) return data.items;
+    return data.items.filter((item) => searchAny(search, item.itemCode, item.itemName));
   }, [data, search]);
 
   async function exportNoCostNoFreight() {
@@ -354,19 +353,13 @@ export default function POSContainerDetail() {
 
       <div className="shrink-0 rounded-xl border bg-card/40 p-3 shadow-xs">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-md">
-            <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search item name or code..."
-              className="pl-9"
-              data-testid="input-pos-container-item-search"
-            />
-          </div>
+          <SearchField
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search item name or code..."
+            wrapperClassName="w-full sm:max-w-md"
+            data-testid="input-pos-container-item-search"
+          />
           <p className="text-sm text-muted-foreground">
             {filteredItems.length} of {data.items.length} item lines
           </p>
