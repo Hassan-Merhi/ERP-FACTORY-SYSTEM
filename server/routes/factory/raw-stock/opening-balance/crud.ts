@@ -110,7 +110,12 @@ function registerRawStockOpeningBalanceRoutesPart2(app: Express) {
           containerUpdates.ratePerKg = String(effectiveCost);
         }
         if (effectiveCurrency !== undefined) containerUpdates.currencyCode = effectiveCurrency;
-        if (effectiveFx !== undefined) containerUpdates.fxRateToUsd = String(effectiveFx);
+        if (effectiveFx !== undefined) {
+          // An explicit rate from the caller is a confirmed rate; without the
+          // flag the next cost-only edit could not resolve it.
+          containerUpdates.fxRateToUsd = String(effectiveFx);
+          containerUpdates.fxRateConfirmed = true;
+        }
 
         if (effectiveCost !== undefined || effectiveFx !== undefined || effectiveCurrency !== undefined) {
           const [current] = await tx
@@ -158,18 +163,28 @@ function registerRawStockOpeningBalanceRoutesPart2(app: Express) {
         ) {
           const [cur] = await tx
             .select({
+              commissionAmount: factoryRawStock.commissionAmount,
               commissionCurrencyCode: factoryRawStock.commissionCurrencyCode,
               commissionFxRateToUsd: factoryRawStock.commissionFxRateToUsd,
             })
             .from(factoryRawStock)
             .where(eq(factoryRawStock.id, id))
             .limit(1);
-          const resolvedCommCurr = commissionCurrencyCode ?? cur?.commissionCurrencyCode ?? "USD";
+          const storedCommCurr = cur?.commissionCurrencyCode ?? "USD";
+          const resolvedCommCurr = commissionCurrencyCode ?? storedCommCurr;
+          // The stored rate belongs to the stored currency: a currency change
+          // must bring its own rate (EUR 1.5 is not a TZS rate).
+          if (resolvedCommCurr !== "USD" && resolvedCommCurr !== storedCommCurr && commissionFxInput === undefined) {
+            throw new Error(
+              `Commission currency changed to ${resolvedCommCurr}: provide commissionFxRateToUsd for it.`
+            );
+          }
           const resolvedCommFx =
             resolvedCommCurr === "USD"
               ? 1
               : resolveStoredFxRateOrThrow(resolvedCommCurr, commissionFxRateToUsd ?? cur?.commissionFxRateToUsd);
-          const resolvedCommAmt = commissionInput ?? toMoney(0);
+          // A rate- or currency-only edit converts the stored amount, not zero.
+          const resolvedCommAmt = commissionInput ?? toMoney(cur?.commissionAmount ?? 0);
           rawUpdates.commissionAmountUsd =
             resolvedCommCurr === "USD"
               ? String(resolvedCommAmt.toNumber())

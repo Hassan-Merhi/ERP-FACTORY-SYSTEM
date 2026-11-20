@@ -87,18 +87,41 @@ describe("POST /api/factory/bales/swap", () => {
     });
   });
 
-  it("returns a reserved bale without an order link to stock and reports it", async () => {
+  it("refuses a reserved bale without an order link and writes nothing", async () => {
     await withFactoryWorld(async (w) => {
       const orphan = await stockBale(w, `${w.tag}-ORPHAN`, "RESERVED");
-      await stockBale(w, `${w.tag}-REPL`);
+      const repl = await stockBale(w, `${w.tag}-REPL`);
+      const before = await w.q(`SELECT id, status, updated_at FROM factory_bales WHERE id = ANY($1) ORDER BY id`, [
+        [orphan, repl],
+      ]);
       const res = await w.agent
         .post(SWAP)
         .send({ currentBaleRef: `${w.tag}-ORPHAN`, replacementBaleRef: `${w.tag}-REPL` });
       expect(res.status).toBe(400);
       expect(res.body.message).toBe("No order link found for the current bale");
-      const [row] = await w.q(`SELECT status FROM factory_bales WHERE id = $1`, [orphan]);
-      // The refusal still writes: the orphan bale is flipped back to stock.
-      expect(row.status).toBe("IN_STOCK");
+      // The refusal writes nothing: both bales keep their status and timestamp.
+      const after = await w.q(`SELECT id, status, updated_at FROM factory_bales WHERE id = ANY($1) ORDER BY id`, [
+        [orphan, repl],
+      ]);
+      expect(after).toEqual(before);
+      expect(after.map((r) => r.status)).toEqual(["RESERVED", "IN_STOCK"]);
+      const [removals] = await w.q(`SELECT count(*)::int AS n FROM customer_order_bale_removals WHERE bale_id = $1`, [
+        orphan,
+      ]);
+      expect(removals.n).toBe(0);
+    });
+  });
+
+  it("refuses an unlinked SOLD bale the same way, leaving it SOLD", async () => {
+    await withFactoryWorld(async (w) => {
+      const sold = await stockBale(w, `${w.tag}-SOLDORPH`, "SOLD");
+      await stockBale(w, `${w.tag}-REPL2`);
+      const res = await w.agent
+        .post(SWAP)
+        .send({ currentBaleRef: `${w.tag}-SOLDORPH`, replacementBaleRef: `${w.tag}-REPL2` });
+      expect(res.status).toBe(400);
+      const [row] = await w.q(`SELECT status FROM factory_bales WHERE id = $1`, [sold]);
+      expect(row.status).toBe("SOLD");
     });
   });
 

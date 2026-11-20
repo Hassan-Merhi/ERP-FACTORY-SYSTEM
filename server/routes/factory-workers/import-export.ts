@@ -317,8 +317,11 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
               "weeklySalary",
               "biWeeklySalary",
             ]) {
-              if (mapped[f] !== undefined && mapped[f] !== "")
-                mapped[f] = String(toMoney(String(mapped[f] ?? "")).toNumber());
+              if (mapped[f] === undefined) continue;
+              // A blank cell must not reach a numeric column as "": drop it, so
+              // an update keeps the stored value and an insert takes the default.
+              if (mapped[f] === null || String(mapped[f]).trim() === "") delete mapped[f];
+              else mapped[f] = String(toMoney(String(mapped[f])).toNumber());
             }
 
             // Find existing worker
@@ -376,7 +379,8 @@ export function registerFactoryWorkerImportExportRoutes(app: Express, requireAut
   // POST /api/factory/workers/reassign-codes - Bulk reassign HMD001, HMD002... codes
   app.post("/api/factory/workers/reassign-codes", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.body.companyId || getFactoryCompanyId(req);
+      // Only the session's company: never trust a companyId from the body.
+      const companyId = getFactoryCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const prefix = (req.body.prefix as string) || "HMD";

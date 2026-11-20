@@ -95,11 +95,16 @@ describe("PATCH opening balance", () => {
       const [again] = await rawRow(w, id);
       expect(again.supplier_id).toBe(row.supplier_id);
 
-      // BUG (reported): the explicit EUR rate above is stored without
-      // fx_rate_confirmed, so a later cost-only edit cannot resolve it.
+      // The explicit EUR rate above is stored confirmed, so a later
+      // cost-only edit resolves it.
+      const [confirmed] = await w.q(
+        `SELECT c.fx_rate_confirmed FROM factory_containers c JOIN factory_raw_stock r ON r.container_id = c.id WHERE r.id = $1`,
+        [id]
+      );
+      expect(confirmed.fx_rate_confirmed).toBe(true);
       const costOnly = await w.agent.patch(`${URL}/${id}`).send({ costPerKg: "4" });
-      expect(costOnly.status).toBe(400);
-      expect(Number((await rawRow(w, id))[0].cost_usd)).toBeCloseTo(3.3, 6);
+      expect(costOnly.status, JSON.stringify(costOnly.body)).toBe(200);
+      expect(Number((await rawRow(w, id))[0].cost_usd)).toBeCloseTo(4.4, 6);
     });
   });
 
@@ -139,13 +144,47 @@ describe("PATCH opening balance", () => {
       expect(eur.status).toBe(200);
       expect(Number((await rawRow(w, id))[0].commission_usd)).toBe(60);
 
-      // BUG (reported): changing only the commission currency reuses the
-      // previous currency's stored rate (1.5, for EUR) for TZS.
+      // Changing the commission currency without a rate is refused: the
+      // stored 1.5 is an EUR rate, not a TZS one. Nothing is written.
       const noRate = await w.agent
         .patch(`${URL}/${id}`)
         .send({ commissionCurrencyCode: "TZS", commissionAmount: "40" });
-      expect(noRate.status).toBe(200);
+      expect(noRate.status).toBe(400);
+      expect(noRate.body.message).toMatch(/Commission currency changed to TZS/);
+      const [kept] = await w.q(
+        `SELECT commission_currency_code, commission_fx_rate_to_usd::text AS fx, commission_amount_usd::text AS usd
+           FROM factory_raw_stock WHERE id = $1`,
+        [id]
+      );
+      expect(kept.commission_currency_code).toBe("EUR");
+      expect(Number(kept.fx)).toBe(1.5);
+      expect(Number(kept.usd)).toBe(60);
+
+      // With its own rate the currency change goes through.
+      const withRate = await w.agent
+        .patch(`${URL}/${id}`)
+        .send({ commissionCurrencyCode: "TZS", commissionFxRateToUsd: "0.0004" });
+      expect(withRate.status, JSON.stringify(withRate.body)).toBe(200);
+      // No amount in the edit: the stored 40 is converted, not zero.
+      expect(Number((await rawRow(w, id))[0].commission_usd)).toBeCloseTo(0.016, 6);
+    });
+  });
+
+  it("keeps the stored commission currency's rate when only the amount changes", async () => {
+    await withFactoryWorld(async (w) => {
+      const { id } = await openingBalance(w);
+      const eur = await w.agent
+        .patch(`${URL}/${id}`)
+        .send({ commissionAmount: "10", commissionCurrencyCode: "EUR", commissionFxRateToUsd: "2" });
+      expect(eur.status).toBe(200);
+      // Same currency resent without a rate: the stored EUR rate still applies.
+      const same = await w.agent.patch(`${URL}/${id}`).send({ commissionAmount: "30", commissionCurrencyCode: "EUR" });
+      expect(same.status, JSON.stringify(same.body)).toBe(200);
       expect(Number((await rawRow(w, id))[0].commission_usd)).toBe(60);
+      // Back to USD needs no rate.
+      const usd = await w.agent.patch(`${URL}/${id}`).send({ commissionCurrencyCode: "USD" });
+      expect(usd.status).toBe(200);
+      expect(Number((await rawRow(w, id))[0].commission_usd)).toBe(30);
     });
   });
 });

@@ -69,7 +69,8 @@ async function loadSalesData(voucherId: number, locationId: number | null | unde
   return items.map((item) => {
     const stockItem = stockItemMap.get(item.stockItemId);
     const configuredPrice =
-      item.configuredPrice && item.configuredPrice !== "0"
+      // numeric(15,6) reads back as "0.000000": compare the value, not the text.
+      item.configuredPrice && !toMoney(item.configuredPrice).isZero()
         ? item.configuredPrice
         : (priceMap.get(item.stockItemId) ?? "0");
     const quantity = toMoney(item.quantity).toNumber();

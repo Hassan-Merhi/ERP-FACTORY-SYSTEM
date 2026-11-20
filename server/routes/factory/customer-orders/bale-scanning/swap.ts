@@ -111,14 +111,8 @@ export function registerOrderBaleSwapRoutes(app: Express) {
         .select()
         .from(customerOrderBales)
         .where(eq(customerOrderBales.baleId, currentBale.id));
-      if (!orderBale) {
-        // No order link — just flip current back to stock
-        await db
-          .update(factoryBales)
-          .set({ status: "IN_STOCK", updatedAt: new Date() })
-          .where(eq(factoryBales.id, currentBale.id));
-        return res.status(400).json({ message: "No order link found for the current bale" });
-      }
+      // A refusal writes nothing: the unlinked bale keeps its status.
+      if (!orderBale) return res.status(400).json({ message: "No order link found for the current bale" });
 
       // 4. Find the order
       const [order] = await db

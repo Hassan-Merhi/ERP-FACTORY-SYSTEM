@@ -114,16 +114,19 @@ describe("loadVoucherRelatedData", () => {
       const rows = withLocation.salesItems ?? [];
       expect(rows.map((r) => [r.stockItemName, r.stockItemUom, String(r.configuredPrice)])).toEqual([
         ["Shirt", "PCS", "10.000000"],
-        // Pinned bug: configured_price is numeric(15,6), so a stored zero reads
-        // back as "0.000000" and never matches the `!== "0"` fallback check.
-        ["Cap", "PCS", "0.000000"],
+        // configured_price is numeric(15,6): a stored zero reads back as
+        // "0.000000" and still falls back to the location price.
+        ["Cap", "PCS", "8.00"],
         ["Cap", "PCS", "8.00"],
       ]);
       expect(rows[0]).toMatchObject({ hassansProfit: "4.00", hassansTotal: "20.00", hassansPercentage: "20.0" });
+      expect(rows[1]).toMatchObject({ hassansProfit: "4.00", hassansTotal: "16.00", hassansPercentage: "25.0" });
 
       const noLocation = await loadVoucherRelatedData(header(w, sale, "Sales"));
       const fallback = (noLocation.salesItems ?? [])[2];
       expect(fallback).toMatchObject({ configuredPrice: "0", hassansTotal: "0.00", hassansPercentage: "0.0" });
+      // A stored zero with no location price falls back to "0" as well.
+      expect((noLocation.salesItems ?? [])[1]).toMatchObject({ configuredPrice: "0", hassansTotal: "0.00" });
     });
   });
 

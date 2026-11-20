@@ -7,7 +7,12 @@
  * of another company. Rolled back per test.
  */
 import ExcelJS from "exceljs";
+import express, { type RequestHandler } from "express";
+import request from "supertest";
 import { describe, expect, it } from "vitest";
+
+import { db } from "../server/db";
+import { registerFactoryWorkerImportExportRoutes } from "../server/routes/factory-workers/import-export";
 
 import { withFactoryWorld, type FactoryWorld } from "./helpers/rolledBackFactoryApp";
 
@@ -67,9 +72,6 @@ describe("POST /api/factory/workers/import-excel", () => {
       const byNid = await worker(w, "Old Nid", { nid: "N-1" });
       await worker(w, "Odd code", { code: "X-12" });
 
-      // Every row fills the numeric columns: a blank numeric cell is written
-      // as "" and fails the row (bug reported), which would abort this
-      // rolled-back transaction.
       const file = await workbook([
         [
           "Full Name",
@@ -131,6 +133,38 @@ describe("POST /api/factory/workers/import-excel", () => {
   });
 });
 
+describe("worker import with blank numeric cells", () => {
+  it("imports rows with blank rates: new workers take the default, updates keep the stored value", async () => {
+    await withFactoryWorld(async (w) => {
+      const existing = await w.one(
+        `INSERT INTO factory_workers (company_id, full_name, employee_code, base_salary, per_kg_rate)
+         VALUES ($1, 'Kept Rates', $2, 500, 0.25) RETURNING id`,
+        [w.companyId, `${w.tag}K1`]
+      );
+      const file = await workbook([
+        ["Full Name", "Employee Code", "Base Salary", "Per KG Rate", "Hourly Rate"],
+        ["Blank Rates", `${w.tag}B1`, "", "", ""],
+        ["Kept Rates", `${w.tag}K1`, "", "", "3"],
+        ["Spaces", `${w.tag}S1`, "   ", "0.5", ""],
+      ]);
+      const res = await w.agent.post(IMPORT).attach("file", file, "workers.xlsx");
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ created: 2, updated: 1, skipped: 0, errors: [] });
+
+      const rows = await w.q<{ employee_code: string; base_salary: string; per_kg_rate: string; hourly_rate: string }>(
+        `SELECT employee_code, base_salary::text, per_kg_rate::text, hourly_rate::text
+           FROM factory_workers WHERE company_id = $1 ORDER BY employee_code`,
+        [w.companyId]
+      );
+      const by = (code: string) => rows.find((r) => r.employee_code === `${w.tag}${code}`)!;
+      expect(by("B1")).toMatchObject({ base_salary: "0.00", per_kg_rate: "0.0000", hourly_rate: "0.0000" });
+      expect(by("K1")).toMatchObject({ base_salary: "500.00", per_kg_rate: "0.2500", hourly_rate: "3.0000" });
+      expect(by("S1")).toMatchObject({ base_salary: "0.00", per_kg_rate: "0.5000" });
+      expect(existing).toBeGreaterThan(0);
+    });
+  });
+});
+
 describe("POST /api/factory/workers/reassign-codes", () => {
   it("renumbers this company's workers in id order with the given or default prefix", async () => {
     await withFactoryWorld(async (w) => {
@@ -157,11 +191,38 @@ describe("POST /api/factory/workers/reassign-codes", () => {
         [other]
       );
       const res = await w.agent.post(REASSIGN).send({ companyId: other, prefix: "PWN" });
-      // The route itself trusts req.body.companyId; the company-scope
-      // middleware refuses the foreign id before the handler runs.
+      // The company-scope middleware refuses the foreign id before the handler runs.
       expect(res.status).toBe(403);
       const [row] = await w.q(`SELECT employee_code FROM factory_workers WHERE id = $1`, [foreign]);
       expect(row.employee_code).toBe("KEEP-1");
+    });
+  });
+
+  it("uses only the session company even when the handler is reached with a foreign body companyId", async () => {
+    await withFactoryWorld(async (w) => {
+      const other = await w.one(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [
+        `${w.tag}Y`,
+      ]);
+      const foreign = await w.one(
+        `INSERT INTO factory_workers (company_id, full_name, employee_code) VALUES ($1, 'Foreign', 'KEEP-2') RETURNING id`,
+        [other]
+      );
+      const own = await worker(w, "Own");
+      // Mount the handler alone (no company-scope middleware) to check the
+      // handler itself ignores the body companyId.
+      const bare = express();
+      bare.use(express.json());
+      bare.use((req, _res, next) => {
+        (req as unknown as { session: Record<string, unknown> }).session = { factoryCompanyId: w.companyId };
+        next();
+      });
+      const passThrough: RequestHandler = (_req, _res, next) => next();
+      registerFactoryWorkerImportExportRoutes(bare, passThrough, db);
+      const res = await request(bare).post(REASSIGN).send({ companyId: other, prefix: "OWN" });
+      expect(res.status).toBe(200);
+      expect(res.body.codes).toEqual([{ id: own, name: "Own", code: "OWN001" }]);
+      const [row] = await w.q(`SELECT employee_code FROM factory_workers WHERE id = $1`, [foreign]);
+      expect(row.employee_code).toBe("KEEP-2");
     });
   });
 });
