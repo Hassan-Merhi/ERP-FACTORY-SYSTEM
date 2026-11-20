@@ -24,7 +24,12 @@ import {
 } from "./phase9StockItemEditEnvelope.mjs";
 import { canonicalEvidence, hashEvidence } from "./edgeSyncStageProtocol.mjs";
 import { PHASE9_JOURNAL_KIND, phase9JournalEnvelope } from "./phase9JournalEnvelope.mjs";
-import { PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope } from "./phase9SalesVoucherEnvelope.mjs";
+import {
+  PHASE9_PURCHASE_VOUCHER_KIND,
+  PHASE9_SALES_VOUCHER_KIND,
+  phase9PurchaseVoucherEnvelope,
+  phase9SalesVoucherEnvelope,
+} from "./phase9AccountingVoucherEnvelope.mjs";
 import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
 import {
   PHASE9_STOCK_ADJUST_KIND,
@@ -157,6 +162,14 @@ function stockItemEditPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
+/** A kind no decision can force through, referenced by `field` of its payload. */
+const plainKind = (kind, envelope, field = "localVoucherId") =>
+  Object.freeze({
+    parse: (payload) => rebuiltPayload(payload, kind, envelope),
+    localRef: (payload) => payload[field],
+    overridable: Object.freeze([]),
+  });
+
 function rebuiltPayload(payload, kind, envelope) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   if (payload.kind !== kind) return null;
@@ -274,11 +287,11 @@ const STREAMS = Object.freeze({
         localRef: (payload) => payload.localStockItemId,
         overridable: Object.freeze([PHASE9_STOCK_ITEM_NAME_EXISTS_CONFLICT]),
       }),
-      [PHASE9_STOCK_ITEM_DELETE_KIND]: Object.freeze({
-        parse: (payload) => rebuiltPayload(payload, PHASE9_STOCK_ITEM_DELETE_KIND, phase9StockItemDeleteEnvelope),
-        localRef: (payload) => payload.stockItemId,
-        overridable: Object.freeze([]),
-      }),
+      [PHASE9_STOCK_ITEM_DELETE_KIND]: plainKind(
+        PHASE9_STOCK_ITEM_DELETE_KIND,
+        phase9StockItemDeleteEnvelope,
+        "stockItemId"
+      ),
       // Plan batch 3: changes to existing transfers, on the same stream as the
       // transfers themselves so a change never applies before its transfer.
       [PHASE9_STOCK_TRANSFER_EDIT_KIND]: Object.freeze({
@@ -293,12 +306,11 @@ const STREAMS = Object.freeze({
         overridable: Object.freeze([PHASE9_STOCK_TRANSFER_CHANGED_CONFLICT]),
       }),
       // A stale revision is held but reject-only: the revision service refuses it whatever the decision.
-      [PHASE9_STOCK_TRANSFER_REVISION_KIND]: Object.freeze({
-        parse: (payload) =>
-          rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_REVISION_KIND, phase9StockTransferRevisionEnvelope),
-        localRef: (payload) => payload.localRevisionId,
-        overridable: Object.freeze([]),
-      }),
+      [PHASE9_STOCK_TRANSFER_REVISION_KIND]: plainKind(
+        PHASE9_STOCK_TRANSFER_REVISION_KIND,
+        phase9StockTransferRevisionEnvelope,
+        "localRevisionId"
+      ),
       [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: Object.freeze({
         parse: (payload) =>
           rebuiltPayload(
@@ -357,28 +369,16 @@ const STREAMS = Object.freeze({
   }),
   payments: Object.freeze({
     kinds: Object.freeze({
-      [PHASE9_PAYMENT_KIND]: Object.freeze({
-        parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_KIND, phase9PaymentEnvelope),
-        localRef: (payload) => payload.localVoucherId,
-        overridable: Object.freeze([]),
-      }),
+      [PHASE9_PAYMENT_KIND]: plainKind(PHASE9_PAYMENT_KIND, phase9PaymentEnvelope),
       // Plan batch 4: edits and deletes, on the same stream as the payment itself.
       [PHASE9_PAYMENT_EDIT_KIND]: Object.freeze({
         parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_EDIT_KIND, phase9PaymentEditEnvelope),
         localRef: (payload) => payload.localVoucherId,
         overridable: Object.freeze([PHASE9_PAYMENT_CHANGED_CONFLICT]),
       }),
-      // Full offline mode: a Journal entered on a PC, on the voucher stream.
-      [PHASE9_JOURNAL_KIND]: Object.freeze({
-        parse: (payload) => rebuiltPayload(payload, PHASE9_JOURNAL_KIND, phase9JournalEnvelope),
-        localRef: (payload) => payload.localVoucherId,
-        overridable: Object.freeze([]),
-      }),
-      [PHASE9_SALES_VOUCHER_KIND]: Object.freeze({
-        parse: (payload) => rebuiltPayload(payload, PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope),
-        localRef: (payload) => payload.localVoucherId,
-        overridable: Object.freeze([]),
-      }),
+      [PHASE9_JOURNAL_KIND]: plainKind(PHASE9_JOURNAL_KIND, phase9JournalEnvelope), // PC entries: journals, sales, purchases
+      [PHASE9_SALES_VOUCHER_KIND]: plainKind(PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope),
+      [PHASE9_PURCHASE_VOUCHER_KIND]: plainKind(PHASE9_PURCHASE_VOUCHER_KIND, phase9PurchaseVoucherEnvelope),
       [PHASE9_PAYMENT_DELETE_KIND]: Object.freeze({
         parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_DELETE_KIND, phase9PaymentDeleteEnvelope),
         localRef: (payload) => payload.localVoucherId,
