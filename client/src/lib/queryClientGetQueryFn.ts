@@ -198,7 +198,7 @@ export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryF
       }
 
       await throwIfResNotOk(res);
-      const body: T = await res.json();
+      const body = await res.json();
       // A body can finish parsing after its request has been cancelled or the
       // selected company changed. Never commit that body to a Query cache.
       if (readScope) assertCompanyReadSnapshot(readScope);
