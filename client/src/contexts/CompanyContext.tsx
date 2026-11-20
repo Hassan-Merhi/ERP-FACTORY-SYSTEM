@@ -393,6 +393,14 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     setShowResumeVerificationCover(false);
     resumeCompanyCacheScope();
     setExternalSessionState("idle");
+    // The verification fence can reject requests that happened to be in flight
+    // when a background tab resumes. Once the same company is verified, retry
+    // only failed mounted company queries; never repeat mutations or flood all
+    // pages with a full refetch on every focus event.
+    void queryClient.invalidateQueries({
+      predicate: (query) => query.state.status === "error" && isCompanySessionQueryKey(query.queryKey),
+      refetchType: "active",
+    });
   }, [clearResumeVerificationCoverTimer]);
   const rememberExternalSessionRevision = useCallback((companyId: number, revision?: string | null) => {
     rememberVerifiedServerCompanyRevision(companyId, revision);

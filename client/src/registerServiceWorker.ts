@@ -3,7 +3,6 @@ const UPDATE_CHECK_INTERVAL_MS = 5 * 60_000;
 
 let activeRegistration: ServiceWorkerRegistration | undefined;
 let lastUpdateCheckAt = 0;
-let controllerReloadStarted = false;
 let hadControllerAtStartup = false;
 
 async function registerServiceWorker(): Promise<ServiceWorkerRegistration | undefined> {
@@ -30,27 +29,21 @@ async function checkForServiceWorkerUpdate() {
   await activeRegistration.update().catch(() => undefined);
 }
 
-function reloadIntoUpdatedWorker() {
-  if (controllerReloadStarted) return;
-
-  // A first-time install can claim the current page even though it already
-  // loaded the newest build. Only existing controlled installs need an
-  // automatic reload when a replacement worker takes control.
+function notifyUpdatedWorker() {
+  // A newly activated worker must never discard unsaved forms, scanner state,
+  // or pending voucher entries just because the user returned to the tab.
+  // The app's UpdateBanner already offers a deliberate Refresh action.
   if (!hadControllerAtStartup) {
     hadControllerAtStartup = true;
     return;
   }
-
-  controllerReloadStarted = true;
-  const url = new URL(window.location.href);
-  url.searchParams.delete("_pwa_update");
-  window.location.replace(`${url.pathname}${url.search}${url.hash}`);
+  window.dispatchEvent(new Event("erp:service-worker-updated"));
 }
 
 if ("serviceWorker" in navigator) {
   hadControllerAtStartup = !!navigator.serviceWorker.controller;
 
-  navigator.serviceWorker.addEventListener?.("controllerchange", reloadIntoUpdatedWorker);
+  navigator.serviceWorker.addEventListener?.("controllerchange", notifyUpdatedWorker);
 
   window.addEventListener("load", () => {
     void registerServiceWorker().then((registration) => {
