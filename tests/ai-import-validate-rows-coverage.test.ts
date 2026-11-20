@@ -4,9 +4,9 @@
  * alias, duplicate-code refusals, correction-memory account resolution and
  * its fallbacks, date / type / amount refusals and the generic fallback.
  *
- * Pinned bug: validateSupplierRows reads existing supplier codes from every
- * company (no company filter), so a code used only by another company is
- * refused as "already exists" although the unique index is per company.
+ * Supplier codes are unique per company, so validateSupplierRows only checks
+ * this company's codes: a code used only by another company is accepted (and
+ * never revealed in an error).
  */
 import { describe, expect, it } from "vitest";
 
@@ -74,12 +74,13 @@ describe("supplier rows", () => {
       expect(result[4].mappedData).toMatchObject({ code: null, phone: null, email: null, openingBalance: "0" });
     }));
 
-  it("refuses a code that exists only in another company (pinned cross-company check)", () =>
+  it("accepts a code that exists only in another company", () =>
     withReportWorld(async (w) => {
       const other = await w.otherCompany();
       await supplierRow(w, `${w.tag}X`, other);
       const [r] = await validateRows(w.companyId, "suppliers", rows({ legalName: "Mine", code: `${w.tag}X` }));
-      expect(r.errors).toEqual([`code "${w.tag}X" already exists`]);
+      expect(r.errors).toEqual([]);
+      expect(JSON.stringify(r)).not.toContain("already exists");
     }));
 });
 

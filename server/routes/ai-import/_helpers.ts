@@ -4,7 +4,8 @@
  * Extracted verbatim from the former single-file aiImportRoutes.ts.
  */
 import { db } from "../../db";
-import { aiCorrectionMemory, suppliers, ledgerAccounts } from "@shared/schema";
+import { aiCorrectionMemory, ledgerAccounts } from "@shared/schema";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { parseMoneyInput, toMoney } from "../../lib/money";
@@ -56,7 +57,12 @@ export async function validateSupplierRows(
   companyId: number,
   rows: { id: number; rowNumber: number; rawData: unknown }[]
 ) {
-  const existingCodes = await db.select({ code: suppliers.code }).from(suppliers).where(isNull(suppliers.deletedAt));
+  // Supplier codes are unique per company (suppliers_company_code_unique), so only
+  // this company's codes can collide; reading every company's would also leak them.
+  const existingCodes = await db
+    .select({ code: companyScopedSuppliers.code })
+    .from(companyScopedSuppliers)
+    .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)));
   const existingCodeSet = new Set(existingCodes.map((r) => (r.code || "").toLowerCase()));
   const batchCodes = new Set<string>();
 
