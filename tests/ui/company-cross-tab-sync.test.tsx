@@ -86,6 +86,21 @@ async function renderOnCompanyOne() {
   return hook;
 }
 
+/** Only a real hidden -> visible page return should trigger reconciliation. */
+async function returnFromAnotherBrowserTab() {
+  const visibility = vi.spyOn(document, "visibilityState", "get");
+  try {
+    await act(async () => {
+      visibility.mockReturnValue("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      visibility.mockReturnValue("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+  } finally {
+    visibility.mockRestore();
+  }
+}
+
 describe("company selection across browser tabs", () => {
   beforeEach(() => {
     FakeBroadcastChannel.instances.clear();
@@ -101,6 +116,8 @@ describe("company selection across browser tabs", () => {
 
   afterEach(() => {
     queryClient.clear();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     FakeBroadcastChannel.instances.clear();
   });
@@ -172,10 +189,7 @@ describe("company selection across browser tabs", () => {
     const { result } = await renderOnCompanyOne();
     sessionCompanyId = 2;
 
-    await act(async () => {
-      window.dispatchEvent(new Event("blur"));
-      window.dispatchEvent(new Event("focus"));
-    });
+    await returnFromAnotherBrowserTab();
 
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
     expect(localStorage.getItem("selectedCompanyId")).toBe("2");
@@ -186,7 +200,8 @@ describe("company selection across browser tabs", () => {
     const { result } = await renderOnCompanyOne();
 
     await act(async () => {
-      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("blur"));
+      window.dispatchEvent(new Event("focus")); // foreground window focus is not a browser-tab return
       window.dispatchEvent(new Event("pageshow")); // not a BFCache restore
       document.dispatchEvent(new Event("visibilitychange")); // still visible
       window.dispatchEvent(new Event("focus"));
@@ -198,23 +213,18 @@ describe("company selection across browser tabs", () => {
     expect(result.current.selectedCompany?.id).toBe(1);
   });
 
-  it("checks once per genuine background-to-foreground return, without another focus loop", async () => {
+  it("checks once per genuine browser-tab return without a blocking overlay for a quick response", async () => {
     const { result } = await renderOnCompanyOne();
-
-    await act(async () => {
-      window.dispatchEvent(new Event("blur"));
-      window.dispatchEvent(new Event("focus"));
-      window.dispatchEvent(new Event("focus"));
-      window.dispatchEvent(new Event("pageshow"));
-    });
+    await returnFromAnotherBrowserTab();
 
     await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(false));
     expect(result.current.selectedCompany?.id).toBe(1);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isCheckingCompanySession).toBe(false);
 
     await act(async () => {
       window.dispatchEvent(new Event("focus"));
-      window.dispatchEvent(new Event("pageshow"));
+      window.dispatchEvent(new Event("pageshow")); // not BFCache
     });
     expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1);
     expect(result.current.isCheckingCompanySession).toBe(false);
@@ -290,7 +300,7 @@ describe("company selection across browser tabs", () => {
     });
   });
 
-  it("covers a resumed tab while verifying without unmounting unchanged-company forms", async () => {
+  it("only covers a slow resumed tab after the grace period and preserves same-company drafts", async () => {
     const { result } = await renderOnCompanyOne();
     let resolveSession!: (value: { companyId: number }) => void;
     harness.fetchSessionCompany.mockImplementationOnce(
@@ -300,14 +310,12 @@ describe("company selection across browser tabs", () => {
         })
     );
 
-    await act(async () => {
-      window.dispatchEvent(new Event("blur"));
-      window.dispatchEvent(new Event("focus"));
-    });
+    await returnFromAnotherBrowserTab();
     expect(result.current.selectedCompany?.id).toBe(1);
-    expect(result.current.isCheckingCompanySession).toBe(true);
+    expect(result.current.isCheckingCompanySession).toBe(false);
     expect(result.current.isLoading).toBe(false);
     await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(true), { timeout: 1200 });
 
     await act(async () => {
       resolveSession({ companyId: 1 });
@@ -315,6 +323,22 @@ describe("company selection across browser tabs", () => {
     await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(false));
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not wait to mask records when another tab sends a company-switch hint", async () => {
+    const { result } = await renderOnCompanyOne();
+    let resolveSession!: (value: { companyId: number }) => void;
+    harness.fetchSessionCompany.mockImplementationOnce(
+      () => new Promise<{ companyId: number }>((resolve) => { resolveSession = resolve; })
+    );
+
+    await act(async () => { otherTabSwitchedTo(2); });
+    expect(result.current.isCheckingCompanySession).toBe(true);
+    expect(result.current.selectedCompany?.id).toBe(1);
+
+    await act(async () => { resolveSession({ companyId: 2 }); });
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    expect(result.current.isCheckingCompanySession).toBe(false);
   });
 
   it("does not reveal an unassigned session company", async () => {

@@ -137,6 +137,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isSyncingCompany, setIsSyncingCompany] = useState(false);
   const [externalSessionState, setExternalSessionState] = useState<"idle" | "checking" | "switching">("idle");
+  // A fast same-company tab resume must not flash a blocking verification screen.
+  // Keep reads and writes fenced immediately; only show the cover if the
+  // authoritative check takes long enough to affect the operator.
+  const [showResumeVerificationCover, setShowResumeVerificationCover] = useState(false);
+  const resumeVerificationCoverTimer = useRef<number | null>(null);
   const [initialSyncAttempt, setInitialSyncAttempt] = useState(0);
   const selectedCompanyRef = useRef<Company | null>(null);
   const lastSyncedCompanyId = useRef<number | null>(null);
@@ -347,17 +352,48 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     refreshRealtimeSessionScope();
   }, [commitCompanySelection]);
 
-  const beginExternalSessionVerification = useCallback((signal: CompanySessionSignal) => {
-    beginCompanyCacheTransition();
-    if (signal === "selection") announceCompanyWorkspaceTransition();
-    setExternalSessionState((current) =>
-      signal === "selection" || current === "switching" ? "switching" : "checking"
-    );
+  const clearResumeVerificationCoverTimer = useCallback(() => {
+    if (resumeVerificationCoverTimer.current !== null) {
+      window.clearTimeout(resumeVerificationCoverTimer.current);
+      resumeVerificationCoverTimer.current = null;
+    }
   }, []);
+
+  useEffect(() => () => clearResumeVerificationCoverTimer(), [clearResumeVerificationCoverTimer]);
+
+  const beginExternalSessionVerification = useCallback((signal: CompanySessionSignal | "hint") => {
+    // The cache fence is immediate even when the cover is delayed: a response
+    // or submitted voucher must never cross an unverified company session.
+    beginCompanyCacheTransition();
+    if (signal === "selection") {
+      // This is an authoritative mismatch, not merely another tab's hint.
+      clearResumeVerificationCoverTimer();
+      setShowResumeVerificationCover(false);
+      announceCompanyWorkspaceTransition();
+      setExternalSessionState("switching");
+      return;
+    }
+    if (signal === "hint") {
+      // A confirmed cross-tab commit notification might mean a new company.
+      // Hide old records now, but retain drafts until the server confirms it.
+      clearResumeVerificationCoverTimer();
+      setShowResumeVerificationCover(true);
+    } else if (resumeVerificationCoverTimer.current === null) {
+      // Foreground-only tab returns usually verify in milliseconds. Avoid the
+      // repeated full-screen flash; still fail closed on slow or failed probes.
+      resumeVerificationCoverTimer.current = window.setTimeout(() => {
+        resumeVerificationCoverTimer.current = null;
+        setShowResumeVerificationCover(true);
+      }, 350);
+    }
+    setExternalSessionState((current) => current === "switching" ? current : "checking");
+  }, [clearResumeVerificationCoverTimer]);
   const finishExternalSessionVerification = useCallback(() => {
+    clearResumeVerificationCoverTimer();
+    setShowResumeVerificationCover(false);
     resumeCompanyCacheScope();
     setExternalSessionState("idle");
-  }, []);
+  }, [clearResumeVerificationCoverTimer]);
   const rememberExternalSessionRevision = useCallback((companyId: number, revision?: string | null) => {
     rememberVerifiedServerCompanyRevision(companyId, revision);
   }, []);
@@ -383,7 +419,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         // Pending local changes stay covered rather than unmounting forms.
         // A confirmed external company mismatch still hard-gates the workspace.
         isCheckingCompanySession:
-          externalSessionState !== "switching" && (externalSessionState === "checking" || isSyncingCompany),
+          isSyncingCompany || (externalSessionState === "checking" && showResumeVerificationCover),
         error: companyAssignmentsError instanceof Error ? companyAssignmentsError : null,
         selectCompany,
       }}
