@@ -188,44 +188,44 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       const isInitialActivation = selectedCompanyRef.current === null;
       if (!isInitialActivation) beginCompanyCacheTransition();
       try {
-      await cancelCompanySessionQueries(queryClient);
+        await cancelCompanySessionQueries(queryClient);
 
-      if (options.offline) {
+        if (options.offline) {
+          removeCompanySessionQueries(queryClient, {
+            resetAuthenticatedUser: !isInitialActivation,
+          });
+          commitCompanySelection(company, { prefetch: false, serverSynced: false });
+          return true;
+        }
+
+        const ok = await switchCompanyOnServer(company.id);
+        if (!ok) {
+          void queryClient.invalidateQueries({
+            predicate: (query) => isCompanySessionQueryKey(query.queryKey),
+            refetchType: "active",
+          });
+          return false;
+        }
+
         removeCompanySessionQueries(queryClient, {
           resetAuthenticatedUser: !isInitialActivation,
         });
-        commitCompanySelection(company, { prefetch: false, serverSynced: false });
+        commitCompanySelection(company, { prefetch: true, serverSynced: true });
+        publishCompanySessionCommit(company.id);
+        // The WebSocket's company/user scope is captured when it connects. Since
+        // company switching is now SPA-native (no page reload), replace the socket
+        // after the server session changes so realtime events follow this company.
+        refreshRealtimeSessionScope();
+
+        if (isInitialActivation) {
+          void queryClient.invalidateQueries({
+            queryKey: ["/api/auth/me"],
+            exact: true,
+            refetchType: "active",
+          });
+        }
+
         return true;
-      }
-
-      const ok = await switchCompanyOnServer(company.id);
-      if (!ok) {
-        void queryClient.invalidateQueries({
-          predicate: (query) => isCompanySessionQueryKey(query.queryKey),
-          refetchType: "active",
-        });
-        return false;
-      }
-
-      removeCompanySessionQueries(queryClient, {
-        resetAuthenticatedUser: !isInitialActivation,
-      });
-      commitCompanySelection(company, { prefetch: true, serverSynced: true });
-      publishCompanySessionCommit(company.id);
-      // The WebSocket's company/user scope is captured when it connects. Since
-      // company switching is now SPA-native (no page reload), replace the socket
-      // after the server session changes so realtime events follow this company.
-      refreshRealtimeSessionScope();
-
-      if (isInitialActivation) {
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/auth/me"],
-          exact: true,
-          refetchType: "active",
-        });
-      }
-
-      return true;
       } finally {
         // A denied switch or transport error must reopen the existing
         // company's read scope without exposing a stale in-flight response.
