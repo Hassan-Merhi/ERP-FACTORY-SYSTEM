@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./AdvancesTab.tsx to keep that module under the source-size cap.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -181,20 +182,14 @@ export function AdvancesTabDialogSection({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cash Account</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-advance-cash">
-                          <SelectValue placeholder="Select account" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {cashAccounts.map((acc) => (
-                          <SelectItem key={acc.id} value={String(acc.id)}>
-                            {acc.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <UnifiedAccountPicker
+                      options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      placeholder="Select account"
+                      testId="select-advance-cash"
+                      ariaLabel="Cash account"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
