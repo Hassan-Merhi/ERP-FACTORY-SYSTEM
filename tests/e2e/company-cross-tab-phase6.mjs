@@ -76,6 +76,7 @@ async function waitForCompany(page, id) {
   );
 }
 async function chooseCompany(page, id) {
+  await page.bringToFront();
   await page.waitForSelector('[data-testid="button-company-selector"]', { visible: true, timeout: timeoutMs });
   await page.click('[data-testid="button-company-selector"]');
   const option = `[data-testid="company-option-${id}"]`;
@@ -84,6 +85,7 @@ async function chooseCompany(page, id) {
   await waitForCompany(page, id);
 }
 async function login(page) {
+  await page.bringToFront();
   await page.goto(`${baseUrl}/login`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
   await page.waitForSelector('[data-testid="input-username"]', { visible: true, timeout: timeoutMs });
   await page.type('[data-testid="input-username"]', username);
@@ -151,6 +153,7 @@ try {
 
   const factorySession = await session(b);
   await record("Company A read finishing late cannot be used under Company B", async () => {
+    await b.bringToFront();
     let delayedRequest;
     await b.setRequestInterception(true);
     const onRequest = (request) => {
