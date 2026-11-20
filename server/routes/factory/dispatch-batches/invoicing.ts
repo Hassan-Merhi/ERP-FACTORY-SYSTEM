@@ -13,6 +13,7 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { sql, eq, and } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { sumMoney, toMoney } from "../../../lib/money";
+import { sqlArray } from "../../../lib/sqlArray";
 import {
   customerDispatchBatches,
   customerDispatchTruckRides,
@@ -381,10 +382,10 @@ export function registerDispatchInvoiceRoutes(app: Express) {
         }
 
         // 10. Mark all scanned bales as SOLD
-        const baleIds = scans.map((s) => s.bale_id);
+        const baleIds = scans.map((s) => Number(s.bale_id));
         await tx.execute(sql`
           UPDATE factory_bales SET status = 'SOLD', updated_at = now()
-          WHERE id = ANY(${baleIds}::int[])
+          WHERE id = ANY(${sqlArray(baleIds)})
         `);
 
         // 11. Post to customerBalances (one row = one invoice)

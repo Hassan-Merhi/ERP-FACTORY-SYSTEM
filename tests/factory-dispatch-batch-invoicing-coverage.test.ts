@@ -193,19 +193,14 @@ describe("dispatch batch invoice generation refusals", () => {
   });
 });
 
-describe("dispatch batch invoice generation (pinned bug)", () => {
-  // BUG (invoicing.ts:387): `ANY(${baleIds}::int[])` makes drizzle expand the
-  // JS array into `($1, $2, ...)`, a row, which PostgreSQL cannot cast to
-  // int[] ("cannot cast type record/integer to integer[]"). Every batch that
-  // reaches step 10 therefore fails with 500 and the whole invoice rolls back,
-  // so no dispatch batch can be invoiced. Fix: bind the array as one parameter,
-  // e.g. `ANY(${sql.param(baleIds)}::int[])` or drizzle's inArray(). Until then
-  // this pins that the failure leaves the batch, bales, proforma, invoice
-  // sequence and customer balance untouched.
+describe("dispatch batch invoice generation", () => {
+  // Regression: invoicing.ts once bound the scanned bale ids as `ANY(${ids}::int[])`,
+  // which drizzle expands into a row PostgreSQL cannot cast, so every scanned batch
+  // failed with 500 and nothing could be invoiced. The ids are now bound with sqlArray.
   it.each([
     ["one bale (USD, no proforma)", "USD", false, 1],
     ["several bales grouped by article (EUR, with proforma)", "EUR", true, 3],
-  ])("fails for %s and writes nothing", async (_label, currency, withProforma, count) => {
+  ])("invoices %s", async (_label, currency, withProforma, count) => {
     await withFactoryWorld(async (w) => {
       const b = await batch(w, {
         currency,
@@ -222,26 +217,38 @@ describe("dispatch batch invoice generation (pinned bug)", () => {
       const bales: number[] = [];
       for (let i = 0; i < count; i += 1) bales.push(await scan(w, b, articles[i], i === 1 ? "10.50" : "10"));
 
-      const res = await generate(w, b.batchId, { invoiceDate: "2026-03-02" });
-      expect(res.status).toBe(500);
-      expect(res.body.message).toMatch(/UPDATE factory_bales SET status = 'SOLD'/);
-
-      expect(await orders(w)).toEqual({ orders: 0, balances: 0 });
-      const statuses = await w.q(`SELECT DISTINCT status FROM factory_bales WHERE id = ANY($1::int[])`, [bales]);
-      expect(statuses.map((s) => s.status)).toEqual(["LOADED"]);
-      const [row] = await w.q(
-        `SELECT b.status, r.status AS ride,
-                (SELECT count(*)::int FROM customer_invoice_sequences WHERE company_id = $2) AS seq
-           FROM customer_dispatch_batches b JOIN customer_dispatch_truck_rides r ON r.batch_id = b.id WHERE b.id = $1`,
-        [b.batchId, w.companyId]
-      );
-      expect(row.ride).toBe("DISPATCHED");
-      expect(row.seq).toBe(0);
-      expect(row.status).not.toBe("INVOICED");
-      if (b.proformaId) {
-        const [pf] = await w.q(`SELECT status FROM customer_proformas WHERE id = $1`, [b.proformaId]);
-        expect(pf.status).toBe("ACTIVE");
+      if (currency !== "USD") {
+        // A non-USD invoice needs a confirmed factory rate; without one it is refused and writes nothing.
+        const unrated = await generate(w, b.batchId, { invoiceDate: "2026-03-02" });
+        expect(unrated.status).toBe(409);
+        expect(unrated.body.code).toBe("FACTORY_INVOICE_RATE_UNCONFIRMED");
+        expect(await orders(w)).toEqual({ orders: 0, balances: 0 });
+        await w.q(
+          `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source)
+           VALUES ($1, $2, '1.08', '2020-01-01', 'manual')`,
+          [w.companyId, currency]
+        );
       }
+
+      const res = await generate(w, b.batchId, { invoiceDate: "2026-03-02" });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body.ok).toBe(true);
+
+      expect(await orders(w)).toEqual({ orders: 1, balances: 1 });
+      const statuses = await w.q(`SELECT DISTINCT status FROM factory_bales WHERE id = ANY($1::int[])`, [bales]);
+      expect(statuses.map((s) => s.status)).toEqual(["SOLD"]);
+      const [row] = await w.q(
+        `SELECT b.status, r.status AS ride, b.final_order_id
+           FROM customer_dispatch_batches b JOIN customer_dispatch_truck_rides r ON r.batch_id = b.id WHERE b.id = $1`,
+        [b.batchId]
+      );
+      expect(row.status).toBe("INVOICED");
+      expect(row.ride).toBe("COMPLETED");
+      expect(row.final_order_id).not.toBeNull();
+
+      const again = await generate(w, b.batchId, { invoiceDate: "2026-03-02" });
+      expect(again.body.message).toBe("Batch already invoiced");
+      expect(await orders(w)).toEqual({ orders: 1, balances: 1 });
     });
   });
 });
