@@ -80,11 +80,10 @@ describe("order bale scan, locked step", () => {
       const { orderId, bales } = await loadingWithBales(w, ["10"]);
       const other = await loadingWithBales(w, ["11"]);
       expect((await scan(w, orderId, "NO-SUCH-BALE")).status).toBe(404);
-      // BUG (reported): reservedInThisOrder compares cob.bale_id with an
-      // unqualified "id" that resolves to cob.id, so a bale already reserved
-      // in this order is reported as reserved for another order.
+      // reservedInThisOrder correlates on the outer factory_bales.id, so a bale
+      // already reserved in this order is reported as such, not as another order's.
       expect((await scan(w, orderId, bales[0].reference)).body.message).toBe(
-        `Bale ${bales[0].reference} is reserved for another loading order`
+        `${bales[0].reference} is already loaded in this order`
       );
       expect((await scan(w, orderId, other.bales[0].reference)).body.message).toMatch(
         /reserved for another loading order/
@@ -192,6 +191,33 @@ describe("order bale scan, locked step", () => {
       expect(x.price_used).toBe("0.00");
       const statuses = await w.q(`SELECT DISTINCT status FROM factory_bales WHERE company_id = $1`, [w.companyId]);
       expect(statuses).toEqual([{ status: "IN_STOCK" }]);
+    });
+  });
+
+  it("re-adds a bale removed from this order without the overload confirmation", async () => {
+    await withFactoryWorld(async (w) => {
+      const proformaId = await proforma(w, [{ code: "ART-A", qty: 1 }]);
+      const orderId = await order(w, "LOADING", proformaId);
+      await inStock(w, `${w.tag}-R1`);
+      const removedBale = await inStock(w, `${w.tag}-R2`);
+      const otherBale = await inStock(w, `${w.tag}-R3`);
+      expect((await scan(w, orderId, `${w.tag}-R1`)).status).toBe(200);
+      // The removal row's own id is far from any bale id, so only the outer
+      // factory_bales.id can make the EXISTS check match.
+      await w.q(
+        `INSERT INTO customer_order_bale_removals (id, order_id, bale_id, reference_number, article_code)
+         VALUES ($1, $2, $3, $4, 'ART-A')`,
+        [2_000_000_000 + Math.floor(Math.random() * 100_000_000), orderId, removedBale, `${w.tag}-R2`]
+      );
+
+      const overload = await scan(w, orderId, `${w.tag}-R3`);
+      expect(overload.status).toBe(400);
+      expect(overload.body).toMatchObject({ confirmationRequired: true, confirmationType: "overload" });
+
+      expect((await scan(w, orderId, `${w.tag}-R2`)).status).toBe(200);
+      const rows = await w.q(`SELECT bale_id FROM customer_order_bales WHERE order_id = $1 ORDER BY id`, [orderId]);
+      expect(rows.map((r) => r.bale_id)).not.toContain(otherBale);
+      expect(rows.map((r) => r.bale_id)).toContain(removedBale);
     });
   });
 });

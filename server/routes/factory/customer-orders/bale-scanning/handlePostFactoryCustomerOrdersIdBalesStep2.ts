@@ -153,17 +153,20 @@ export async function handlePostFactoryCustomerOrdersIdBalesStep2(
                 AND fbp.company_id = ${companyId}
               LIMIT 1
             )`,
+        // Drizzle renders ${factoryBales.id} as a bare "id" in a single-table select
+        // list, which inside these subqueries would bind to cob.id / cobr.id, so the
+        // outer bale id is named explicitly.
         reservedInThisOrder: sql<boolean>`EXISTS (
               SELECT 1
               FROM customer_order_bales cob
               WHERE cob.order_id = ${orderId}
-                AND cob.bale_id = ${factoryBales.id}
+                AND cob.bale_id = ${sql.raw("factory_bales.id")}
             )`,
         removedFromThisOrder: sql<boolean>`EXISTS (
               SELECT 1
               FROM ${customerOrderBaleRemovals} cobr
               WHERE cobr.order_id = ${orderId}
-                AND cobr.bale_id = ${factoryBales.id}
+                AND cobr.bale_id = ${sql.raw("factory_bales.id")}
             )`,
       })
       .from(factoryBales)
