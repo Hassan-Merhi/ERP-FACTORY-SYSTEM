@@ -3,6 +3,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { requireAuth, requireRole } from "../auth";
 import { pool } from "../db";
+import { requireExportAccess } from "../lib/permissionMiddleware";
 import { logger } from "../lib/logger";
 import { storage } from "../storage";
 import {
@@ -21,6 +22,8 @@ import { registerWhatsAppRoutesPart3 } from "./registerWhatsAppRoutesPart3";
 // reads too, like the rest of the export center (requireRole always admits
 // Developer; it is listed for the route manifest).
 const settingsAdmins = requireRole("Admin", "Developer", "Owner");
+// Sending through the company WhatsApp account needs the named export permission.
+const whatsappSend = requireExportAccess("exp_whatsapp_send");
 
 export function registerWhatsAppRoutesPart1(app: Express) {
   // ── Settings (singleton row id=1) ──────────────────────────────────────────
@@ -115,7 +118,7 @@ export function registerWhatsAppRoutesPart1(app: Express) {
 
   // ── Send net-position Excel manually ───────────────────────────────────────
 
-  app.post("/api/whatsapp/send-net-position", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp/send-net-position", requireAuth, whatsappSend, async (req, res) => {
     const _t = Date.now();
     const _uid = req.session.userId;
     const _cid = req.session.currentCompanyId;

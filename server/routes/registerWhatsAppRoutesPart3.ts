@@ -3,6 +3,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { requireAuth, requireRole } from "../auth";
 import { pool } from "../db";
+import { requireExportAccess } from "../lib/permissionMiddleware";
 import {
   fetchGreenApiChats,
   getPosWaSettings,
@@ -18,9 +19,13 @@ import { maskGreenApiToken, submittedGreenApiToken } from "../services/whatsappS
 // reads too, like the rest of the export center (requireRole always admits
 // Developer; it is listed for the route manifest).
 const settingsAdmins = requireRole("Admin", "Developer", "Owner");
+// The recipient list decides which chats the company account sends to: reading
+// and changing it needs the WhatsApp send permission. Chats and instance state
+// stay readable by any signed-in user (many pickers use them).
+const whatsappSend = requireExportAccess("exp_whatsapp_send");
 
 export function registerWhatsAppRoutesPart3(app: Express) {
-  app.get("/api/whatsapp/recipients", requireAuth, async (req, res) => {
+  app.get("/api/whatsapp/recipients", requireAuth, whatsappSend, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -42,7 +47,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.post("/api/whatsapp/recipients", requireAuth, async (req, res) => {
+  app.post("/api/whatsapp/recipients", requireAuth, whatsappSend, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -67,7 +72,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.put("/api/whatsapp/recipients/:id", requireAuth, async (req, res) => {
+  app.put("/api/whatsapp/recipients/:id", requireAuth, whatsappSend, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -89,7 +94,7 @@ export function registerWhatsAppRoutesPart3(app: Express) {
     }
   });
 
-  app.delete("/api/whatsapp/recipients/:id", requireAuth, async (req, res) => {
+  app.delete("/api/whatsapp/recipients/:id", requireAuth, whatsappSend, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
