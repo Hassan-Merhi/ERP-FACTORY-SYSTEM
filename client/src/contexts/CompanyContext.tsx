@@ -7,7 +7,7 @@ import {
   removeCompanySessionQueries,
 } from "@/lib/companyQueryScope";
 import { createCompanySwitchQueue, type CompanySwitchQueue } from "@/lib/companySwitchQueue";
-import { publishCompanySessionCommit } from "@/lib/companySessionSync";
+import { publishCompanySessionCommit, type CompanySessionSignal } from "@/lib/companySessionSync";
 import { useCompanySessionFollower } from "@/hooks/useCompanySessionFollower";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { stableReferenceQueryPolicy } from "@/lib/queryPolicies";
@@ -65,6 +65,8 @@ interface CompanyContextType {
   selectedCompany: Company | null;
   companies: Company[];
   isLoading: boolean;
+  /** True while checking a resumed tab, without discarding unchanged forms. */
+  isCheckingCompanySession: boolean;
   error: Error | null;
   selectCompany: (company: Company, options?: CompanySelectionOptions) => Promise<boolean>;
 }
@@ -116,7 +118,7 @@ async function switchCompanyOnServer(companyId: number): Promise<boolean> {
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isSyncingCompany, setIsSyncingCompany] = useState(false);
-  const [isVerifyingExternalSession, setIsVerifyingExternalSession] = useState(false);
+  const [externalSessionState, setExternalSessionState] = useState<"idle" | "checking" | "switching">("idle");
   const [initialSyncAttempt, setInitialSyncAttempt] = useState(0);
   const selectedCompanyRef = useRef<Company | null>(null);
   const lastSyncedCompanyId = useRef<number | null>(null);
@@ -309,8 +311,12 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     refreshRealtimeSessionScope();
   }, [commitCompanySelection]);
 
-  const beginExternalSessionVerification = useCallback(() => setIsVerifyingExternalSession(true), []);
-  const finishExternalSessionVerification = useCallback(() => setIsVerifyingExternalSession(false), []);
+  const beginExternalSessionVerification = useCallback((signal: CompanySessionSignal) => {
+    setExternalSessionState((current) =>
+      signal === "selection" || current === "switching" ? "switching" : "checking"
+    );
+  }, []);
+  const finishExternalSessionVerification = useCallback(() => setExternalSessionState("idle"), []);
 
   useCompanySessionFollower({
     companiesRef,
@@ -328,7 +334,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
         selectedCompany,
         companies,
         isLoading:
-          isLoading || isSyncingCompany || isVerifyingExternalSession || (companies.length > 0 && !selectedCompany),
+          isLoading || isSyncingCompany || externalSessionState === "switching" || (companies.length > 0 && !selectedCompany),
+        isCheckingCompanySession: externalSessionState === "checking",
         error: companyAssignmentsError instanceof Error ? companyAssignmentsError : null,
         selectCompany,
       }}
