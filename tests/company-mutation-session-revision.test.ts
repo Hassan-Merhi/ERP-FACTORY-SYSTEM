@@ -116,6 +116,67 @@ describe("Phase 5 server company mutation scope", () => {
     expect(passkeyLogin).toContain("req.session.companyRevision = randomUUID()");
   });
 
+  it("reloads the persisted session before accepting a stamped write", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      // Simulate a request whose middleware loaded Company A just before
+      // another tab committed Company B to the shared session store.
+      const loadedSession = {
+        userId: "fixture-user",
+        currentCompanyId: 1,
+        companyRevision: "revision-A",
+        csrfToken: csrf,
+        reload(callback: (error?: Error) => void) {
+          this.currentCompanyId = 2;
+          this.companyRevision = revision;
+          callback();
+        },
+      };
+      Object.defineProperty(req, "session", { configurable: true, value: loadedSession });
+      next();
+    });
+    app.use(browserMutationFailClosedBoundary);
+    app.post("/api/vouchers", (_req, res) => res.json({ ok: true }));
+
+    const response = await request(app)
+      .post("/api/vouchers")
+      .set("X-Expected-Company-Id", "1")
+      .set("X-Expected-Company-Revision", "revision-A")
+      .send({ amount: 100 });
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("COMPANY_SESSION_CHANGED");
+  });
+
+  it("fails closed if the persisted company session cannot be reloaded", async () => {
+    const app = express();
+    app.use((req, _res, next) => {
+      Object.defineProperty(req, "session", {
+        configurable: true,
+        value: {
+          userId: "fixture-user",
+          currentCompanyId: 1,
+          companyRevision: "revision-A",
+          reload(callback: (error?: Error) => void) {
+            callback(new Error("store unavailable"));
+          },
+        },
+      });
+      next();
+    });
+    app.use(browserMutationFailClosedBoundary);
+    app.post("/api/vouchers", (_req, res) => res.json({ ok: true }));
+
+    const response = await request(app)
+      .post("/api/vouchers")
+      .set("X-Expected-Company-Id", "1")
+      .set("X-Expected-Company-Revision", "revision-A");
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe("COMPANY_SESSION_UNVERIFIED");
+  });
+
   it("does not allow a valid company ID to bypass a mismatched revision", () => {
     const result = verifyExpectedCompanyMutation({
       method: "POST",
