@@ -6,6 +6,7 @@ import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { errorStatus, getErrorMessage, translateDatabaseError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { resultRows } from "../../lib/queryResult";
+import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 import {
   isRealBonusDate,
   parseTargetBonusPaymentCommand,
@@ -60,6 +61,7 @@ export function registerFactoryTargetBonusPaymentRoutes(app: Express): void {
           FROM ledger_accounts
           WHERE company_id = ${companyId} AND deleted_at IS NULL AND active = TRUE
             AND account_type IN ('Cash','Bank')
+             AND ${ledgerPostingLeafCondition(companyId)}
           ORDER BY account_type, name, id
         `);
         return res.json({ accounts: resultRows(accounts), currency: "USD" });
