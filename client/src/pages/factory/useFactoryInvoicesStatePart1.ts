@@ -23,6 +23,7 @@ const INVOICE_OPTIONAL_COLUMNS: { key: InvoiceColumnKey; label: string }[] = [
   { key: "proforma", label: "Proforma" },
   { key: "container", label: "Container" },
   { key: "bookingInfo", label: "Booking Info" },
+  { key: "agent", label: "Agent" },
   { key: "destination", label: "Destination" },
   { key: "notes", label: "Notes" },
   { key: "date", label: "Date" },
@@ -113,7 +114,7 @@ export function useFactoryInvoicesStatePart1() {
   const allowedInvoiceColumns = INVOICE_OPTIONAL_COLUMNS.filter(
     ({ key }) =>
       (key !== "proforma" || !hideProformaCol) &&
-      (key !== "bookingInfo" || showBookingInfo) &&
+      (key !== "bookingInfo" && key !== "agent" || showBookingInfo) &&
       (key !== "total" || !hideTotalsUsd)
   );
   const isColumnVisible = (key: InvoiceColumnKey): boolean =>
