@@ -142,20 +142,26 @@ describe("company selection across browser tabs", () => {
     expect(harness.apiRequest).not.toHaveBeenCalled();
   });
 
-  it("ignores other keys, the current company and companies the user is not assigned to", async () => {
+  it("ignores unrelated events and refuses unassigned session companies", async () => {
     const { result } = await renderOnCompanyOne();
 
     await act(async () => {
       window.dispatchEvent(new StorageEvent("storage", { key: "language", newValue: "2" }));
-      window.dispatchEvent(new StorageEvent("storage", { key: "selectedCompanyId", newValue: "1" }));
       window.dispatchEvent(new StorageEvent("storage", { key: "selectedCompanyId", newValue: null }));
     });
     expect(harness.fetchSessionCompany).not.toHaveBeenCalled();
 
+    // Even a hint that names the currently displayed company should trigger
+    // verification, because a server switch may not have changed the key.
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "selectedCompanyId", newValue: "1" }));
+    });
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalled());
+
     await act(async () => {
       otherTabSwitchedTo(99);
     });
-    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalled());
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(2));
 
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(harness.apiRequest).not.toHaveBeenCalled();
