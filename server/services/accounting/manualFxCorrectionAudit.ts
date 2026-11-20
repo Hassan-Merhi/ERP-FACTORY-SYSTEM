@@ -68,11 +68,9 @@ function targetKey(line: FxRepairAuditLine): string | null {
   return null;
 }
 function isFxCounter(line: FxRepairAuditLine): boolean {
-  return (
-    line.accountCode === "FX-REVALUATION" ||
-    line.accountCode === "FXREVGAI" ||
-    line.accountName?.trim().toLowerCase() === "fx revaluation gain/loss"
-  );
+  // A known ledger code is required: a descriptive account name is not
+  // sufficient identity to authorize a financial correction.
+  return line.accountCode === "FX-REVALUATION" || line.accountCode === "FXREVGAI";
 }
 function lineIdentity(line: FxRepairAuditLine, mirror = false): string {
   return JSON.stringify([
