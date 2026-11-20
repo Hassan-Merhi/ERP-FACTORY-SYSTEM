@@ -2,11 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   _testOnly_resetCompanyCacheScope,
   activateCompanyCacheScope,
+  addCompanyMutationHeaders,
+  assertCompanyMutationSnapshot,
   assertCompanyReadSnapshot,
   beginCompanyCacheTransition,
   captureCompanyReadSnapshot,
+  captureCompanyMutationSnapshot,
   companyReadCacheIdentity,
   isCompanyOwnedApiRead,
+  isCompanyOwnedApiMutation,
+  rememberVerifiedServerCompanyRevision,
   resumeCompanyCacheScope,
 } from "../../client/src/lib/companyCacheScope";
 import { registerBandwidthCacheInvalidator } from "../../client/src/lib/bandwidthInvalidationPolicy";
@@ -87,6 +92,71 @@ describe("company-scoped browser cache identity", () => {
     resumeCompanyCacheScope();
     expect(buildRequestKey(url, headers)).not.toBe(stormB);
     expect(fetchQueryCacheKey(url, ["page"])).not.toBe(pageB);
+  });
+
+  it("stamps only verified company-owned writes with an exact company and revision", () => {
+    activateCompanyCacheScope(4);
+    expect(() => captureCompanyMutationSnapshot("POST", "/api/vouchers")).toThrow(/Company session changed/);
+    rememberVerifiedServerCompanyRevision(4, "server-revision-A");
+    const scope = captureCompanyMutationSnapshot("POST", "/api/vouchers");
+    expect(scope).toMatchObject({ companyId: 4, serverRevision: "server-revision-A" });
+    const headers = new Headers();
+    addCompanyMutationHeaders(headers, scope);
+    expect(headers.get("X-Expected-Company-Id")).toBe("4");
+    expect(headers.get("X-Expected-Company-Revision")).toBe("server-revision-A");
+
+    expect(captureCompanyMutationSnapshot("POST", "/api/auth/set-company")).toBeNull();
+    expect(captureCompanyMutationSnapshot("PUT", "/api/user-preferences")).toBeNull();
+    expect(isCompanyOwnedApiMutation("POST", "/api/factory/vouchers")).toBe(true);
+  });
+
+  it("blocks a prepared draft immediately when another tab changes the company", () => {
+    activateCompanyCacheScope(4);
+    rememberVerifiedServerCompanyRevision(4, "server-revision-A");
+    const oldDraft = captureCompanyMutationSnapshot("POST", "/api/vouchers");
+    beginCompanyCacheTransition();
+    expect(() => assertCompanyMutationSnapshot(oldDraft)).toThrow();
+
+    activateCompanyCacheScope(5);
+    rememberVerifiedServerCompanyRevision(5, "server-revision-B");
+    const newDraft = captureCompanyMutationSnapshot("POST", "/api/vouchers");
+    expect(newDraft?.serverRevision).toBe("server-revision-B");
+    expect(() => assertCompanyMutationSnapshot(oldDraft)).toThrow();
+    expect(() => assertCompanyMutationSnapshot(newDraft)).not.toThrow();
+  });
+
+  it("invalidates old writes even if the active company ID cycles back to the same value", () => {
+    activateCompanyCacheScope(4);
+    rememberVerifiedServerCompanyRevision(4, "visit-A");
+    const oldDraft = captureCompanyMutationSnapshot("PATCH", "/api/vouchers/12");
+
+    beginCompanyCacheTransition();
+    activateCompanyCacheScope(5);
+    rememberVerifiedServerCompanyRevision(5, "visit-B");
+    beginCompanyCacheTransition();
+    activateCompanyCacheScope(4);
+    rememberVerifiedServerCompanyRevision(4, "visit-C");
+
+    expect(() => assertCompanyMutationSnapshot(oldDraft)).toThrow();
+    expect(captureCompanyMutationSnapshot("PATCH", "/api/vouchers/12")?.serverRevision).toBe("visit-C");
+  });
+
+  it("preserves original scope headers when a stale queued operation is retried", () => {
+    activateCompanyCacheScope(4);
+    rememberVerifiedServerCompanyRevision(4, "visit-A");
+    const oldDraft = captureCompanyMutationSnapshot("POST", "/api/vouchers");
+
+    const headers = new Headers({
+      "X-Expected-Company-Id": "4",
+      "X-Expected-Company-Revision": "visit-A",
+    });
+    beginCompanyCacheTransition();
+    activateCompanyCacheScope(5);
+    rememberVerifiedServerCompanyRevision(5, "visit-B");
+    addCompanyMutationHeaders(headers, captureCompanyMutationSnapshot("POST", "/api/vouchers"));
+    expect(headers.get("X-Expected-Company-Id")).toBe("4");
+    expect(headers.get("X-Expected-Company-Revision")).toBe("visit-A");
+    expect(() => assertCompanyMutationSnapshot(oldDraft)).toThrow();
   });
 
   it("allows auth/session probes during a switch but blocks company-owned business reads", () => {
