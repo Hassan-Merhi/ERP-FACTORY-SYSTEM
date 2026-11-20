@@ -2,7 +2,8 @@
  * Ground Scan routes (server/routes/factory/factoryGroundScanRoutes.ts) over
  * HTTP in one rolled-back factory company per test: single scans with and
  * without a location, the missing-reference, non-bale-product and duplicate
- * refusals, bulk scans (empty, blank, excluded, alias fields, duplicate), the
+ * refusals, bulk scans (empty, blank, excluded, alias fields, duplicate, and
+ * unlocated duplicates within a request and against stored rows), the
  * live status read, the scoped deletes including another company's scan id, and
  * the refusal of another company's (or an invalid) location id.
  */
@@ -127,6 +128,42 @@ describe("ground scan single and bulk scans", () => {
 
       const unlocated = await w.agent.post(`${BASE}/bulk`).send({ items: [{ refCode: "c-1" }] });
       expect(unlocated.body).toEqual({ inserted: 1, skipped: 0 });
+    }));
+
+  it("inserts an unlocated duplicate once and skips an unlocated reference that already exists", () =>
+    withFactoryWorld(async (w) => {
+      // The unique index treats a NULL location as distinct, so the route itself
+      // must de-duplicate unlocated scans within the request and against stored rows.
+      const unlocatedCount = async () => {
+        const [row] = await w.q(
+          `SELECT count(*)::int AS n FROM factory_ground_scan_items
+            WHERE company_id = $1 AND location_id IS NULL AND reference_number = 'U-DUP'`,
+          [w.companyId]
+        );
+        return row.n;
+      };
+      const first = await w.agent
+        .post(`${BASE}/bulk`)
+        .send({ items: [{ refCode: "u-dup" }, { refCode: "U-DUP" }, { refCode: " u-dup " }] });
+      expect(first.body).toEqual({ inserted: 1, skipped: 2 });
+      expect(await unlocatedCount()).toBe(1);
+
+      const again = await w.agent
+        .post(`${BASE}/bulk`)
+        .send({ locationId: "all", items: [{ refCode: "U-DUP" }, { refCode: "u-new" }] });
+      expect(again.body).toEqual({ inserted: 1, skipped: 1 });
+      expect(await unlocatedCount()).toBe(1);
+      expect(await scans(w)).toEqual([
+        { reference_number: "U-DUP", location_id: null },
+        { reference_number: "U-NEW", location_id: null },
+      ]);
+
+      // A located scan of the same reference is a different key and still inserts.
+      const located = await w.agent
+        .post(`${BASE}/bulk`)
+        .send({ locationId: String(w.locationId), items: [{ refCode: "U-DUP" }] });
+      expect(located.body).toEqual({ inserted: 1, skipped: 0 });
+      expect(await unlocatedCount()).toBe(1);
     }));
 
   it("counts an item the database rejects as skipped", () =>

@@ -167,6 +167,11 @@ export function registerFactoryGroundScanRoutes(app: Express) {
 
         let inserted = 0;
         let skipped = 0;
+        // The unique key (company_id, location_id, reference_number) treats a NULL
+        // location_id as distinct, so ON CONFLICT never fires for unlocated scans.
+        // De-duplicate those within the request and against existing rows here,
+        // using the same NULL-safe check as the single-scan route.
+        const seenUnlocated = new Set<string>();
         for (const item of items) {
           const ref = String(item.refCode || item.reference_number || "")
             .trim()
@@ -183,6 +188,21 @@ export function registerFactoryGroundScanRoutes(app: Express) {
             if (excluded.rowCount) {
               skipped++;
               continue;
+            }
+            if (locVal === null) {
+              if (seenUnlocated.has(ref)) {
+                skipped++;
+                continue;
+              }
+              seenUnlocated.add(ref);
+              const existing = await pool.query(
+                `SELECT id FROM factory_ground_scan_items WHERE company_id=$1 AND location_id IS NULL AND reference_number=$2`,
+                [companyId, ref]
+              );
+              if (existing.rowCount) {
+                skipped++;
+                continue;
+              }
             }
             const insert = await pool.query(
               `INSERT INTO factory_ground_scan_items
