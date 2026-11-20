@@ -166,6 +166,12 @@ export function registerFactoryCustomerProformaBulkPricingRoutesPart1(app: Expre
 
         if (id === null) return res.status(400).json({ message: "Invalid id" });
 
+        const [proforma] = await db
+          .select({ id: customerProformas.id })
+          .from(customerProformas)
+          .where(and(eq(customerProformas.id, id), eq(customerProformas.companyId, companyId)));
+        if (!proforma) return res.status(404).json({ message: "Proforma not found" });
+
         const lines = await db.select().from(customerProformaLines).where(eq(customerProformaLines.proformaId, id));
         if (!lines.length) return res.json({ updated: 0, skipped: 0 });
 

@@ -1,7 +1,8 @@
 /**
  * Customer proforma bulk create, replace-lines and apply-catalog-prices:
  * every refusal (bad destination, missing fields, no valid line, duplicate
- * article codes, bad id, unknown or other-company proforma) writes nothing;
+ * article codes, bad id, unknown or other-company proforma) writes nothing,
+ * including apply-catalog-prices on another company's proforma;
  * the happy paths store per-bale and per-kg lines and re-price only unfixed
  * lines that have a positive catalog price. One rolled-back transaction per test.
  */
@@ -152,10 +153,17 @@ describe("replace proforma lines", () => {
 });
 
 describe("apply catalog prices", () => {
-  it("refuses a bad id and reports nothing for a proforma without lines", async () => {
+  it("refuses a bad or unknown id and reports nothing for a proforma without lines", async () => {
     await withFactoryWorld(async (w) => {
       expect((await w.agent.post(`${BASE}/abc/apply-catalog-prices`)).status).toBe(400);
-      const res = await w.agent.post(`${BASE}/999999999/apply-catalog-prices`);
+      const unknown = await w.agent.post(`${BASE}/999999999/apply-catalog-prices`);
+      expect(unknown.status).toBe(404);
+      expect(unknown.body.message).toBe("Proforma not found");
+      const empty = await w.one(
+        `INSERT INTO customer_proformas (company_id, customer_id, name) VALUES ($1, $2, 'Empty') RETURNING id`,
+        [w.companyId, await customer(w)]
+      );
+      const res = await w.agent.post(`${BASE}/${empty}/apply-catalog-prices`);
       expect(res.body).toEqual({ updated: 0, skipped: 0 });
     });
   });
@@ -183,7 +191,7 @@ describe("apply catalog prices", () => {
     });
   });
 
-  it("pins re-pricing another company's proforma lines by id (no company check)", async () => {
+  it("refuses another company's proforma and leaves its lines unchanged", async () => {
     await withFactoryWorld(async (w) => {
       const other = await w.one(`INSERT INTO companies (code, name) VALUES ($1::varchar, $1::text) RETURNING id`, [
         `${w.tag}Y`,
@@ -194,8 +202,13 @@ describe("apply catalog prices", () => {
         [w.companyId, `${w.tag}A1`]
       );
       const res = await w.agent.post(`${BASE}/${foreign}/apply-catalog-prices`);
-      expect(res.body).toEqual({ updated: 1, skipped: 1, fixed: 1 });
-      expect((await linePrices(w, foreign))[0]).toEqual(["A1", 99]);
+      expect(res.status).toBe(404);
+      expect(res.body.message).toBe("Proforma not found");
+      expect(await linePrices(w, foreign)).toEqual([
+        ["A1", 1],
+        ["B1", 2],
+        ["C1", 3],
+      ]);
     });
   });
 });

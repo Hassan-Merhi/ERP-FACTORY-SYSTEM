@@ -2,7 +2,8 @@
  * Simple company transfers over HTTP: refusals (bad input, no access to the
  * other company, unknown transfer) write nothing; a USD transfer creates both
  * vouchers and clearing accounts, a retry with the same clientRequestId
- * returns the same transfer, and delete posts reversals (then replays). A
+ * replays the same transfer, and delete (over HTTP or the service) posts
+ * reversals in both companies (then replays). A
  * Kwacha transfer between a USD/ZMW subsidiary and its parent posts native
  * ZMW evidence and reverses it. The approved-rate policy is stubbed, as in
  * the other Zambia transfer suites. One rolled-back transaction per test.
@@ -105,18 +106,31 @@ describe("simple company transfer refusals", () => {
 });
 
 describe("simple company transfer lifecycle", () => {
-  it("creates a USD transfer, refuses a re-stamped retry, and lists it", async () => {
+  it("creates a USD transfer, replays a retry with the same clientRequestId, and lists it", async () => {
     await withFactoryWorld(async (w) => {
       const p = await pair(w);
       const created = await w.agent.post(URL).send(body(w, p, { description: "Float top-up" }));
       expect(created.status).toBe(201);
       expect(created.body).toMatchObject({ fromCompanyId: w.companyId, toCompanyId: p.other });
       const retry = await w.agent.post(URL).send(body(w, p, { description: "Float top-up" }));
-      // Pinned: a USD retry re-stamps TR-OUT-<Date.now()>, so the posting
-      // engine sees a different payload under the same idempotency key.
-      expect(retry.status).toBe(400);
-      expect(retry.body.message).toMatch(/already used for a different posting payload/);
+      // The USD voucher numbers derive from clientRequestId, so the retry
+      // rebuilds the same posting payload and replays it.
+      expect(retry.status).toBe(201);
+      expect(retry.body).toMatchObject({
+        id: created.body.id,
+        fromVoucherId: created.body.fromVoucherId,
+        toVoucherId: created.body.toVoucherId,
+      });
       expect(await transferCount(w, p)).toBe(1);
+      const numbers = await w.q(
+        `SELECT voucher_number FROM vouchers WHERE company_id = ANY($1) AND voucher_number LIKE 'TR-%' ORDER BY id`,
+        [[w.companyId, p.other]]
+      );
+      expect(numbers).toHaveLength(2);
+      expect(numbers.map((v) => v.voucher_number)).toEqual([
+        expect.stringMatching(/^TR-OUT-[0-9a-f]{24}$/),
+        expect.stringMatching(/^TR-IN-[0-9a-f]{24}$/),
+      ]);
 
       const vouchers = await w.q(`SELECT total_amount::numeric AS total FROM vouchers WHERE id = ANY($1)`, [
         [created.body.fromVoucherId, created.body.toVoucherId],
@@ -132,17 +146,40 @@ describe("simple company transfer lifecycle", () => {
     });
   });
 
-  it("pins the HTTP delete failing on the counterparty company scope and leaving the transfer", async () => {
+  it("deletes over HTTP, reversing both companies' vouchers", async () => {
     await withFactoryWorld(async (w) => {
       const p = await pair(w);
       const created = await w.agent.post(URL).send(body(w, p));
       expect(created.status).toBe(201);
-      // DELETE carries no fromCompanyId/toCompanyId body, so the request
-      // boundary never authorizes the other company for the reversal posting.
+      // DELETE carries no company ids in its body; the service authorizes both
+      // membership-checked companies for the reversal postings itself.
       const res = await w.agent.delete(`${URL}/${created.body.id}`);
-      expect(res.status).toBe(500);
-      expect(res.body.message).toBe("transaction company scope is not authorized for the active request");
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, replayed: false });
+      expect(await transferCount(w, p)).toBe(0);
+      const reversals = await w.q(`SELECT company_id, voucher_number FROM vouchers WHERE id = ANY($1) ORDER BY id`, [
+        res.body.reversalVoucherIds,
+      ]);
+      expect(reversals.map((v) => v.company_id)).toEqual([w.companyId, p.other]);
+      expect(reversals.every((v) => String(v.voucher_number).startsWith("REV-TR-"))).toBe(true);
+      const again = await w.agent.delete(`${URL}/${created.body.id}`);
+      expect(again.body).toEqual({ success: true, replayed: true });
+    });
+  });
+
+  it("refuses an HTTP delete by a user without access to the other company", async () => {
+    await withFactoryWorld(async (w) => {
+      const p = await pair(w);
+      const created = await w.agent.post(URL).send(body(w, p));
+      await w.q(`DELETE FROM user_company_roles WHERE user_id = $1 AND company_id = $2`, [w.userId, p.other]);
+      const res = await w.agent.delete(`${URL}/${created.body.id}`);
+      expect(res.status).toBe(403);
       expect(await transferCount(w, p)).toBe(1);
+      const reversals = await w.q(
+        `SELECT id FROM vouchers WHERE voucher_number LIKE 'REV-TR-%' AND company_id = ANY($1)`,
+        [[w.companyId, p.other]]
+      );
+      expect(reversals).toHaveLength(0);
     });
   });
 
@@ -170,12 +207,11 @@ describe("simple company transfer lifecycle", () => {
     await withFactoryWorld(async (w) => {
       const p = await pair(w);
       const created = await w.agent.post(URL).send(body(w, p));
-      // Pinned: Number(null) is 0, an integer, so a NULL voucher id skips the
-      // "missing one or both accounting vouchers" guard and fails the load instead.
+      // A NULL voucher id is missing, not voucher 0.
       await w.q(`UPDATE inter_company_transfers SET to_voucher_id = NULL WHERE id = $1`, [created.body.id]);
       await expect(simpleCompanyTransferService.delete(w.userId, created.body.id)).rejects.toMatchObject({
         statusCode: 409,
-        message: "Transfer accounting vouchers could not be loaded for reversal",
+        message: "Transfer is missing one or both accounting vouchers",
       });
       // A voucher of the other company is not loadable for this side either.
       await w.q(`UPDATE inter_company_transfers SET to_voucher_id = $2 WHERE id = $1`, [
@@ -184,6 +220,7 @@ describe("simple company transfer lifecycle", () => {
       ]);
       await expect(simpleCompanyTransferService.delete(w.userId, created.body.id)).rejects.toMatchObject({
         statusCode: 409,
+        message: "Transfer accounting vouchers could not be loaded for reversal",
       });
       expect(await transferCount(w, p)).toBe(1);
     });

@@ -5,6 +5,7 @@ import {
   type CentralPostingRequest,
   type PostingActor,
 } from "../../services/accounting";
+import { withAuthorizedPostingCompany } from "../../services/accounting/erpVoucherPosting";
 import { requireCompanyAccess } from "./transferRequestContext";
 import {
   resolveZambiaIntercompanyAmount,
@@ -13,10 +14,30 @@ import {
 import { TransferRouteError } from "./transferErrors";
 import { transferRepository } from "./transferRepository";
 import { parseSimpleTransferInput } from "./transferValidation";
+import { createHash } from "node:crypto";
 
 const postingDependencies = createDatabasePostingDependencies();
 
 type TransferSide = "from" | "to";
+
+/**
+ * USD voucher number for one side of a transfer. The posting engine includes
+ * voucherNumber in its request fingerprint, so a retry with the same
+ * clientRequestId must rebuild the same number to replay instead of being
+ * refused. Derived from clientRequestId the same way as the Kwacha numbers;
+ * only a request without a clientRequestId (no retry identity) falls back to
+ * the legacy timestamp.
+ */
+function usdTransferVoucherNumber(prefix: string, clientRequestId: string | undefined, timestamp: number): string {
+  if (!clientRequestId) return `${prefix}-${timestamp}`;
+  const digest = createHash("sha256").update(clientRequestId).digest("hex").slice(0, 24);
+  return `${prefix}-${digest}`;
+}
+
+function nullableVoucherId(value: unknown): number {
+  // Number(null) is 0, an integer: a NULL voucher id must read as missing.
+  return value === null || value === undefined ? NaN : Number(value);
+}
 
 async function getOrCreateClearingAccount(companyId: number) {
   const accounts = await transferRepository.listLedgerAccounts(companyId);
@@ -94,6 +115,62 @@ function buildTransferReversalRequest(input: {
   };
 }
 
+function reverseSimpleTransfer(userId: string, transferId: number, actor?: PostingActor) {
+  return transferRepository.transaction(async (tx) => {
+    const lockedTransfer = await transferRepository.getSimpleTransferForUpdateTx(tx, transferId);
+    if (!lockedTransfer) return { success: true, replayed: true };
+
+    const fromVoucherId = nullableVoucherId(lockedTransfer.fromVoucherId);
+    const toVoucherId = nullableVoucherId(lockedTransfer.toVoucherId);
+    if (!Number.isInteger(fromVoucherId) || !Number.isInteger(toVoucherId)) {
+      throw new TransferRouteError(409, "Transfer is missing one or both accounting vouchers");
+    }
+
+    const [fromSnapshot, toSnapshot] = await Promise.all([
+      transferRepository.getVoucherSnapshotTx(tx, lockedTransfer.fromCompanyId, fromVoucherId),
+      transferRepository.getVoucherSnapshotTx(tx, lockedTransfer.toCompanyId, toVoucherId),
+    ]);
+    if (!fromSnapshot || !toSnapshot) {
+      throw new TransferRouteError(409, "Transfer accounting vouchers could not be loaded for reversal");
+    }
+
+    const reversalActor = actor ?? { userId, reason: `Reverse company transfer ${transferId}` };
+    const fromReversal = await postBalancedVoucherTx(
+      tx,
+      buildTransferReversalRequest({
+        transferId,
+        side: "from",
+        transferDate: lockedTransfer.transferDate,
+        snapshot: fromSnapshot,
+        actor: reversalActor,
+      }),
+      postingDependencies
+    );
+    const toReversal = await postBalancedVoucherTx(
+      tx,
+      buildTransferReversalRequest({
+        transferId,
+        side: "to",
+        transferDate: lockedTransfer.transferDate,
+        snapshot: toSnapshot,
+        actor: reversalActor,
+      }),
+      postingDependencies
+    );
+
+    // Replaces the legacy deleteTransferVoucher behavior: originals remain for audit.
+    await transferRepository.deleteSimpleTransferTx(tx, transferId);
+    return {
+      success: true,
+      replayed: fromReversal.replayed && toReversal.replayed,
+      reversalVoucherIds: [
+        Number((fromReversal.voucher as { id: unknown }).id),
+        Number((toReversal.voucher as { id: unknown }).id),
+      ],
+    };
+  });
+}
+
 export const simpleCompanyTransferService = {
   list(companyId: number) {
     return transferRepository.listSimpleTransfers(companyId);
@@ -140,7 +217,7 @@ export const simpleCompanyTransferService = {
       const fromNarration = `Transfer out to ${toCompany.name}`;
       const fromBuilt = buildCompanyTransferPostingRequest({
         companyId: parsed.fromCompanyId,
-        voucherNumber: zmwOutNumber ?? `TR-OUT-${voucherTimestamp}`,
+        voucherNumber: zmwOutNumber ?? usdTransferVoucherNumber("TR-OUT", parsed.clientRequestId, voucherTimestamp),
         voucherType: "Payment",
         voucherDate: parsed.transferDate,
         description: `${description} → ${toCompany.name}`,
@@ -160,7 +237,7 @@ export const simpleCompanyTransferService = {
       const toNarration = `Transfer in from ${fromCompany.name}`;
       const toBuilt = buildCompanyTransferPostingRequest({
         companyId: parsed.toCompanyId,
-        voucherNumber: zmwInNumber ?? `TR-IN-${voucherTimestamp}`,
+        voucherNumber: zmwInNumber ?? usdTransferVoucherNumber("TR-IN", parsed.clientRequestId, voucherTimestamp),
         voucherType: "Receipt",
         voucherDate: parsed.transferDate,
         description: `Transfer from ${fromCompany.name}`,
@@ -209,58 +286,11 @@ export const simpleCompanyTransferService = {
     }
     await requireCompanyAccess(userId, [transfer.fromCompanyId, transfer.toCompanyId]);
 
-    return transferRepository.transaction(async (tx) => {
-      const lockedTransfer = await transferRepository.getSimpleTransferForUpdateTx(tx, transferId);
-      if (!lockedTransfer) return { success: true, replayed: true };
-
-      const fromVoucherId = Number(lockedTransfer.fromVoucherId);
-      const toVoucherId = Number(lockedTransfer.toVoucherId);
-      if (!Number.isInteger(fromVoucherId) || !Number.isInteger(toVoucherId)) {
-        throw new TransferRouteError(409, "Transfer is missing one or both accounting vouchers");
-      }
-
-      const [fromSnapshot, toSnapshot] = await Promise.all([
-        transferRepository.getVoucherSnapshotTx(tx, lockedTransfer.fromCompanyId, fromVoucherId),
-        transferRepository.getVoucherSnapshotTx(tx, lockedTransfer.toCompanyId, toVoucherId),
-      ]);
-      if (!fromSnapshot || !toSnapshot) {
-        throw new TransferRouteError(409, "Transfer accounting vouchers could not be loaded for reversal");
-      }
-
-      const reversalActor = actor ?? { userId, reason: `Reverse company transfer ${transferId}` };
-      const fromReversal = await postBalancedVoucherTx(
-        tx,
-        buildTransferReversalRequest({
-          transferId,
-          side: "from",
-          transferDate: lockedTransfer.transferDate,
-          snapshot: fromSnapshot,
-          actor: reversalActor,
-        }),
-        postingDependencies
-      );
-      const toReversal = await postBalancedVoucherTx(
-        tx,
-        buildTransferReversalRequest({
-          transferId,
-          side: "to",
-          transferDate: lockedTransfer.transferDate,
-          snapshot: toSnapshot,
-          actor: reversalActor,
-        }),
-        postingDependencies
-      );
-
-      // Replaces the legacy deleteTransferVoucher behavior: originals remain for audit.
-      await transferRepository.deleteSimpleTransferTx(tx, transferId);
-      return {
-        success: true,
-        replayed: fromReversal.replayed && toReversal.replayed,
-        reversalVoucherIds: [
-          Number((fromReversal.voucher as { id: unknown }).id),
-          Number((toReversal.voucher as { id: unknown }).id),
-        ],
-      };
-    });
+    // The DELETE request names neither company in its body, so the request
+    // boundary only authorized the active company. Both companies were just
+    // membership-checked above; authorize them for the reversal postings.
+    return withAuthorizedPostingCompany(transfer.fromCompanyId, () =>
+      withAuthorizedPostingCompany(transfer.toCompanyId, () => reverseSimpleTransfer(userId, transferId, actor))
+    );
   },
 };
