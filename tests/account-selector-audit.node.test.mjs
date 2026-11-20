@@ -29,7 +29,7 @@ describe("Phase 5 account-selector prevention audit", () => {
 
   it("rejects searchable command rows matching account codes and types", () => {
     const issues = scanAccountSelectorSource(`
-      <CommandItem value={`${account.name} ${account.code}`}>
+      <CommandItem value={account.name + " " + account.code}>
         <span>{account.name}</span> <small>{account.accountType}</small>
       </CommandItem>`);
     assert.equal(issues["visible-account-metadata"], 1);
