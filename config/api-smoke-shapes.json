@@ -522,8 +522,8 @@
       "shape": "[{accountType:scalar,active:scalar,code:scalar,companyId:scalar,createdAt:scalar,deletedAt:scalar,id:scalar,isHidden:scalar,name:scalar,openingBalance:scalar,openingBalanceBaseAmount:scalar,openingBalanceCurrency:scalar,openingBalanceHistoricalRate:scalar,openingBalanceNativeAmount:scalar,openingBalanceSide:scalar,parentId:scalar,subType:scalar}]"
     },
     "/api/erp/rental/linked-rent-control": {
-      "status": 404,
-      "shape": "{message:scalar}"
+      "status": 403,
+      "shape": "{code:scalar,message:scalar}"
     },
     "/api/erp/rental/payments": {
       "status": 200,
