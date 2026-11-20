@@ -92,7 +92,7 @@ export function RetailPOSPosCheckoutPanel({
               )
             );
           }}
-        />/select>
+        />
       </PosCheckoutField>
       <div className="min-w-[190px] flex-1 xl:max-w-[350px]">
         <RetailCustomerPicker customer={customer} onSelect={selectCustomer} />
