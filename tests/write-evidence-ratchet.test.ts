@@ -179,7 +179,7 @@ describe("write evidence ratchet", () => {
       "phase-3-infrastructure-writers": 11,
       "phase-4-operational-writers": 22,
       "phase-5-operational-writers": 22,
-      "phase-6-deterministic-source-writers": 6,
+      "phase-6-deterministic-source-writers": 5,
       "phase-6-intrinsic-replay-safe-writers": 2,
       "phase-7-post-review-safe-writers": 1,
       "phase-8-request-identity-writers": 1,

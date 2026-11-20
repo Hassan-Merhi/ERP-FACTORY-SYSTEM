@@ -20,11 +20,11 @@ audit fails instead of allowing the reference to drift.
 | Type escapes (AST) | 0 total | `npm run audit:type-escapes` |
 | ESLint warnings | 0 total | `npm run lint` |
 | Runtime DDL statements | 0 in server/ and shared/ | `npm run audit:runtime-ddl` |
-| Backend coverage floor (lines) | 80% | `config/coverage-thresholds.json` |
+| Backend coverage floor (lines) | 84% | `config/coverage-thresholds.json` |
 | Write routes with no test at all | 0 of 331 | `npm run audit:write-routes` |
 | Write routes covered only by the guard sweep | 0 of 331 | `npm run audit:write-routes` |
-| Registered routes | 2,464 | `config/route-manifest.json` |
-| Routes with a declared access rule | 2,464 of 2,464 | `npm run verify:route-access-coverage` |
+| Registered routes | 2,460 | `config/route-manifest.json` |
+| Routes with a declared access rule | 2,460 of 2,460 | `npm run verify:route-access-coverage` |
 | God-file backlog | 0 files, 0 excess lines | `npm run audit:god-files` |
 
 The schema layer remains the type source of truth. New code is not allowed to
