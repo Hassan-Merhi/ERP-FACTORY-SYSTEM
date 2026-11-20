@@ -54,7 +54,7 @@ export function useCompanySessionFollower({
         // authenticated server session is the authoritative identity.
         const initialSession = await fetchSessionCompany();
         if (disposed) return;
-        if (!initialSession.companyId) throw new Error("Active company is unavailable.");
+        if (!initialSession.companyId) throw new Error("COMPANY_SESSION_UNAVAILABLE");
 
         if (initialSession.companyId !== selectedCompanyRef.current?.id) {
           // A resume probe detected an actual change: unmount all old-company
@@ -67,7 +67,7 @@ export function useCompanySessionFollower({
             const { companyId } = await fetchSessionCompany();
             if (disposed) return;
             const company = companiesRef.current.find((candidate) => candidate.id === companyId);
-            if (!company) throw new Error("The active company is not assigned to this user.");
+            if (!company) throw new Error("COMPANY_SESSION_UNASSIGNED");
             if (company.id === selectedCompanyRef.current?.id) return;
 
             await cancelCompanySessionQueries(queryClient);
