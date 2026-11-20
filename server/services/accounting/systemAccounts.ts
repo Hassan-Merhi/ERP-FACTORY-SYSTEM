@@ -412,22 +412,9 @@ function statusFor(definition: SystemAccountDefinition, rows: ExistingRow[]): Sy
     return { code: definition.code, state: "ok", accountId: byCode.id };
   }
   const byName = rows.find((row) => !row.deleted && row.name === definition.name);
-  if (byName) {
-    // A legacy account may have the correct system name but the WRONG type.
-    // In particular, an Asset named "FX Revaluation Gain/Loss" must never be
-    // silently reused as the Indirect Expense counter-account. Fail closed:
-    // the accounting correction must be reviewed before any new FX posting.
-    if (byName.account_type !== definition.accountType) {
-      return {
-        code: definition.code,
-        state: "type_differs",
-        accountId: byName.id,
-        expectedType: definition.accountType,
-        actualType: byName.account_type,
-      };
-    }
-    return { code: definition.code, state: "reused_by_name", accountId: byName.id, actualCode: byName.code };
-  }
+  // A same-name account with the wrong type is unsafe as a posting target.
+  if (byName && byName.account_type !== definition.accountType) return { code: definition.code, state: "type_differs", accountId: byName.id, expectedType: definition.accountType, actualType: byName.account_type };
+  if (byName) return { code: definition.code, state: "reused_by_name", accountId: byName.id, actualCode: byName.code };
   return { code: definition.code, state: "missing" };
 }
 
