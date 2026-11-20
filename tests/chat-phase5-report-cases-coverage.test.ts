@@ -1,9 +1,8 @@
 /**
  * Chat report phase 5 cases (worker document expiry, purchase order detail,
  * trial balance) run against PostgreSQL in one rolled-back transaction per
- * test. The phase 5 container cost breakdown is not exercised: the report
- * registry routes "container_cost_breakdown" to the schema-compatibility
- * shard, so that phase 5 handler is never called in production.
+ * test. The report registry routes "container_cost_breakdown" to the
+ * schema-compatibility shard, so phase 5 has no handler for it.
  *
  * Pinned: missing-parameter and not-found answers, expired-document flags,
  * which charge rows appear, and trial balance totals for live vouchers only.

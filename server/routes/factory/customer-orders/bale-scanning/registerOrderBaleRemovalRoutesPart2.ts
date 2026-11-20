@@ -22,7 +22,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { FactoryInvoiceRateRefusalError } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { lockCustomerOrderTx, syncOrderTotalsTx } from "../orderChargeLedger";
 import { closedPeriodErrorResponse } from "../../../../lib/closedPeriodError";
-import { getFactoryAccessState } from "../../../../lib/factoryAccessControl";
 import {
   hasLiveFinancialTripTx,
   isPostedDispatchBaleTx,
@@ -43,13 +42,7 @@ export function registerOrderBaleRemovalRoutesPart2(app: Express) {
             "Use Compare All Trips → approve a batch of unshipped bales with a reason. Individual dispatch-reconciliation deletes are disabled.",
         });
       }
-      const access = reconciliation ? await getFactoryAccessState(req) : null;
-      if (reconciliation && (!access || !["admin", "owner", "developer"].includes(access.role.toLowerCase()))) {
-        return res.status(403).json({ message: "Only Admin, Owner or Developer can reconcile missing dispatch bales" });
-      }
-      const companyId = reconciliation
-        ? access!.companyId
-        : req.session.factoryCompanyId || req.session.currentCompanyId;
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const orderId = parseId(req.params.id);
@@ -92,29 +85,6 @@ export function registerOrderBaleRemovalRoutesPart2(app: Express) {
             );
           }
         }
-        if (reconciliation) {
-          // This check is inside the same order lock used by physical scanners.
-          // A bale cannot be removed if it was scanned or if a trip is still open.
-          const currentRows = await tx.execute(sql`
-            SELECT status FROM customer_orders
-             WHERE company_id = ${companyId} AND id = ${orderId}
-               AND deleted_at IS NULL
-          `);
-          const status = resultRows(currentRows)[0]?.status;
-          if (!["LOADING", "PENDING_VERIFICATION"].includes(typeof status === "string" ? status : "")) {
-            throw new DispatchReconciliationRefusal(409, "Only active Pending Loading orders can be reconciled");
-          }
-          const tripRows = await tx.execute(sql`
-            SELECT COUNT(*)::integer AS "totalTrips",
-                   COUNT(*) FILTER (WHERE status = 'OPEN')::integer AS "openTrips"
-              FROM factory_loading_dispatches
-             WHERE status <> 'CANCELLED' AND company_id = ${companyId} AND order_id = ${orderId}
-          `);
-          const tripCounts = resultRows(tripRows)[0];
-          if (Number(tripCounts?.totalTrips ?? 0) === 0 || Number(tripCounts?.openTrips ?? 0) > 0) {
-            throw new DispatchReconciliationRefusal(409, "Finish all dispatch trips before removing missing bales");
-          }
-        }
         const [orderBale] = await tx
           .select()
           .from(customerOrderBales)
@@ -152,24 +122,6 @@ export function registerOrderBaleRemovalRoutesPart2(app: Express) {
             throw new DispatchReconciliationRefusal(
               409,
               "This item is scanned on a dispatch trip. Remove the scan through Dispatch Management first."
-            );
-          }
-        }
-
-        if (reconciliation) {
-          if (!orderBale) {
-            throw new DispatchReconciliationRefusal(409, "Bale is no longer in this loading. Refresh comparison.");
-          }
-          const scanned = await tx.execute(sql`
-            SELECT id FROM factory_loading_dispatch_scans
-             WHERE company_id = ${companyId} AND order_id = ${orderId}
-               AND bale_id = ${orderBale.baleId} AND removed_at IS NULL
-             LIMIT 1
-          `);
-          if (resultRows(scanned).length > 0) {
-            throw new DispatchReconciliationRefusal(
-              409,
-              "This bale was verified on a trip and cannot be removed as missing"
             );
           }
         }

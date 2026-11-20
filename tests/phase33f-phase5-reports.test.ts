@@ -8,6 +8,8 @@ vi.mock("../server/chat/reports/implementations/reportShardSupport", () => ({
 }));
 
 import { phase5QueryTypes, phase5ReportShard } from "../server/chat/reports/implementations/phase5ReportShard";
+import { findReportImplementation } from "../server/chat/reports/implementations/reportImplementationRegistry";
+import { schemaCompatibilityReportShard } from "../server/chat/reports/implementations/schemaCompatibilityReportShard";
 
 function ctx(queryType: string, extraParams: Record<string, unknown> = {}) {
   return {
@@ -45,7 +47,7 @@ describe("Phase 33F phase 5 report shard", () => {
     expect(phase5ReportShard.queryTypes).toBe(phase5QueryTypes);
   });
 
-  it("returns actionable prompts before querying for missing PO/container identifiers", async () => {
+  it("returns an actionable prompt before querying for a missing PO identifier", async () => {
     const po = await phase5ReportShard.run(ctx("purchase_order_detail"));
     expect(po).toEqual(
       expect.objectContaining({
@@ -54,15 +56,12 @@ describe("Phase 33F phase 5 report shard", () => {
         summary: "Please specify a PO number.",
       })
     );
+    expect(harness.execute).not.toHaveBeenCalled();
+  });
 
-    const container = await phase5ReportShard.run(ctx("container_cost_breakdown"));
-    expect(container).toEqual(
-      expect.objectContaining({
-        queryType: "container_cost_breakdown",
-        title: "Container Cost Breakdown",
-        summary: "Please specify a container number.",
-      })
-    );
+  it("leaves the container cost breakdown to the schema-compatibility shard", async () => {
+    expect(findReportImplementation("container_cost_breakdown")).toBe(schemaCompatibilityReportShard);
+    expect(await phase5ReportShard.run(ctx("container_cost_breakdown"))).toBeUndefined();
     expect(harness.execute).not.toHaveBeenCalled();
   });
 

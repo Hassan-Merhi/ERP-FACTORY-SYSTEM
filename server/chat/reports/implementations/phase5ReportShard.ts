@@ -9,11 +9,13 @@ import {
 } from "./phase5ReportCases2";
 import {
   runPhase5WorkerDocumentExpiry,
-  runPhase5ContainerCostBreakdown,
   runPhase5PurchaseOrderDetail,
   runPhase5TrialBalance,
 } from "./phase5ReportCases";
 
+// container_cost_breakdown stays listed so the public query registry keeps it,
+// but reportImplementationRegistry routes it to the schema-compatibility shard
+// (the legacy phase 5 SQL read a container column that no longer exists).
 export const phase5QueryTypes = [
   "trial_balance",
   "purchase_order_detail",
@@ -37,10 +39,6 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
 
     case "purchase_order_detail": {
       return await runPhase5PurchaseOrderDetail({ params, companyId, fmtDec, fmt });
-    }
-
-    case "container_cost_breakdown": {
-      return await runPhase5ContainerCostBreakdown({ params, companyId, fmtDec, fmt });
     }
 
     case "worker_document_expiry": {

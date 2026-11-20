@@ -2,6 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import {
+  findReportImplementation,
+  implementedReportQueryTypes,
+} from "../server/chat/reports/implementations/reportImplementationRegistry";
+
 const root = process.cwd();
 const resolve = (file: string) => path.join(root, file);
 const read = (file: string) => fs.readFileSync(resolve(file), "utf8");
@@ -18,14 +23,11 @@ function ownedQueryTypes(): string[] {
     });
 }
 
+// The registry is the implementation of record: phase shards claim their
+// query types and the schema-compatibility shard overrides the few whose legacy
+// SQL drifted (container_cost_breakdown has no phase 5 handler left).
 function implementedQueryTypes(): string[] {
-  return fs
-    .readdirSync(resolve("server/chat/reports/implementations"))
-    .filter((name) => /^phase\d+ReportShard\.ts$/.test(name))
-    .flatMap((name) => [
-      ...read(path.join("server/chat/reports/implementations", name)).matchAll(/case\s+"([a-z0-9_]+)"\s*:/g),
-    ])
-    .map((match) => match[1]);
+  return implementedReportQueryTypes.filter((queryType) => findReportImplementation(queryType) !== undefined);
 }
 
 describe("Phase 6 chat reporting architecture", () => {
