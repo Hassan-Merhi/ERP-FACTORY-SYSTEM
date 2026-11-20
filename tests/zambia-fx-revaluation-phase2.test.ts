@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import { postedFxRevaluationAdjustmentUsd } from "../server/services/accounting/fxRevaluationAmount";
 import { legacyManualFxConflictReason } from "../server/services/accounting/legacyManualFxGuard";
+import { statusForSameNamedSystemAccount } from "../server/services/accounting/systemAccountNameStatus";
 import { applyVerifiedMonetaryFxOverlay } from "../server/services/accounting/monetaryFxReportOverlay";
 import type { MonetaryFxValuationResult, MonetaryFxValuationRow } from "../server/services/accounting/monetaryFxValuationService";
 
@@ -60,6 +61,30 @@ function valuation(): MonetaryFxValuationResult {
 }
 
 describe("Zambia manual FX Phase 2 accounting correction contract", () => {
+  it("refuses the wrong-type legacy FX asset while preserving the original account", () => {
+    const candidate = { id: 4404, code: "FXREVGAI", account_type: "Asset" };
+    const expected = {
+      code: "FX-REVALUATION",
+      name: "FX Revaluation Gain/Loss",
+      accountType: "Indirect Expense",
+      required: false,
+      purpose: "exchange differences",
+    };
+    expect(statusForSameNamedSystemAccount(expected, candidate)).toEqual({
+      code: "FX-REVALUATION",
+      state: "type_differs",
+      accountId: 4404,
+      expectedType: "Indirect Expense",
+      actualType: "Asset",
+    });
+    expect(statusForSameNamedSystemAccount(expected, { ...candidate, account_type: "Indirect Expense" })).toEqual({
+      code: "FX-REVALUATION",
+      state: "reused_by_name",
+      accountId: 4404,
+      actualCode: "FXREVGAI",
+    });
+  });
+
   it("uses POSTED cents, not six-decimal historical base, to split the $45.63 rate loss", () => {
     const kitwe = postedFxRevaluationAdjustmentUsd(currentValue(KITWE.native), KITWE.priorUsdPosted);
     const lusaka = postedFxRevaluationAdjustmentUsd(currentValue(LUSAKA.native), LUSAKA.priorUsdPosted);
