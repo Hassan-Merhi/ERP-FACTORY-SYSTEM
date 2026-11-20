@@ -183,7 +183,9 @@ export function AdvancesTabDialogSection({
                   <FormItem>
                     <FormLabel>Cash Account</FormLabel>
                     <UnifiedAccountPicker
-                      options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                      options={cashAccounts.flatMap((account) =>
+                        account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
+                      )}
                       value={field.value ?? ""}
                       onChange={field.onChange}
                       placeholder="Select account"
