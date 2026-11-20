@@ -8,7 +8,8 @@
  * deletes are scoped to company and agent; prepaid set-all drops non-numeric
  * ids; the replace flow refuses missing, identical, unknown, undesignated and
  * duty-mismatched containers and swaps only on confirmation. Every route that
- * takes a company id refuses another company's id.
+ * takes a company id refuses another company's id, and set-all / replace
+ * refuse another company's container.
  */
 import { describe, expect, it } from "vitest";
 
@@ -243,7 +244,7 @@ describe("company scope", () => {
       expect(written).toEqual([{ notes: 0, adjustments: 0, prepaid: 0 }]);
     }));
 
-  it("replaces a designation with another company's container (current behaviour: lookup is not company-scoped)", () =>
+  it("refuses to swap in another company's container without leaking its number", () =>
     withFactoryWorld(async (w) => {
       const other = await otherCompany(w);
       const own = await container(w, "OWN", "100");
@@ -251,8 +252,29 @@ describe("company scope", () => {
       const base = `/api/git/agent-prepaid/${w.companyId}/${enc}`;
       await w.agent.post(`${base}/set-all`).send({ containerIds: [own] });
       const res = await w.agent.post(`${base}/replace`).send({ oldContainerId: own, newContainerId: foreign });
-      expect(res.status).toBe(200);
-      expect(res.body.replaced.to).toBe(`${w.tag}FOREIGN`);
-      expect(await designations(w)).toEqual([{ container_id: foreign }]);
+      expect(res.status).toBe(404);
+      expect(res.body.message).toMatch(/New container/);
+      expect(JSON.stringify(res.body)).not.toContain(`${w.tag}FOREIGN`);
+      expect(await designations(w)).toEqual([{ container_id: own }]);
+      const log = await w.q(`SELECT 1 FROM git_prepaid_activity_log WHERE company_id = $1`, [w.companyId]);
+      expect(log).toEqual([]);
+    }));
+
+  it("set-all refuses another company's or a missing container and keeps the list", () =>
+    withFactoryWorld(async (w) => {
+      const other = await otherCompany(w);
+      const own = await container(w, "OWN", "100");
+      const foreign = await container(w, "FOREIGN", "100", other);
+      const base = `/api/git/agent-prepaid/${w.companyId}/${enc}`;
+      await w.agent.post(`${base}/set-all`).send({ containerIds: [own] });
+      for (const ids of [
+        [own, foreign],
+        [own, 999999999],
+      ]) {
+        const res = await w.agent.post(`${base}/set-all`).send({ containerIds: ids });
+        expect(res.status).toBe(404);
+        expect(res.body.message).toContain(String(ids[1]));
+      }
+      expect(await designations(w)).toEqual([{ container_id: own }]);
     }));
 });

@@ -11,6 +11,7 @@ import { requireAuth } from "../../auth";
 import { sql } from "drizzle-orm";
 import { resultRows } from "../../lib/queryResult";
 import { parseMoneyInput, toMoney } from "../../lib/money";
+import { sqlArray } from "../../lib/sqlArray";
 import type { GitAgentAdjustmentRow, GitAgentAdjustment } from "./gitAgentRoutesTypes";
 
 export function registerGitAgentRoutes(app: Express) {
@@ -183,6 +184,17 @@ export function registerGitAgentRoutes(app: Express) {
       const agentName = req.params.agentName;
       const containerIds: number[] = (req.body.containerIds ?? []).map(Number).filter((n: number) => !isNaN(n));
       const userId = (req as { user: { id: unknown } }).user?.id ?? null;
+      // Only this company's containers may be designated.
+      if (containerIds.length > 0) {
+        const owned = await db.execute(
+          sql`SELECT id FROM containers WHERE company_id = ${companyId} AND id = ANY(${sqlArray(containerIds)})`
+        );
+        const ownedIds = new Set(resultRows<{ id: number }>(owned).map((r) => Number(r.id)));
+        const missing = containerIds.filter((cid) => !ownedIds.has(cid));
+        if (missing.length > 0) {
+          return res.status(404).json({ message: `Container(s) not found: ${missing.join(", ")}.` });
+        }
+      }
       // Enforce uniqueness: no container can be prepaid for two agents at once for same company.
       // We simply replace the list for this agent atomically.
       await db.execute(
@@ -217,10 +229,10 @@ export function registerGitAgentRoutes(app: Express) {
         return res.status(400).json({ message: "Old and new containers must be different." });
       }
 
-      // Look up container details
+      // Look up container details (this company's containers only)
       const cResult = await db.execute(
         sql`SELECT id, container_number, duty_fee FROM containers
-            WHERE id IN (${oldContainerId}, ${newContainerId})`
+            WHERE company_id = ${companyId} AND id IN (${oldContainerId}, ${newContainerId})`
       );
       const rows = resultRows<{ id: number; container_number: string; duty_fee: string | null }>(cResult);
       const oldC = rows.find((r) => r.id === oldContainerId || r.id === Number(oldContainerId));
