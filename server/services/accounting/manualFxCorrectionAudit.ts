@@ -192,6 +192,7 @@ export function assessManualFxCorrection(input: {
   if (!reversal) return { ...base, status: "reverse_original" };
   base.reversalVoucherId = reversal.id;
   if (reversal.reversalOfVoucherId !== original.id ||
+      reversal.sourceType !== "voucher-reversal" ||
       !reversalMirrorsOriginal(original.lines, reversal.lines)) {
     blockers.push("REVERSAL_DOES_NOT_EXACTLY_CANCEL_ORIGINAL");
     return base;
@@ -211,10 +212,14 @@ export function assessManualFxCorrection(input: {
     const byTarget = aggregate(baseLines, () => true);
     if (!sameAdjustments(originalByTarget, byTarget)) continue;
     const offset = voucher.lines.filter(isFxCounter);
-    if (offset.length !== 1 ||
-        signed(offset[0]).toFixed(2) !== originalLoss.toFixed(2) ||
-        offset[0].accountType !== "Indirect Expense" ||
-        voucher.lines.length !== baseLines.length + 1) continue;
+    if (
+      offset.length !== 1 ||
+      signed(offset[0]).toFixed(2) !== originalLoss.toFixed(2) ||
+      offset[0].accountType !== "Indirect Expense" ||
+      offset[0].currency !== "USD" ||
+      offset[0].rateConvention !== "IDENTITY" ||
+      voucher.lines.length !== baseLines.length + 1
+    ) continue;
     matching.push(voucher);
   }
   if (matching.length > 1) {
@@ -222,14 +227,16 @@ export function assessManualFxCorrection(input: {
     return base;
   }
   if (!matching.length) {
+    // A partial, incompatible or earlier base-only journal on the same cash
+    // account is *not* a blank canvas for a second repair. Require review.
     const unsafe = candidates.some((v) =>
       v.lines.some((line) => {
         const key = targetKey(line);
-        return key !== null && originalByTarget.has(key) && line.rateConvention !== "BASE_ONLY_REVALUATION";
+        return key !== null && originalByTarget.has(key);
       })
     );
     if (unsafe) {
-      blockers.push("UNSAFE_FX_JOURNAL_ON_AFFECTED_ACCOUNT");
+      blockers.push("EXISTING_UNRECONCILED_FX_JOURNAL");
       return base;
     }
     return { ...base, status: "post_base_only" };
