@@ -22,6 +22,8 @@ vi.mock("../server/auth", () => ({
 import { sql } from "drizzle-orm";
 import { db } from "../server/db";
 import { registerLedgerAccountReadRoutes } from "../server/routes/ledger/reads";
+import { registerLedgerAccountPaginationRoutes } from "../server/routes/ledgerAccountPaginationRoutes";
+import { registerFactoryTransporterRoutes } from "../server/routes/factory/factoryTransporterRoutes";
 import { registerAccountVoucherSidebarRoutes } from "../server/routes/accounts/voucher-sidebar";
 import { assertPostingLedgerLeavesTx } from "../server/services/accounting/postableLedgerAccountPolicy";
 import { PostingValidationError } from "../server/services/accounting/centralPostingEngine";
@@ -36,6 +38,40 @@ const app = {
 };
 registerLedgerAccountReadRoutes(app as never);
 registerAccountVoucherSidebarRoutes(app as never);
+
+const paginatedHandlers = new Map<string, Handler>();
+registerLedgerAccountPaginationRoutes({
+  get: (path: string, ...chain: Handler[]) => paginatedHandlers.set(path, chain[chain.length - 1]),
+} as never);
+
+const transporterHandlers = new Map<string, Handler>();
+registerFactoryTransporterRoutes({
+  get: (path: string, ...chain: Handler[]) => transporterHandlers.set(path, chain[chain.length - 1]),
+  post: () => undefined,
+  patch: () => undefined,
+  delete: () => undefined,
+} as never);
+
+async function callFiltered(
+  handler: Handler,
+  companyId: number,
+  query: Record<string, string> = {}
+): Promise<{ items: Array<{ id: number; code?: string }>; total: number }> {
+  const response = {
+    statusCode: 200,
+    body: undefined as unknown,
+    headers: {} as Record<string, string>,
+    status(code: number) { response.statusCode = code; return response; },
+    json(body: unknown) { response.body = body; return response; },
+    setHeader(key: string, value: string) { response.headers[key] = value; return response; },
+  };
+  await handler({ session: { currentCompanyId: companyId }, query }, response);
+  if (response.statusCode !== 200) {
+    throw new Error(`Filtered account read -> ${response.statusCode} ${JSON.stringify(response.body)}`);
+  }
+  return response.body as { items: Array<{ id: number; code?: string }>; total: number };
+}
+
 
 async function call(path: string, companyId: number, query: Record<string, string> = {}) {
   const res = {
@@ -147,6 +183,29 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
         code: "POSTING_LEDGER_GROUP_NOT_ALLOWED",
       } satisfies Partial<PostingValidationError>);
     });
+  });
+
+  it("paged posting pickers return only leaves and count only eligible accounts", async () => {
+    const handler = paginatedHandlers.get("/api/ledger-accounts")!;
+    for (const profile of ["picker", "voucher-picker"]) {
+      const result = await callFiltered(handler, companyId, { profile, pagination: "1", limit: "2" });
+      expect(result.total).toBe(3);
+      expect(result.items).toHaveLength(2);
+      expect(result.items.some((account) => [ids.groupTag, ids.legacyParent].includes(Number(account.id)))).toBe(false);
+    }
+    const full = await callFiltered(handler, companyId, { pagination: "1", limit: "100" });
+    expect(full.total).toBe(5);
+  });
+
+  it("Factory transporter account choices do not expose tagged or legacy parent groups", async () => {
+    const handler = transporterHandlers.get("/api/factory/transporter-accounts")!;
+    const result = await callFiltered(handler, companyId);
+    const idsReturned = (result as unknown as Array<{ id: number }>).map((account) => account.id);
+    expect(idsReturned).toContain(ids.cash);
+    expect(idsReturned).toContain(ids.legacyChild);
+    expect(idsReturned).not.toContain(ids.groupTag);
+    expect(idsReturned).not.toContain(ids.legacyParent);
+    expect(idsReturned).not.toContain(ids.deletedChild);
   });
 
 });
