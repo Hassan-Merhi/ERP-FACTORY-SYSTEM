@@ -45,6 +45,8 @@ export interface ManualFxCorrectionCandidate {
   accountKey: string;
   accountName: string;
   bookClosingUsd: string;
+  /** Book after excluding the legacy native-USD FX movement. */
+  bookBeforeManualUsd: string;
   currentTranslatedUsd: string;
   nativeBalancesByCurrency: Record<string, string>;
   expectedBaseOnlyAdjustmentUsd: string;
@@ -171,7 +173,7 @@ export async function getManualFxCorrectionPreflight(
       row.account_code === "FX-REVALUATION" ||
       row.account_name?.toLowerCase().trim() === "fx revaluation gain/loss"
   );
-  const foreignTargetKeys = new Set<string>();
+  const manualByTarget = new Map<string, Decimal>();
   const monetaryMovements = snapshot.lines.filter((row) => {
     const originalUsd = row.transaction_currency?.trim().toUpperCase() === "USD";
     const monetary =
@@ -179,15 +181,18 @@ export async function getManualFxCorrectionPreflight(
       row.bank_account_id !== null ||
       row.customer_id !== null;
     if (!originalUsd || row.rate_convention !== "IDENTITY" || !monetary) return false;
-    if (row.ledger_account_id !== null) foreignTargetKeys.add(`ledger:${row.ledger_account_id}`);
-    else if (row.bank_account_id !== null) foreignTargetKeys.add(`bank:${row.bank_account_id}`);
-    else if (row.customer_id !== null) foreignTargetKeys.add(`customer:${row.customer_id}`);
+    const key = row.customer_id !== null ? `customer:${row.customer_id}` :
+      row.ledger_account_id !== null ? `ledger:${row.ledger_account_id}` :
+        `bank:${row.bank_account_id}`;
+    const signedUsd = new Decimal(row.debit_amount).minus(row.credit_amount);
+    manualByTarget.set(key, (manualByTarget.get(key) ?? new Decimal(0)).plus(signedUsd));
     return true;
   });
   const candidates: ManualFxCorrectionCandidate[] = [];
   let unresolved = 0;
   for (const row of valuation.accounts) {
-    if (!foreignTargetKeys.has(row.accountKey)) continue;
+    const manualMovement = manualByTarget.get(row.accountKey);
+    if (!manualMovement) continue;
     if (
       row.provisional ||
       row.currentTranslatedUsd === null ||
@@ -203,17 +208,26 @@ export async function getManualFxCorrectionPreflight(
       unresolved++;
       continue;
     }
+    // The live book already contains the manual journal. The proposed base-only
+    // replacement must use the book after subtracting that manual movement.
+    const beforeManual = new Decimal(row.bookClosingUsd).minus(
+      snapshot.header?.reversed ? new Decimal(0) : manualMovement
+    );
     candidates.push({
       accountKey: row.accountKey,
       accountName: row.name,
       bookClosingUsd: row.bookClosingUsd,
+      bookBeforeManualUsd: beforeManual.toFixed(2),
       currentTranslatedUsd: row.currentTranslatedUsd,
       nativeBalancesByCurrency: row.nativeBalancesByCurrency,
-      expectedBaseOnlyAdjustmentUsd: postedFxRevaluationAdjustmentUsd(row.currentTranslatedUsd, row.bookClosingUsd),
+      expectedBaseOnlyAdjustmentUsd: postedFxRevaluationAdjustmentUsd(row.currentTranslatedUsd, beforeManual.toFixed(2)),
     });
   }
   // A balanced voucher totals zero across all accounts. Its FX counter-line
   // is the amount of the original loss, not the sum of the entire journal.
+  unresolved += [...manualByTarget.keys()].filter((key) =>
+    !candidates.some((candidate) => candidate.accountKey === key)
+  ).length;
   const netAdjustment = candidates.reduce((sum, row) => sum.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0));
   const cashMovement = monetaryMovements.reduce(
     (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount),
