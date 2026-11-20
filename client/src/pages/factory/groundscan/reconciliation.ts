@@ -4,7 +4,7 @@ export interface GroundExpectedBale {
   referenceNumber: string;
   articleCode: string;
   productName?: string;
-  weightKg: string | number;
+  weightKg: string;
   stockEntryDate?: string | null;
   workerName?: string | null;
 }
