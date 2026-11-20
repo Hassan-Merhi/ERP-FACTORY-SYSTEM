@@ -14,9 +14,9 @@ describe("Supplier Partner route boundary", () => {
     // Authentication is resolved before this shell mounts. Company loading is
     // still awaited before any route decision is resolved, so Supplier Partner
     // routes are never rejected mid-restoration.
-    expect(authenticatedApp).toContain("const { selectedCompany, isLoading: companyLoading } = useCompany()");
-    expect(authenticatedApp).toContain("if (companyLoading || !selectedCompany) return <AppLoadingState />");
-    const companyGuard = authenticatedApp.indexOf("companyLoading || !selectedCompany");
+    expect(authenticatedApp).toContain("const { selectedCompany, isLoading: companyLoading, isCheckingCompanySession } = useCompany()");
+    expect(authenticatedApp).toContain("if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) return <AppLoadingState />");
+    const companyGuard = authenticatedApp.indexOf("companyLoading && !isCheckingCompanySession");
     const routeResolution = authenticatedApp.indexOf("resolveAuthenticatedAppRoute({");
     expect(companyGuard).toBeGreaterThan(-1);
     expect(routeResolution).toBeGreaterThan(companyGuard);
