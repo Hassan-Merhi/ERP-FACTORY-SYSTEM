@@ -14,7 +14,7 @@ import { LocationProvider } from "@/contexts/LocationContext";
 import { DateFormatProvider } from "@/contexts/DateFormatContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { CursorNavProvider } from "@/contexts/CursorNavContext";
-import { ApplicationLanguageProvider } from "@/contexts/ApplicationLanguageContext";
+import { ApplicationLanguageProvider, useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useServerRestart } from "@/hooks/use-server-restart";
 import { Button } from "@/components/ui/button";
@@ -221,6 +221,7 @@ function DeferredAuthenticatedUtilities() {
  * preserving draft form state if the company is still the same.
  */
 function CompanySessionVerificationCover() {
+  const { t } = useApplicationLanguage();
   const coverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -238,12 +239,12 @@ function CompanySessionVerificationCover() {
       ref={coverRef}
       role="alertdialog"
       aria-modal="true"
-      aria-label="Verifying company"
+      aria-label={t("company.verifyingSession")}
       tabIndex={-1}
       className="fixed inset-0 z-[2147483647] overflow-auto bg-background"
       data-testid="company-session-verification-cover"
     >
-      <AppLoadingState message="Verifying company" />
+      <AppLoadingState message={t("company.verifyingSession")} />
     </div>
   );
 }
@@ -262,9 +263,10 @@ function CompanyWorkspaceBoundary({
   handleLogout: () => Promise<void>;
 }) {
   const { selectedCompany, isLoading: companyLoading, isCheckingCompanySession } = useCompany();
+  const { t } = useApplicationLanguage();
 
   if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) {
-    return <AppLoadingState message="Switching company" />;
+    return <AppLoadingState message={t("company.switching")} />;
   }
 
   return (
