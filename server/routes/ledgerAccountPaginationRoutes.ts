@@ -77,10 +77,12 @@ export function registerLedgerAccountPaginationRoutes(app: Express): void {
       const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
       if (search) {
         conditions.push(
-          or(
-            punctuationInsensitiveSearch(ledgerAccounts.name, search),
-            ...(postingPicker ? [] : [punctuationInsensitiveSearch(ledgerAccounts.code, search)])
-          )
+          postingPicker
+            ? punctuationInsensitiveSearch(ledgerAccounts.name, search)
+            : or(
+                punctuationInsensitiveSearch(ledgerAccounts.name, search),
+                punctuationInsensitiveSearch(ledgerAccounts.code, search)
+              )
         );
       }
 
