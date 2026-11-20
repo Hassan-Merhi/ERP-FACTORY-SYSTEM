@@ -5,7 +5,7 @@
  * It deliberately creates a fake company; it NEVER connects to the user's
  * production Render database. No test uses company ID 19 or real voucher IDs.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import { db, pool } from "../server/db";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
@@ -117,12 +117,23 @@ async function countRows(table: "vouchers" | "voucher_entries" | "accounting_pos
   return r.rows[0].n;
 }
 
+async function linkManualPosting(): Promise<void> {
+  if (!manualVoucherId) return;
+  await pool.query(
+    `INSERT INTO accounting_posting_requests
+     (company_id, idempotency_key, source_type, source_id, request_fingerprint, voucher_id)
+     VALUES ($1, $2, 'manual-journal', $3, $4, $5)
+     ON CONFLICT (company_id, idempotency_key) DO NOTHING`,
+    [companyId, `${unique}:manual-fx`, `${unique}:manual-fx`, "a".repeat(64), manualVoucherId]
+  );
+}
+
 databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", () => {
   beforeAll(async () => {
     const company = await pool.query<{ id: number }>(
       `INSERT INTO companies (code, name, company_type, base_currency, display_currency)
-       VALUES ($1, $1, 'erp', 'USD', 'ZMW') RETURNING id`,
-      [unique]
+       VALUES ($1, $2, 'erp', 'USD', 'ZMW') RETURNING id`,
+      [unique, unique]
     );
     companyId = company.rows[0].id;
     await pool.query(`INSERT INTO company_settings (company_id, timezone) VALUES ($1, 'Africa/Lusaka')`, [companyId]);
@@ -153,13 +164,12 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
       { ledgerId: lusaka, debit: "0", credit: "34.03" },
       { ledgerId: fxAccount, debit: "45.63", credit: "0" },
     ]);
-    await pool.query(
-      `INSERT INTO accounting_posting_requests
-       (company_id, idempotency_key, source_type, source_id, request_fingerprint, voucher_id)
-       VALUES ($1, $2, 'manual-journal', $3, $4, $5)`,
-      [companyId, `${unique}:manual-fx`, `${unique}:manual-fx`, "a".repeat(64), manualVoucherId]
-    );
+    await linkManualPosting();
   }, 120_000);
+
+  // The shared test setup deletes every posting request after each test
+  // (tests/voucherRequestIdentityTestBridge.mjs); re-link the manual journal's.
+  beforeEach(linkManualPosting);
 
   afterAll(async () => {
     if (!companyId) return;

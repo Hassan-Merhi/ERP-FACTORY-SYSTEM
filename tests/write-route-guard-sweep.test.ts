@@ -294,6 +294,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/import/opening-raw-stock",
   "POST /api/factory/import/raw-stock",
   "POST /api/factory/import/suppliers",
+  "POST /api/factory/loading-agents",
   "POST /api/factory/mix-batches",
   "POST /api/factory/mix-batches/:id/assign-bales",
   "POST /api/factory/mix-batches/:id/finalize",
