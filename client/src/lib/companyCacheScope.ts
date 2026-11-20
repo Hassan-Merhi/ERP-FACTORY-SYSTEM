@@ -62,6 +62,26 @@ export function addCompanyMutationHeaders(headers: Headers, snapshot: CompanyMut
   if (!headers.has("X-Expected-Company-Revision")) headers.set("X-Expected-Company-Revision", snapshot.serverRevision);
 }
 
+/**
+ * An API-level CSRF retry must retain the first request's company. The
+ * browser interceptor already does this for raw fetch retries, but apiRequest
+ * and privileged calls can also retry above it.
+ */
+export function assertPreparedCompanyMutationStillCurrent(headersInit?: HeadersInit): void {
+  const headers = new Headers(headersInit);
+  const expectedCompany = headers.get("X-Expected-Company-Id");
+  const expectedRevision = headers.get("X-Expected-Company-Revision");
+  if (!expectedCompany && !expectedRevision) return;
+  if (
+    transitioning ||
+    expectedCompany !== String(companyId) ||
+    !serverCompanyRevision ||
+    expectedRevision !== serverCompanyRevision
+  ) {
+    throw companyReadAbortError();
+  }
+}
+
 const GLOBAL_READ_ENDPOINTS = [
   /^\/api\/auth(?:\/|$)/,
   /^\/api\/user\/companies(?:\/|$)/,
