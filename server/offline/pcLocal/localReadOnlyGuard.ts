@@ -52,7 +52,8 @@ const OWN_ID_KINDS: ReadonlyMap<string, (body: Record<string, unknown>) => unkno
  * sale edits and cancellations (any other voucher is refused here), stock item master edits and deletes
  * (fields the cloud alone may change are refused by the route), and stock
  * transfer edits, finalizes and revisions (finalizing any other voucher is
- * refused here), container offloads, and file uploads, renames and moves.
+ * refused here), container offloads, file uploads, renames and moves, and new
+ * customers (Phase C1; the customer service records them).
  */
 export const PC_LOCAL_EVIDENCE_ROUTES: readonly RegExp[] = Object.freeze([
   /^PATCH \/api\/vouchers\/\d+\/payment-receipt$/,
@@ -67,6 +68,7 @@ export const PC_LOCAL_EVIDENCE_ROUTES: readonly RegExp[] = Object.freeze([
   /^(POST|PATCH) \/api\/containers\/\d+\/offload$/,
   /^PATCH \/api\/files\/\d+$/,
   /^POST \/api\/files\/upload$/,
+  /^POST \/api\/customers$/,
   /^POST \/api\/stock-items\/(update-names-by-code|bulk-assign-category|bulk-update-prices|import-opening-balances|bulk-update-uom|bulk-rename|import-barcodes|update-categories)$/,
 ]);
 

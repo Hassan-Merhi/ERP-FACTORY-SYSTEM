@@ -23,20 +23,12 @@ import type { PoolClient } from "pg";
 import { pool } from "../../db";
 import { hashEvidence } from "../../edge/edgeSyncStageProtocol.mjs";
 import { phase9OverridableConflicts, validatePhase9Event } from "../../edge/phase9EventProtocol.mjs";
-import { PHASE9_PAYMENT_DELETE_KIND, PHASE9_PAYMENT_EDIT_KIND } from "../../edge/phase9PaymentEnvelope.mjs";
-import { PHASE9_STOCK_ITEM_EDIT_KIND } from "../../edge/phase9StockItemEditEnvelope.mjs";
-import { PHASE9_POS_SALE_CANCEL_KIND, PHASE9_POS_SALE_EDIT_KIND } from "../../edge/phase9PosSaleEnvelope.mjs";
-import { PHASE9_RECEIVING_KIND } from "../../edge/phase9ReceivingEnvelope.mjs";
-import { PHASE9_ATTACHMENT_KIND, PHASE9_ATTACHMENT_UPDATE_KIND } from "../../edge/phase9AttachmentEnvelope.mjs";
-import { PHASE9_STOCK_ITEM_DELETE_KIND } from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
-import {
-  PHASE9_STOCK_TRANSFER_EDIT_KIND,
-  PHASE9_STOCK_TRANSFER_FINALIZE_KIND,
-  PHASE9_STOCK_TRANSFER_REVISION_KIND,
-  PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND,
-} from "../../edge/phase9StockTransferWorkflowEnvelope.mjs";
 import { Phase9EventConflict } from "../../edge/phase9CloudEventStore.mjs";
 import { Phase9StockItemNotYetSynced, translatePhase9LanStockItems } from "../../edge/phase9StockItemMap.mjs";
+import { Phase9PcRecordNotYetSynced, translatePhase9PcRecords } from "../../edge/phase9PcRecordMap.mjs";
+import { PC_ENVELOPE_KINDS } from "./pcEnvelopeKinds";
+
+export { PC_ENVELOPE_KINDS };
 import { PHASE9_HANDLERS } from "../../edge/phase9OperatorApply";
 import {
   createTenantDatabaseScope,
@@ -123,23 +115,6 @@ const PERMANENT_APPLY_REFUSALS: ReadonlySet<string> = new Set([
   "PHASE9_ATTACHMENT_FILE_NOT_STAGED",
   "PHASE9_ATTACHMENT_FILE_SIZE_MISMATCH",
 ]);
-
-/** Kinds a PC may deliver as a finished envelope, and their stream. */
-export const PC_ENVELOPE_KINDS: Readonly<Record<string, string>> = Object.freeze({
-  [PHASE9_PAYMENT_EDIT_KIND]: "payments",
-  [PHASE9_PAYMENT_DELETE_KIND]: "payments",
-  [PHASE9_STOCK_ITEM_EDIT_KIND]: "stock",
-  [PHASE9_STOCK_ITEM_DELETE_KIND]: "stock",
-  [PHASE9_STOCK_TRANSFER_EDIT_KIND]: "stock",
-  [PHASE9_STOCK_TRANSFER_FINALIZE_KIND]: "stock",
-  [PHASE9_STOCK_TRANSFER_REVISION_KIND]: "stock",
-  [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: "stock",
-  [PHASE9_RECEIVING_KIND]: "receiving",
-  [PHASE9_POS_SALE_EDIT_KIND]: "pos",
-  [PHASE9_POS_SALE_CANCEL_KIND]: "pos",
-  [PHASE9_ATTACHMENT_KIND]: "attachments",
-  [PHASE9_ATTACHMENT_UPDATE_KIND]: "attachments",
-});
 
 function prepareEnvelopeOperation(actor: BrowserActor, request: BrowserOperationRequest): PreparedOperation {
   const stream = Object.prototype.hasOwnProperty.call(PC_ENVELOPE_KINDS, request.kind)
@@ -410,7 +385,13 @@ export async function applyBrowserOperation(
         prepared.event.kind
       ];
       if (!handler) throw new BrowserSyncRefusal("OFFLINE_BROWSER_KIND_NOT_SUPPORTED", 400);
-      const handled = await translatePhase9LanStockItems(client, deviceId, prepared.event);
+      // Records the device made itself (stock items; a PC's customers and their
+      // ledgers) are named by the cloud's ids before the handler sees them.
+      const handled = await translatePhase9PcRecords(
+        client,
+        deviceId,
+        await translatePhase9LanStockItems(client, deviceId, prepared.event)
+      );
       await handler.authorize(client, handled as never);
       const result = (await handler.apply(
         client,
@@ -446,7 +427,9 @@ export async function applyBrowserOperation(
         detail: ((error as unknown as { detail?: Record<string, unknown> }).detail ?? {}) as Record<string, unknown>,
       };
     }
-    if (error instanceof Phase9StockItemNotYetSynced) return { status: "waiting", code: error.message };
+    if (error instanceof Phase9StockItemNotYetSynced || error instanceof Phase9PcRecordNotYetSynced) {
+      return { status: "waiting", code: error.message };
+    }
     // A PC sends a file's bytes before its record, so these cannot succeed on a
     // retry: refuse the entry instead of answering "try again" forever.
     if (error instanceof Error && PERMANENT_APPLY_REFUSALS.has(error.message)) {

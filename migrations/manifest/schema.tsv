@@ -2100,6 +2100,13 @@ column	public.factory_edge_payment_outbox.payload	{"type":"jsonb","notNull":true
 column	public.factory_edge_payment_outbox.payload_sha256	{"type":"character(64)","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_edge_payment_outbox.sequence	{"type":"bigint","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_edge_payment_outbox.site_id	{"type":"uuid","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_edge_pc_record_map.cloud_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_edge_pc_record_map.company_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_edge_pc_record_map.local_id	{"type":"integer","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_edge_pc_record_map.mapped_at	{"type":"timestamp with time zone","notNull":true,"default":"clock_timestamp()","identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_edge_pc_record_map.operation_id	{"type":"uuid","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_edge_pc_record_map.record_type	{"type":"text","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
+column	public.factory_edge_pc_record_map.site_id	{"type":"uuid","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_edge_pos_counter.last_sequence	{"type":"bigint","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_edge_pos_counter.site_id	{"type":"uuid","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
 column	public.factory_edge_pos_outbox.actor_user_id	{"type":"text","notNull":true,"default":null,"identity":null,"generated":null,"collation":null,"comment":null}
@@ -6440,6 +6447,11 @@ constraint	public.factory_edge_payment_outbox.factory_edge_payment_outbox_operat
 constraint	public.factory_edge_payment_outbox.factory_edge_payment_outbox_site_id_operation_id_unique	{"type":"u","def":"UNIQUE (site_id, operation_id)","validated":true}
 constraint	public.factory_edge_payment_outbox.factory_edge_payment_outbox_site_id_sequence_pk	{"type":"p","def":"PRIMARY KEY (site_id, sequence)","validated":true}
 constraint	public.factory_edge_payment_outbox.factory_edge_payment_source_fk	{"type":"f","def":"FOREIGN KEY (local_voucher_id) REFERENCES vouchers(id) ON DELETE RESTRICT","validated":true}
+constraint	public.factory_edge_pc_record_map.factory_edge_pc_record_map_cloud_id_check	{"type":"c","def":"CHECK (cloud_id > 0 AND cloud_id < 1000000000)","validated":true}
+constraint	public.factory_edge_pc_record_map.factory_edge_pc_record_map_company_id_fkey	{"type":"f","def":"FOREIGN KEY (company_id) REFERENCES companies(id)","validated":true}
+constraint	public.factory_edge_pc_record_map.factory_edge_pc_record_map_local_id_check	{"type":"c","def":"CHECK (local_id >= 1000000000)","validated":true}
+constraint	public.factory_edge_pc_record_map.factory_edge_pc_record_map_pkey	{"type":"p","def":"PRIMARY KEY (site_id, record_type, local_id)","validated":true}
+constraint	public.factory_edge_pc_record_map.factory_edge_pc_record_map_type_check	{"type":"c","def":"CHECK (record_type = ANY (ARRAY['customer'::text, 'ledger_account'::text]))","validated":true}
 constraint	public.factory_edge_pos_counter.factory_edge_pos_counter_pkey	{"type":"p","def":"PRIMARY KEY (site_id)","validated":true}
 constraint	public.factory_edge_pos_outbox.factory_edge_pos_outbox_site_id_lan_invoice_number_unique	{"type":"u","def":"UNIQUE (site_id, lan_invoice_number)","validated":true}
 constraint	public.factory_edge_pos_outbox.factory_edge_pos_outbox_site_id_operation_id_unique	{"type":"u","def":"UNIQUE (site_id, operation_id)","validated":true}
@@ -8369,6 +8381,7 @@ index	public.factory_edge_payment_counter_pkey	{"table":"public.factory_edge_pay
 index	public.factory_edge_payment_outbox_create_once	{"table":"public.factory_edge_payment_outbox","def":"CREATE UNIQUE INDEX factory_edge_payment_outbox_create_once ON public.factory_edge_payment_outbox USING btree (site_id, local_voucher_id) WHERE (operation_kind = 'voucher.payment-receipt.v1'::text)","valid":true,"constraint":false}
 index	public.factory_edge_payment_outbox_site_id_operation_id_unique	{"table":"public.factory_edge_payment_outbox","def":"CREATE UNIQUE INDEX factory_edge_payment_outbox_site_id_operation_id_unique ON public.factory_edge_payment_outbox USING btree (site_id, operation_id)","valid":true,"constraint":true}
 index	public.factory_edge_payment_outbox_site_id_sequence_pk	{"table":"public.factory_edge_payment_outbox","def":"CREATE UNIQUE INDEX factory_edge_payment_outbox_site_id_sequence_pk ON public.factory_edge_payment_outbox USING btree (site_id, sequence)","valid":true,"constraint":true}
+index	public.factory_edge_pc_record_map_pkey	{"table":"public.factory_edge_pc_record_map","def":"CREATE UNIQUE INDEX factory_edge_pc_record_map_pkey ON public.factory_edge_pc_record_map USING btree (site_id, record_type, local_id)","valid":true,"constraint":true}
 index	public.factory_edge_pos_counter_pkey	{"table":"public.factory_edge_pos_counter","def":"CREATE UNIQUE INDEX factory_edge_pos_counter_pkey ON public.factory_edge_pos_counter USING btree (site_id)","valid":true,"constraint":true}
 index	public.factory_edge_pos_outbox_site_id_lan_invoice_number_unique	{"table":"public.factory_edge_pos_outbox","def":"CREATE UNIQUE INDEX factory_edge_pos_outbox_site_id_lan_invoice_number_unique ON public.factory_edge_pos_outbox USING btree (site_id, lan_invoice_number)","valid":true,"constraint":true}
 index	public.factory_edge_pos_outbox_site_id_operation_id_unique	{"table":"public.factory_edge_pos_outbox","def":"CREATE UNIQUE INDEX factory_edge_pos_outbox_site_id_operation_id_unique ON public.factory_edge_pos_outbox USING btree (site_id, operation_id)","valid":true,"constraint":true}
@@ -10012,6 +10025,7 @@ table	public.factory_edge_event_stage_receipts	{"kind":"r","unlogged":false,"rls
 table	public.factory_edge_outbox_counter	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_edge_payment_counter	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_edge_payment_outbox	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
+table	public.factory_edge_pc_record_map	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_edge_pos_counter	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_edge_pos_outbox	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
 table	public.factory_edge_pressing_counter	{"kind":"r","unlogged":false,"rls":false,"forceRls":false,"partitionKey":null,"comment":null}
