@@ -202,6 +202,22 @@
       "reason": "CREATE SCHEMA interpolates only a quote_ident()-rendered schema name from the committed manifest. scripts/db/lib/schemaDdl.mjs is imported only by the operator CLI scripts/db/migrate.mjs (and isLosslessTypeChange by its test); no server route or request can supply manifest entries, and the live database's own catalog text never becomes DDL."
     },
     {
+      "classification": "test-fixture",
+      "context": "withWorld.one",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "one(...) callers in the same test file, which pass SQL template literals with $n placeholders",
+          "validation": "Every caller passes a literal SQL string and a separate params array; the client is a rolled-back test transaction."
+        }
+      ],
+      "id": "060598a673146788f7ec",
+      "kind": "indirect-query-text",
+      "path": "tests/sp-excel-import-validation-coverage.test.ts",
+      "reason": "Thin query helper over a rolled-back test client; the SQL text is always a literal. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
+    },
+    {
       "id": "060855704d4907b437b2",
       "path": "server/services/factory/netPositionHistoricalOtw.ts",
       "kind": "sql.raw",
@@ -958,7 +974,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -990,7 +1006,7 @@
         {
           "expression": "deletedAt ?? \"NULL\"",
           "source": "deletedAt param of w.item() tests/soft-delete-purge-db.test.ts:43; callers :66-69 pass OLD, OLD, RECENT, null (consts :14-15).",
-          "validation": "Values limited to the two literal interval expressions OLD/RECENT or null \u2192 literal \"NULL\"."
+          "validation": "Values limited to the two literal interval expressions OLD/RECENT or null → literal \"NULL\"."
         }
       ],
       "reason": "Only hard-coded SQL timestamp expressions from file constants reach the text; code/name bound as parameters. Test file run only by vitest against the disposable test database (server/db.ts:31 NODE_ENV=test); no HTTP request, cookie, import file or external data reaches this text."
@@ -1376,7 +1392,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -2350,6 +2366,22 @@
       "reason": "Only `$n` placeholder text and code-owned SQL fragments are generated; every request-derived value is pushed into the bound-parameter array and sent by node-postgres as a parameter."
     },
     {
+      "classification": "test-fixture",
+      "context": "world.one",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "one(...) callers in the same test file, which pass SQL template literals with $n placeholders",
+          "validation": "Every caller passes a literal SQL string and a separate params array; the client is a rolled-back test transaction."
+        }
+      ],
+      "id": "37c7c9ae1ce2cf2b20be",
+      "kind": "indirect-query-text",
+      "path": "tests/factory-net-position-historical-orders-coverage.test.ts",
+      "reason": "Thin query helper over a rolled-back test client; the SQL text is always a literal. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
+    },
+    {
       "id": "37eedb150bbf92388a1f",
       "path": "server/routes/ticketReportingRoutes.ts",
       "kind": "query-text",
@@ -2837,7 +2869,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -3123,7 +3155,7 @@
       "dynamicInputs": [
         {
           "expression": "ctx.companyId",
-          "source": "ctx.companyId from seedTestData(PREFIX) tests/wave12-audit-trail.test.ts:86 \u2192 tests/setup.ts:577-585 db.insert(companies).returning() serial id.",
+          "source": "ctx.companyId from seedTestData(PREFIX) tests/wave12-audit-trail.test.ts:86 → tests/setup.ts:577-585 db.insert(companies).returning() serial id.",
           "validation": "Integer serial primary key returned by PostgreSQL; cannot contain SQL syntax."
         }
       ],
@@ -4018,7 +4050,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -4808,7 +4840,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -5065,7 +5097,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -5203,12 +5235,12 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         },
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -6297,7 +6329,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -6425,7 +6457,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -7045,7 +7077,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -7550,7 +7582,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -7604,6 +7636,22 @@
       "reason": "These PL/pgSQL statements are test data inside a JavaScript string literal used to prove the scanner flags %s/concatenated EXECUTE; the text is parsed, never sent to PostgreSQL."
     },
     {
+      "classification": "test-fixture",
+      "context": "one",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "one(...) callers in the same test file, which pass SQL template literals with $n placeholders",
+          "validation": "Every caller passes a literal SQL string and a separate params array; the client is a rolled-back test transaction."
+        }
+      ],
+      "id": "bc980a53e6819daf26cf",
+      "kind": "indirect-query-text",
+      "path": "tests/chat-erp-context-step2-coverage.test.ts",
+      "reason": "Thin query helper over a rolled-back test client; the SQL text is always a literal. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
+    },
+    {
       "id": "bccc7ba94e17cfa1e349",
       "path": "tests/security-sql-injection-regression.test.ts",
       "kind": "query-text",
@@ -7614,7 +7662,7 @@
         {
           "expression": "parties",
           "source": "const parties = `sqli_parties_${suffix}` with suffix = `${process.pid}_${Date.now() % 100000}` (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text, the numeric process id and a numeric timestamp remainder \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text, the numeric process id and a numeric timestamp remainder — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -7780,6 +7828,22 @@
         }
       ],
       "reason": "False positive: the string is an entry of the errorDetails array returned in the JSON response (offloadRoutes.ts:811); it never reaches a query. All SQL in this loop uses drizzle sql`` bound parameters (:722-732)."
+    },
+    {
+      "classification": "test-fixture",
+      "context": "withWorld.one",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "one(...) callers in the same test file, which pass SQL template literals with $n placeholders",
+          "validation": "Every caller passes a literal SQL string and a separate params array; the client is a rolled-back test transaction."
+        }
+      ],
+      "id": "c09be486538cd863d1fc",
+      "kind": "indirect-query-text",
+      "path": "tests/edge-phase9-pressing-apply-coverage.test.ts",
+      "reason": "Thin query helper over a rolled-back test client; the SQL text is always a literal. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
     },
     {
       "id": "c18c1e71e80f6c10962b",
@@ -7949,6 +8013,22 @@
         }
       ],
       "reason": "NOT SQL: scanner false positive (key=value text). Log message; actual writes at :251-258 use drizzle sql`` with bound values."
+    },
+    {
+      "classification": "test-fixture",
+      "context": "goldenCoast.one",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "one(...) callers in the same test file, which pass SQL template literals with $n placeholders",
+          "validation": "Every caller passes a literal SQL string and a separate params array; the client is a rolled-back test transaction."
+        }
+      ],
+      "id": "c5cf08874b7ae38f3404",
+      "kind": "indirect-query-text",
+      "path": "tests/sp-golden-coast-pre-cutover-balances-coverage.test.ts",
+      "reason": "Thin query helper over a rolled-back test client; the SQL text is always a literal. Test-only code run by vitest against a disposable test database; no HTTP request, file import or external service data reaches this value.",
+      "userControlled": "no"
     },
     {
       "id": "c6f5dbdd765d50b5f483",
@@ -9084,7 +9164,7 @@
         {
           "expression": "ledger",
           "source": "const ledger = `sqli_ledger_${suffix}` with the same numeric suffix (tests/security-sql-injection-regression.test.ts)",
-          "validation": "only literal text and numeric suffix \u2014 matches [a-z_0-9]+"
+          "validation": "only literal text and numeric suffix — matches [a-z_0-9]+"
         }
       ],
       "reason": "Disposable tables created and dropped by the injection regression suite on the test database; their names are a literal prefix plus numeric process/timestamp digits, and the hostile payload strings are passed only as bound values or rejected by allowlists."
@@ -9790,7 +9870,7 @@
       "dynamicInputs": [
         {
           "expression": "column",
-          "source": "targets[i][0] passed by account-history callers (AccountLineColumn union) \u2014 server/services/accounting/accountHistoryPolicy.ts:97-103",
+          "source": "targets[i][0] passed by account-history callers (AccountLineColumn union) — server/services/accounting/accountHistoryPolicy.ts:97-103",
           "validation": "LINE_COLUMNS.has(column) membership test at accountHistoryPolicy.ts:104 (7 fixed column names), then quoted by sql.identifier"
         }
       ],
