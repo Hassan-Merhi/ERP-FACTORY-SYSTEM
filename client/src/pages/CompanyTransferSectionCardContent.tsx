@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./CompanyTransferSection.tsx
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -178,24 +179,14 @@ export function CompanyTransferSectionCardContent({
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Destination Account</Label>
-                    <Select
-                      value={ruleDestAccountId}
-                      onValueChange={setRuleDestAccountId}
-                      disabled={!ruleDestCompanyId}
-                      data-testid={`select-rule-dest-account-${module}`}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={ruleDestCompanyId ? "Select account" : "Select company first"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accountOptions(ruleDestAccounts).map((account) => (
-                          <SelectItem key={account.id} value={String(account.id)}>
-                            {account.name}
-                            <span className="ml-1 text-xs text-muted-foreground">({account.accountType})</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <UnifiedAccountPicker
+                options={accountOptions(ruleDestAccounts).map((account) => ({ value: String(account.id), name: account.name }))}
+                value={ruleDestAccountId}
+                onChange={setRuleDestAccountId}
+                placeholder={ruleDestCompanyId ? "Select account" : "Select company first"}
+                disabled={!ruleDestCompanyId}
+                testId={`select-rule-dest-account-${module}`}
+              />
                   </div>
                 </div>
 
