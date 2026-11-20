@@ -116,7 +116,7 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
           aria-label={props.ariaLabel ?? placeholder}
           disabled={props.disabled}
           data-testid={props.testId}
-          className={cn("min-h-10 w-full justify-between gap-2 px-3 font-normal", props.className)}
+          className={cn("min-h-11 w-full justify-between gap-2 px-3 font-normal sm:min-h-9", props.className)}
           title={label}
         >
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
