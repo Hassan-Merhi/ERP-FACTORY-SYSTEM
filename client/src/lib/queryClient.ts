@@ -168,10 +168,10 @@ if (
     }
 
     if (isFactoryUiRequest) {
-      const factoryHeaders = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+      const factoryHeaders = new Headers(effectiveInit?.headers || (input instanceof Request ? input.headers : undefined));
       factoryHeaders.set("X-App-Mode", "factory");
       factoryHeaders.set("X-Factory-Page", window.location.pathname);
-      effectiveInit = { ...init, headers: factoryHeaders };
+      effectiveInit = { ...effectiveInit, headers: factoryHeaders };
       if (effectiveInit.credentials === undefined) effectiveInit.credentials = "include";
     }
 
