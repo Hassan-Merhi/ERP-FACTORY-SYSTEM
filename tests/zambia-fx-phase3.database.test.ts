@@ -7,7 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
-import { pool } from "../server/db";
+import { db, pool } from "../server/db";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { runInCompanyPostingScope } from "../server/services/accounting/scheduledPostingScope";
@@ -75,8 +75,8 @@ async function createVoucher(
           line.debit,
           line.credit,
           foreign ? "ZMW" : "USD",
-          foreign ? line.nativeDebit ?? "0" : line.debit,
-          foreign ? line.nativeCredit ?? "0" : line.credit,
+          foreign ? (line.nativeDebit ?? "0") : line.debit,
+          foreign ? (line.nativeCredit ?? "0") : line.credit,
           foreign ? new Decimal(line.nativeDebit ?? "0").div(line.rate!).toFixed(6) : line.debit,
           foreign ? new Decimal(line.nativeCredit ?? "0").div(line.rate!).toFixed(6) : line.credit,
           foreign ? line.rate : "1",
@@ -105,10 +105,9 @@ async function countRows(table: "vouchers" | "voucher_entries" | "accounting_pos
     return r.rows[0].n;
   }
   if (table === "vouchers") {
-    const r = await pool.query<{ n: number }>(
-      "SELECT COUNT(*)::int AS n FROM vouchers WHERE company_id=$1",
-      [companyId]
-    );
+    const r = await pool.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM vouchers WHERE company_id=$1", [
+      companyId,
+    ]);
     return r.rows[0].n;
   }
   const r = await pool.query<{ n: number }>(
@@ -211,11 +210,7 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
     });
     expect(result.blockers).not.toContain("FX_CORRECTION_AMOUNT_MISMATCH");
     expect(
-      await Promise.all([
-        countRows("vouchers"),
-        countRows("voucher_entries"),
-        countRows("accounting_posting_requests"),
-      ])
+      await Promise.all([countRows("vouchers"), countRows("voucher_entries"), countRows("accounting_posting_requests")])
     ).toEqual(before);
   });
 
@@ -230,7 +225,7 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
     expect(preview.status).toBe("ready_for_review");
     expect(preview.blockers).toEqual([]);
     const outstanding = await runInCompanyPostingScope(companyId, () =>
-      findLegacyManualFxConflicts((await import("../server/db")).db, companyId, preview.businessDate)
+      findLegacyManualFxConflicts(db, companyId, preview.businessDate)
     );
     expect(outstanding.map((v) => v.voucherId)).toContain(manualVoucherId);
   });

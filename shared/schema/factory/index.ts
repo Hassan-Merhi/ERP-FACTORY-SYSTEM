@@ -9,6 +9,7 @@ export * from "./production";
 export * from "./suppliers-containers";
 export * from "./raw-stock-mix";
 export * from "./customer-orders";
+export * from "./loading-agents";
 export * from "./dispatch-financials";
 export * from "./daybook-fx";
 export * from "./workers-payroll";
