@@ -7,9 +7,11 @@
  * "FX Revaluation Gain/Loss". This replaces the journal that was being
  * entered by hand after each rate change.
  *
- * The figures are exactly those of the monetary FX valuation the reports
- * already show (getMonetaryFxValuation): per account,
- *   adjustment = native balance at the current rate - historical USD book.
+ * The figures come from the monetary FX valuation used by Net Position
+ * (getMonetaryFxValuation): for each account,
+ *   adjustment = rounded current USD translation - rounded posted USD closing.
+ * The six-decimal historical USD basis is retained for diagnostics, but using
+ * it for postings would generate per-account one-cent reporting residues.
  * Each adjusted account gets a base-only line: it carries the account's own
  * foreign currency with a zero native amount, so native balances never move
  * and the account's historical USD basis becomes its current valuation. A
@@ -30,6 +32,7 @@ import { getMonetaryFxValuation, type MonetaryFxValuationRow } from "./monetaryF
 import type { MonetaryFxCategory, MonetaryFxRate } from "./monetaryFxValuationCore";
 import { ensureSystemAccounts } from "./systemAccounts";
 import { findLegacyManualFxConflicts, legacyManualFxConflictReason } from "./legacyManualFxGuard";
+import { postedFxRevaluationAdjustmentUsd } from "./fxRevaluationAmount";
 
 export const FX_REVALUATION_SOURCE_TYPE = "fx-unrealized-revaluation";
 /** The only line kind the database accepts with a base amount and no native amount (migration 0011). */
@@ -118,7 +121,13 @@ export async function postFxRevaluation(input: {
         if (holdsForeign || row.unresolvedOpening || row.unresolvedEntryCount > 0) unresolvedAccounts.push(row.name);
         continue;
       }
-      const adjustment = new Decimal(row.translationDifferenceUsd).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+      // Reports display the posted book in cents. The six-decimal historic
+      // base is diagnostic precision, not the amount to post again. Reconcile
+      // each monetary target to its displayed translated USD balance exactly.
+      if (row.currentTranslatedUsd === null) continue;
+      const adjustment = new Decimal(
+        postedFxRevaluationAdjustmentUsd(row.currentTranslatedUsd, row.bookClosingUsd)
+      );
       if (adjustment.abs().lt(ONE_CENT)) continue;
       const currency = adjustmentCurrency(row, rates);
       if (!currency) continue;
