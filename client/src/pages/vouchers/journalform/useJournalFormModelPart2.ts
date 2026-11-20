@@ -91,7 +91,7 @@ export function useJournalFormModelPart2({
   useEffect(() => setLiveAccountSearch(journalAccountSearchTerm), [journalAccountSearchTerm, setLiveAccountSearch]);
   const filteredJournalAccounts = useMemo(() => {
     if (!journalAccountSearchTerm.trim()) return allAccounts;
-    return allAccounts.filter((account) => searchAny(journalAccountSearchTerm, account.name, account.code));
+    return allAccounts.filter((account) => searchAny(journalAccountSearchTerm, account.name));
   }, [allAccounts, journalAccountSearchTerm]);
 
   useEffect(() => {
