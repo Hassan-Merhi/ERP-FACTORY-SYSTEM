@@ -186,15 +186,17 @@ describe("company selection across browser tabs", () => {
     sessionCompanyId = 3;
 
     await act(async () => {
-      window.dispatchEvent(new StorageEvent("storage", {
-        key: COMPANY_SESSION_STORAGE_PULSE,
-        newValue: JSON.stringify({
-          type: "company-committed",
-          companyId: 1, // stale hint; the server has already moved to 3
-          sourceId: "other-tab",
-          nonce: "pulse-1",
-        }),
-      }));
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: COMPANY_SESSION_STORAGE_PULSE,
+          newValue: JSON.stringify({
+            type: "company-committed",
+            companyId: 1, // stale hint; the server has already moved to 3
+            sourceId: "other-tab",
+            nonce: "pulse-1",
+          }),
+        })
+      );
     });
 
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(3));
@@ -226,7 +228,10 @@ describe("company selection across browser tabs", () => {
     const { result } = await renderOnCompanyOne();
     let resolveSession!: (value: { companyId: number }) => void;
     harness.fetchSessionCompany.mockImplementationOnce(
-      () => new Promise<{ companyId: number }>((resolve) => { resolveSession = resolve; })
+      () =>
+        new Promise<{ companyId: number }>((resolve) => {
+          resolveSession = resolve;
+        })
     );
 
     await act(async () => {
@@ -237,7 +242,9 @@ describe("company selection across browser tabs", () => {
     expect(result.current.isCheckingCompanySession).toBe(true);
     await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
 
-    await act(async () => { resolveSession({ companyId: 2 }); });
+    await act(async () => {
+      resolveSession({ companyId: 2 });
+    });
     await waitFor(() => {
       expect(result.current.selectedCompany?.id).toBe(2);
       expect(result.current.isLoading).toBe(false);
@@ -248,7 +255,10 @@ describe("company selection across browser tabs", () => {
     const { result } = await renderOnCompanyOne();
     let resolveSession!: (value: { companyId: number }) => void;
     harness.fetchSessionCompany.mockImplementationOnce(
-      () => new Promise<{ companyId: number }>((resolve) => { resolveSession = resolve; })
+      () =>
+        new Promise<{ companyId: number }>((resolve) => {
+          resolveSession = resolve;
+        })
     );
 
     await act(async () => {
@@ -259,7 +269,9 @@ describe("company selection across browser tabs", () => {
     expect(result.current.isLoading).toBe(false);
     await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
 
-    await act(async () => { resolveSession({ companyId: 1 }); });
+    await act(async () => {
+      resolveSession({ companyId: 1 });
+    });
     await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(false));
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(harness.apiRequest).not.toHaveBeenCalled();
@@ -292,11 +304,8 @@ describe("company selection across browser tabs", () => {
     });
 
     expect(result.current.selectedCompany?.id).toBe(2);
-    expect(messages).toEqual([
-      expect.objectContaining({ type: "company-committed", companyId: 2 }),
-    ]);
+    expect(messages).toEqual([expect.objectContaining({ type: "company-committed", companyId: 2 })]);
     expect(localStorage.getItem(COMPANY_SESSION_STORAGE_PULSE)).toContain('"companyId":2');
     listener.close();
   });
-
 });
