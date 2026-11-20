@@ -112,9 +112,8 @@ if (
     // The authenticated server session, not the URL, owns company-specific
     // responses. Reject GETs started before or during a company transition.
     // Session/auth/health probes remain available to complete the switch.
-    const readScope = method === "GET" && pathname && isCompanyOwnedApiRead(pathname)
-      ? captureCompanyReadSnapshot()
-      : null;
+    const readScope =
+      method === "GET" && pathname && isCompanyOwnedApiRead(pathname) ? captureCompanyReadSnapshot() : null;
     if (readScope) assertCompanyReadSnapshot(readScope);
 
     // Once /api/auth/me has confirmed expiry, stop protected traffic at the
@@ -245,8 +244,9 @@ if (
       if (!OFFLINE_MODE_ENABLED || !exactReadUrl || effectiveInit?.signal?.aborted) return null;
       const { readColdStartIdentityResponse, readPreparedOfflineResponse } = await import("./offline/offlineReadCache");
       // A read-only cold start (plan batch 5) also answers the identity reads from its sealed ticket.
-      const cached = readColdStartIdentityResponse(method, exactReadUrl) ??
-        await readPreparedOfflineResponse(method, exactReadUrl);
+      const cached =
+        readColdStartIdentityResponse(method, exactReadUrl) ??
+        (await readPreparedOfflineResponse(method, exactReadUrl));
       if (readScope) assertCompanyReadSnapshot(readScope);
       return cached;
     };
