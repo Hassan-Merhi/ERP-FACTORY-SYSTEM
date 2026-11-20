@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -154,33 +154,21 @@ export function RetailLedgerPanel({
               <Label className="text-xs">
                 {reason.label ?? reason.reasonCode} ({reason.direction.replace("_", " ")})
               </Label>
-              <Select
+              <UnifiedAccountPicker
+                options={[
+                  { value: "__none__", name: "No account (movements refused)" },
+                  ...ledgers.map((account) => ({ value: `ledger:${account.id}`, name: account.name })),
+                  ...banks.map((account) => ({ value: `bank:${account.id}`, name: account.name })),
+                ]}
                 value={draft[reason.reasonCode] || "__none__"}
                 disabled={!recordChanges.allowed}
-                onValueChange={(v) =>
+                onChange={(v) =>
                   setDraft((current) => ({ ...current, [reason.reasonCode]: v === "__none__" ? "" : v }))
                 }
-              >
-                <SelectTrigger
-                  className="mt-1 h-9 w-full px-2 text-sm"
-                  aria-label={`${reason.label ?? reason.reasonCode} account`}
-                >
-                  <SelectValue placeholder="No account (movements refused)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No account (movements refused)</SelectItem>
-                  {ledgers.map((account) => (
-                    <SelectItem key={`ledger:${account.id}`} value={`ledger:${account.id}`}>
-                      {account.code} · {account.name}
-                    </SelectItem>
-                  ))}
-                  {banks.map((account) => (
-                    <SelectItem key={`bank:${account.id}`} value={`bank:${account.id}`}>
-                      Bank · {account.code} · {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="No account (movements refused)"
+                ariaLabel={`${reason.label ?? reason.reasonCode} account`}
+                className="mt-1 h-9"
+              />     </Select>
             </div>
           ))}
           {recordChanges.allowed && (
