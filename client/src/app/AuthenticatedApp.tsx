@@ -25,7 +25,7 @@ interface AuthenticatedAppProps {
 }
 
 export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) {
-  const { selectedCompany, isLoading: companyLoading } = useCompany();
+  const { selectedCompany, isLoading: companyLoading, isCheckingCompanySession } = useCompany();
   useOfflineReadScopeLifecycle(selectedCompany?.id ?? null, String(user.id));
   useMobilePerformanceLifecycle();
   useWsInvalidation();
@@ -44,7 +44,7 @@ export function AuthenticatedApp({ user, handleLogout }: AuthenticatedAppProps) 
       userRole: user.role ?? undefined,
     });
 
-  if (companyLoading || !selectedCompany) return <AppLoadingState />;
+  if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) return <AppLoadingState />;
 
   const isAdminOwner = user.role === "Admin" || user.role === "Owner" || user.role === "Developer";
   const routeState = resolveAuthenticatedAppRoute({
