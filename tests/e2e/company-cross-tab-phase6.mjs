@@ -71,7 +71,7 @@ async function waitForCompany(page, id) {
   check(Boolean(name), "Unknown fixture company", id);
   await page.waitForFunction(
     (companyName) => document.querySelector('[data-testid="button-company-selector"]')?.getAttribute("title") === companyName,
-    { timeout: timeoutMs },
+    { timeout: timeoutMs, polling: 100 },
     name
   );
 }
@@ -91,7 +91,7 @@ async function login(page) {
   await page.click('[data-testid="button-login"]');
   await page.waitForFunction(
     () => location.pathname !== "/login" && Boolean(document.getElementById("main-content")),
-    { timeout: timeoutMs }
+    { timeout: timeoutMs, polling: 100 }
   );
   const me = await api(page, "/api/auth/me");
   check(me.status === 200, "Login did not establish a session", me);
