@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ArrowLeftRight, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -154,10 +154,10 @@ export default function MergeBaleProducts() {
       ) : (
         /* Select step */
         <div className="space-y-4">
-          <Input
+          <SearchField
             placeholder="Search by name, code, or article code..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onValueChange={setSearch}
             data-testid="input-merge-search"
           />
 
