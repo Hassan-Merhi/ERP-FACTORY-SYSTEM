@@ -131,7 +131,7 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
             value={query}
             onValueChange={setQuery}
             placeholder={props.searchPlaceholder ?? "Search account name..."}
-            aria-label="Search account name"
+            aria-label="Search accounts..."
             data-testid={props.testId ? `${props.testId}-search` : undefined}
           />
           <CommandList className="max-h-64">
