@@ -421,7 +421,24 @@ route refuses them (`OFFLINE_BROWSER_KIND_NOT_SUPPORTED`). Editing or deleting a
 journal on a PC is still refused. Covered by
 `tests/pc-sync-offline-journals.test.ts`.
 
-Still to come: the other voucher types (invoices, purchases), masters with held edits and duplicate-customer merge (Phase C),
+**Accounting Sales vouchers on a PC.** In entry mode the PC also accepts
+accounting Sales vouchers entered through the voucher screen
+(`POST /api/vouchers/with-entries`), but only those the protected central path
+takes and the factory LAN server records: an active (not optional) USD voucher
+with a client request id, at least two lines, each a debit or a credit with at
+most two decimals. Any other voucher type, and an optional or non-USD voucher,
+is refused on the PC before it is saved (`423 OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED`).
+The cloud posts each one once through the same service as the live route
+(`server/services/accounting/centralGenericVoucherCreate.ts`): customer lines
+take the customer's linked ledger, then the central posting engine, employee
+balances and audit. A voucher that is unbalanced, falls in a closed period,
+names an account or customer the cloud does not have, or a ledger that does not
+match the customer's linked ledger is held as `PHASE9_SALES_VOUCHER_REFUSED`
+(reject-only); one by a cashier is held as `PHASE9_ACTOR_ROLE_NOT_PERMITTED`.
+Sales vouchers are PC-only. Covered by
+`tests/pc-sync-offline-sales-vouchers.test.ts`.
+
+Still to come: purchases, masters with held edits and duplicate-customer merge (Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 

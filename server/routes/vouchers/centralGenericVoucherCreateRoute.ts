@@ -1,70 +1,16 @@
 import type { Express, NextFunction, Request, Response } from "express";
-import { and, eq, inArray } from "drizzle-orm";
-import { customers } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { db, type DbTransaction } from "../../db";
+import { db } from "../../db";
 import { errorBody, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
-import { PostingValidationError, postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
-import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
+import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
+import { postCentralGenericVoucherTx } from "../../services/accounting/centralGenericVoucherCreate";
 import { captureEdgeVoucherTx } from "../../edge/edgeVoucherOutbox";
-import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
-import {
-  buildGenericVoucherPostingRequest,
-  supportsCentralGenericVoucher,
-} from "../../services/accounting/genericVoucherPosting";
+import { supportsCentralGenericVoucher } from "../../services/accounting/genericVoucherPosting";
 import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
-import { buildVoucherChangesForCreate, getCurrentExchangeRate, logAudit, snapshotVoucherEntries } from "../_helpers";
-
-const postingDependencies = createDatabasePostingDependencies();
-type CustomerLinkedLedgerRow = { id: number; ledgerAccountId: number | null };
-
-async function resolveCustomerLinkedLedgersTx(input: {
-  tx: DbTransaction;
-  companyId: number;
-  entries: Array<Record<string, unknown>>;
-}): Promise<Array<Record<string, unknown>>> {
-  const customerIds = [
-    ...new Set(input.entries.map((entry) => Number(entry.customerId)).filter((id) => Number.isInteger(id) && id > 0)),
-  ];
-
-  if (customerIds.length === 0) return input.entries.map((entry) => ({ ...entry }));
-
-  const rows: CustomerLinkedLedgerRow[] = await input.tx
-    .select({ id: customers.id, ledgerAccountId: customers.ledgerAccountId })
-    .from(customers)
-    .where(and(eq(customers.companyId, input.companyId), inArray(customers.id, customerIds)));
-  const customerById = new Map<number, CustomerLinkedLedgerRow>(rows.map((row) => [Number(row.id), row] as const));
-
-  return input.entries.map((entry) => {
-    const customerId = Number(entry.customerId);
-    if (!Number.isInteger(customerId) || customerId <= 0) return { ...entry };
-
-    const customer = customerById.get(customerId);
-    if (!customer) {
-      throw new PostingValidationError(
-        "POSTING_TARGET_NOT_OWNED",
-        `Customer ${customerId} not found in company ${input.companyId}`
-      );
-    }
-
-    const linkedLedgerId = customer.ledgerAccountId == null ? null : Number(customer.ledgerAccountId);
-    const suppliedLedgerId = entry.ledgerAccountId == null ? null : Number(entry.ledgerAccountId);
-    if (linkedLedgerId && suppliedLedgerId && linkedLedgerId !== suppliedLedgerId) {
-      throw new PostingValidationError(
-        "POSTING_LINKED_LEDGER_MISMATCH",
-        `Customer ${customerId} is linked to ledger ${linkedLedgerId}, but the entry specifies ledger ${suppliedLedgerId}`
-      );
-    }
-
-    return {
-      ...entry,
-      ...(linkedLedgerId ? { ledgerAccountId: linkedLedgerId } : {}),
-    };
-  });
-}
+import { getCurrentExchangeRate } from "../_helpers";
 
 function postingStatus(error: PostingValidationError): number {
   return error.code === "POSTING_IDEMPOTENCY_CORRUPT" ? 409 : 400;
@@ -98,64 +44,34 @@ async function createCentralGenericVoucher(req: Request, res: Response, next: Ne
       suppliedRate != null ? String(suppliedRate) : currentRate != null ? String(currentRate) : null;
 
     const result = await db.transaction(async (tx) => {
-      const resolvedEntries = await resolveCustomerLinkedLedgersTx({
-        tx,
-        companyId,
-        entries: req.body.entries,
-      });
-      const built = buildGenericVoucherPostingRequest({
+      // The posting itself (linked ledgers, central engine, employee balances,
+      // audit) is the shared service, also used by the offline replay.
+      const created = await postCentralGenericVoucherTx(tx, {
         companyId,
         clientRequestId: req.body.clientRequestId,
-        // Phase 22 (B), PE8: the form's display number (built from Date.now())
-        // is not the voucher number; the engine allocates the gapless one.
-        voucher: { ...req.body.voucher, voucherNumber: undefined },
-        entries: resolvedEntries,
+        voucher: req.body.voucher,
+        entries: req.body.entries,
         exchangeRate: voucherExchangeRate,
         actor: {
-          userId: userId ?? null,
+          userId: userId as string,
           username: req.session.username || "unknown",
           reason: "Generic voucher creation",
         },
       });
-
-      const posted = await postBalancedVoucherTx(tx, built.request, postingDependencies);
-
-      if (!posted.replayed) {
-        await applyEmployeeBalanceDeltasTx({
-          tx,
-          companyId,
-          entries: posted.entries,
-        });
-        // Wave 16 (B): audited in the posting transaction; an audit failure
-        // rolls the voucher back.
-        const entrySnapshot = await snapshotVoucherEntries(posted.entries, tx);
-        await logAudit(
-          {
-            userId: userId!,
-            username: req.session.username || "unknown",
-            companyId,
-            action: "create",
-            tableName: "vouchers",
-            recordId: posted.voucher.id,
-            recordIdentifier: posted.voucher.voucherNumber,
-            changes: buildVoucherChangesForCreate(posted.voucher, entrySnapshot),
-          },
-          tx
-        );
+      if (!created.posted.replayed) {
         // Phase 8: only the central protected path is approved for new LAN
         // vouchers. Capture immutable evidence in this SAME transaction;
         // if its outbox insert fails, rollback the voucher and its audit.
         await captureEdgeVoucherTx(tx, {
           companyId,
           actorUserId: String(userId),
-          localVoucherId: posted.voucher.id,
-          requestId: built.clientRequestId,
-          voucher: posted.voucher,
-          entries: posted.entries,
+          localVoucherId: created.posted.voucher.id,
+          requestId: created.clientRequestId,
+          voucher: created.posted.voucher,
+          entries: created.posted.entries,
         });
       }
-
-      return { posted, clientRequestId: built.clientRequestId };
+      return created;
     });
 
     const { posted, clientRequestId } = result;
