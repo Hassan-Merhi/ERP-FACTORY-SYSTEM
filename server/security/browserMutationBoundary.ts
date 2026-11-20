@@ -2,6 +2,7 @@ import type { Request, RequestHandler, Response } from "express";
 
 import { logger } from "../lib/logger";
 import { isTrustedOriginHost } from "./originHostPolicy";
+import { verifyExpectedCompanyMutation } from "./companyMutationScope";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const MUTATION_EXEMPT_PATHS = new Set([
@@ -84,6 +85,32 @@ export const browserMutationFailClosedBoundary: RequestHandler = (req, res, next
   if (SAFE_METHODS.has(method)) return next();
   if (!req.path.startsWith("/api")) return next();
   if (MUTATION_EXEMPT_PATHS.has(req.path)) return next();
+
+  // Compare the company's session revision before the route performs any
+  // state changes. This check applies to any client that declares the expected
+  // session, including native/Capacitor clients without an Origin header.
+  if (req.session?.userId) {
+    const companyScope = verifyExpectedCompanyMutation(req);
+    if (!companyScope.allowed) {
+      logger.warn("Company-scoped mutation rejected: the browser session has moved", {
+        module: "security",
+        action: "companyMutationSessionConflict",
+        code: companyScope.code,
+        method,
+        path: req.path,
+        userId: req.session.userId,
+        companyId: req.session.currentCompanyId ?? null,
+      });
+      return rejectBrowserMutation(
+        res,
+        409,
+        companyScope.code,
+        companyScope.code === "COMPANY_SCOPE_INVALID"
+          ? "The request company scope is invalid."
+          : "The active company changed. Review the draft and retry under the correct company."
+      );
+    }
+  }
 
   const sourceDecision = browserSourceAllowed(req);
   if (!sourceDecision.browserRequest) return next();
