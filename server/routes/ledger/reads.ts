@@ -11,7 +11,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, or, asc, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, or, asc, isNull, isNotNull } from "drizzle-orm";
 import { toMoney } from "../../lib/money";
 import { ledgerPostingLeafCondition } from "../../services/accounting/postableLedgerAccountPolicy";
 
