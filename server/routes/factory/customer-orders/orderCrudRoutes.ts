@@ -19,12 +19,18 @@ import { emptyQuery, validateRequest, type RequestSchemas } from "../../../lib/v
 
 // The handler re-parses with insertCustomerOrderSchema after forcing companyId
 // and status, so the body is that insert shape. Clients send companyId (the
-// invoice create page) and tests send status; both are overwritten.
+// invoice create page) and tests send status; both are overwritten. Orders have
+// no currency column: the insert parse always dropped `currency`, which the
+// factory mobile browser fixture (scripts/lib/factory-mobile-fixture.mjs) sends.
 const createOrderInput = {
   query: emptyQuery,
   body: insertCustomerOrderSchema
     .omit({ companyId: true, status: true })
-    .extend({ companyId: z.unknown().optional(), status: z.unknown().optional() })
+    .extend({
+      companyId: z.unknown().optional(),
+      status: z.unknown().optional(),
+      currency: z.unknown().optional(),
+    })
     .strict(),
 } satisfies RequestSchemas;
 
