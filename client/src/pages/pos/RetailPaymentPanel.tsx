@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { money, type RetailPaymentDraft } from "./retailPosTypes";
-import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountOptions, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
+import { paymentAccountValue, paymentFromAccount, RetailPaymentAccountPicker, type RetailPaymentAccounts } from "./RetailPaymentAccountSelect";
 
 export function RetailPaymentPanel({
   total,
@@ -98,20 +98,20 @@ export function RetailPaymentPanel({
               <Label htmlFor={`${formId}-method-${index}`} className="text-xs">
                 Account
               </Label>
-              <select
+              <RetailPaymentAccountPicker
                 id={`${formId}-method-${index}`}
                 className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
+                accounts={accounts}
+                allowCredit={canUseCredit}
+                customerName={customerName}
                 value={paymentAccountValue(payment)}
-                onChange={(event) => {
-                  const selection = event.target.value;
+                onValueChange={(selection) => {
                   if (!accounts) return;
                   onChange(value.map((entry, paymentIndex) => paymentIndex !== index ? entry :
                     selection ? paymentFromAccount(selection, entry.amount, accounts)
                     : ({ method: "cash", amount: entry.amount, tenderedAmount: null } as RetailPaymentDraft)));
                 }}
-              >
-                <RetailPaymentAccountOptions accounts={accounts} allowCredit={canUseCredit} customerName={customerName} />
-              </select>
+              />     </select>
             </div>
             <div>
               <Label htmlFor={`${formId}-amount-${index}`} className="text-xs">
