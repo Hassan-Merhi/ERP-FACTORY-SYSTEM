@@ -38,6 +38,7 @@ vi.mock("@/contracts/sessionQueryContracts", () => ({
 }));
 
 import { queryClient } from "@/lib/queryClient";
+import { _testOnly_resetCompanyCacheScope, captureCompanyMutationSnapshot } from "@/lib/companyCacheScope";
 import { CompanyProvider, useCompany } from "@/contexts/CompanyContext";
 
 function assignment(id: number, overrides: Record<string, unknown> = {}) {
@@ -71,6 +72,7 @@ const prefetched = () =>
 let sessionCompanyId: number | null = 1;
 
 beforeEach(() => {
+  _testOnly_resetCompanyCacheScope();
   localStorage.clear();
   harness.assignments = [assignment(1), assignment(2), assignment(3)];
   harness.listError = null;
@@ -84,6 +86,7 @@ beforeEach(() => {
 
 afterEach(() => {
   queryClient.clear();
+  _testOnly_resetCompanyCacheScope();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -228,6 +231,23 @@ describe("selectCompany", () => {
     expect(result.current.selectedCompany?.id).toBe(2);
     expect(localStorage.getItem("selectedCompanyId")).toBe("2");
     expect(harness.refreshRealtimeSessionScope).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the server-returned revision to scope the next voucher write", async () => {
+    const { result } = await renderOnCompanyOne();
+    harness.apiRequest.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({ companyId: 2, companyRevision: "confirmed-company-two" }),
+    }));
+
+    await act(async () => {
+      expect(await result.current.selectCompany(result.current.companies[1])).toBe(true);
+    });
+
+    expect(captureCompanyMutationSnapshot("POST", "/api/vouchers")).toMatchObject({
+      companyId: 2,
+      serverRevision: "confirmed-company-two",
+    });
   });
 
   it("keeps the current company and reports failure when the server refuses the switch", async () => {
