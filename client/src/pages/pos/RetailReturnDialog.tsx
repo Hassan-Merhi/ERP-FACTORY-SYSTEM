@@ -390,7 +390,7 @@ export function RetailReturnDialog({
                   ariaLabel="Refund cash or bank account"
                   className="mt-2 h-9 w-full rounded-md border bg-background px-3 text-sm"
                   testId="retail-refund-account"
-                />       </select>
+                />
               )}
               {sale.customerId && (
                 <p className="text-xs text-muted-foreground">
