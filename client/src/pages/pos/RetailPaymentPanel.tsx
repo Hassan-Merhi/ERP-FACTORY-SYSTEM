@@ -111,7 +111,7 @@ export function RetailPaymentPanel({
                     selection ? paymentFromAccount(selection, entry.amount, accounts)
                     : ({ method: "cash", amount: entry.amount, tenderedAmount: null } as RetailPaymentDraft)));
                 }}
-              />     </select>
+              />
             </div>
             <div>
               <Label htmlFor={`${formId}-amount-${index}`} className="text-xs">
