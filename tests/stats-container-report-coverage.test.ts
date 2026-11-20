@@ -7,13 +7,10 @@
  * company is 403); "all companies" means the user's memberships, or every
  * company for a Developer; status, supplier and date filters apply to the
  * import date, or to the offload date for "offloaded"; an offloaded
- * container's charge breakdown comes from its latest offload, with the
- * remainder of total charges reported as additional charges.
- *
- * Bug pinned: the voucher-number regexes (lines 139-141) are written as
- * /-\\d+$/ inside regex literals, which match a literal backslash and "d",
- * so live DUTY-/OFFICE-/TRANS-/XFER-/CHG- vouchers are never matched to a
- * container and the persisted offload amounts are always used.
+ * container's charge breakdown comes from its live (not soft-deleted)
+ * DUTY-/OFFICE-/TRANS-/XFER-/CHG- vouchers, falling back per category to its
+ * latest offload, with the remainder of total charges reported as additional
+ * charges.
  */
 import { describe, expect, it } from "vitest";
 
@@ -135,41 +132,82 @@ describe("container report filters and charges", () => {
       expect(outside.body.containers).toEqual([]);
     }));
 
-  it("breaks offload charges down from the latest offload and ignores live charge vouchers", () =>
+  it("breaks offload charges down from live charge vouchers, falling back to the latest offload", () =>
     withFactoryWorld(async (w) => {
       const s = await supplier(w);
       const number = `${w.tag}CH`;
+      const partial = `${w.tag}PART`;
       const id = await container(w, { number, supplierId: s, status: "OFFLOADED", offloadDate: "2026-03-15" });
+      const partId = await container(w, {
+        number: partial,
+        supplierId: s,
+        status: "OFFLOADED",
+        offloadDate: "2026-03-15",
+      });
       const bare = await container(w, { number: `${w.tag}NOOFF`, supplierId: s, status: "OFFLOADED" });
+      for (const cid of [id, partId]) {
+        await w.q(
+          `INSERT INTO container_offloads (container_id, location_id, total_bales, additional_cost_per_bale,
+             duties, office_charges, transport_fees, transfer_charges, total_charges)
+           VALUES ($1, $2, 1, 0, 1, 1, 1, 1, 50), ($1, $2, 1, 0, 10, 5, 3, 2, 45)`,
+          [cid, w.locationId]
+        );
+      }
+      const live: Array<[string, number]> = [
+        [`DUTY-${number}-123`, 77],
+        [`OFFICE-${number}-124`, 6],
+        [`TRANS-${number}-125`, 4],
+        [`XFER-${number}-126`, 3],
+        // CHG-<container>-<id>-<index>: every line counts towards additional charges.
+        [`CHG-${number}-127-0`, 9],
+        [`CHG-${number}-127-1`, 1],
+        [`TRANS-${partial}-128`, 8],
+        // Unrelated or unknown-container vouchers are ignored.
+        ["MISC-1", 5],
+        [`DUTY-${w.tag}NOPE-129`, 500],
+      ];
+      for (const [voucherNumber, amount] of live) {
+        await w.q(
+          `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
+           VALUES ($1, $2, 'Journal', '2026-03-15', $3)`,
+          [w.companyId, voucherNumber, amount]
+        );
+      }
+      // A soft-deleted voucher no longer counts.
       await w.q(
-        `INSERT INTO container_offloads (container_id, location_id, total_bales, additional_cost_per_bale,
-           duties, office_charges, transport_fees, transfer_charges, total_charges)
-         VALUES ($1, $2, 1, 0, 1, 1, 1, 1, 50), ($1, $2, 1, 0, 10, 5, 3, 2, 45)`,
-        [id, w.locationId]
-      );
-      await w.q(
-        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
-         VALUES ($1, $2, 'Journal', '2026-03-15', 77), ($1, $3, 'Journal', '2026-03-15', 9),
-                ($1, 'MISC-1', 'Journal', '2026-03-15', 5)`,
-        [w.companyId, `DUTY-${number}-123`, `CHG-${number}-123-1`]
+        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, deleted_at)
+         VALUES ($1, $2, 'Journal', '2026-03-15', 1000, now())`,
+        [w.companyId, `XFER-${number}-130`]
       );
       const res = await w.agent.get("/api/reports/containers");
       expect(res.status).toBe(200);
       const byNumber = new Map(res.body.containers.map((c: { containerNumber: string }) => [c.containerNumber, c]));
       expect(byNumber.get(number)).toMatchObject({
-        // The live DUTY (77) and CHG (9) vouchers are not matched; the latest offload's amounts are used.
+        chargeBreakdown: {
+          duties: "77.00",
+          officeCharges: "6.00",
+          transportFees: "4.00",
+          transferCharges: "3.00",
+          additionalCharges: "10.00",
+        },
+        offloadingCharges: "100.00",
+        totalContainerCost: "220.00",
+      });
+      // Only TRANS has a live voucher; the rest come from the latest offload,
+      // with total charges beyond the four categories as additional charges.
+      expect(byNumber.get(partial)).toMatchObject({
         chargeBreakdown: {
           duties: "10.00",
           officeCharges: "5.00",
-          transportFees: "3.00",
+          transportFees: "8.00",
           transferCharges: "2.00",
           additionalCharges: "5.00",
         },
-        offloadingCharges: "25.00",
-        totalContainerCost: "145.00",
+        offloadingCharges: "30.00",
+        totalContainerCost: "150.00",
       });
       expect(byNumber.get(`${w.tag}NOOFF`)).toMatchObject({ offloadingCharges: "0.00", totalContainerCost: "120.00" });
       expect(bare).toBeGreaterThan(0);
-      expect(res.body.summary).toMatchObject({ totalContainers: 2, totalGrandTotal: 240, totalOffloadingCharges: 25 });
+      expect(res.body.summary).toMatchObject({ totalContainers: 3, totalGrandTotal: 360, totalOffloadingCharges: 130 });
     }));
 });

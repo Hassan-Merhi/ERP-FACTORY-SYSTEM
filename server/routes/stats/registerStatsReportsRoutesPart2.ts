@@ -133,8 +133,8 @@ export function registerStatsReportsRoutesPart2(app: Express) {
         // identities, never an ambiguous substring of a container number.
         const candidates =
           prefix === "CHG"
-            ? [suffix.replace(/-\\d+-\\d+$/, ""), suffix.replace(/-\\d+$/, "")]
-            : [suffix.replace(/-\\d+$/, "")];
+            ? [suffix.replace(/-\d+-\d+$/, ""), suffix.replace(/-\d+$/, "")]
+            : [suffix.replace(/-\d+$/, "")];
         const containerId = candidates
           .filter((candidate) => candidate !== suffix)
           .map((candidate) => containerLookup.get(`${voucher.companyId}:${candidate}`))
