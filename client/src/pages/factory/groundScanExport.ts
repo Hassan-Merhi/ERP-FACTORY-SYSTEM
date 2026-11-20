@@ -138,10 +138,11 @@ export async function exportGroundScanWorkbook({
     { label: "Missing Bales", value: missingBales.length, color: missingBales.length > 0 ? RED : GRAY },
     { label: "Extra Bales", value: extraBales.length, color: extraBales.length > 0 ? AMBER : GRAY },
   ];
-  const statLabelRow = ws1.addRow(stats.map((s) => s.label));
+  const statLabelRow = ws1.addRow([]);
   statLabelRow.height = 18;
   stats.forEach((s, i) => {
     const cell = statLabelRow.getCell(i * 2 + 1);
+    cell.value = s.label;
     cell.font = { bold: true, size: 9, color: { argb: WHITE }, name: "Calibri" };
     cell.fill = solidFill(s.color);
     cell.alignment = { horizontal: "center", vertical: "middle" };
@@ -149,10 +150,11 @@ export async function exportGroundScanWorkbook({
     if (i < 3) ws1.mergeCells(statLabelRow.number, i * 2 + 1, statLabelRow.number, i * 2 + 2);
     else ws1.mergeCells(statLabelRow.number, 7, statLabelRow.number, 8);
   });
-  const statValueRow = ws1.addRow(stats.map((s) => s.value));
+  const statValueRow = ws1.addRow([]);
   statValueRow.height = 26;
   stats.forEach((s, i) => {
     const cell = statValueRow.getCell(i * 2 + 1);
+    cell.value = s.value;
     cell.font = { bold: true, size: 18, color: { argb: s.color }, name: "Calibri" };
     cell.fill = solidFill(WHITE);
     cell.alignment = { horizontal: "center", vertical: "middle" };
