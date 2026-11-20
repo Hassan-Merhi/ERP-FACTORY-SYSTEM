@@ -169,7 +169,9 @@ export function PosCheckoutStrip({
               options={(paymentAccountType === "bank"
                 ? Array.isArray(bankAccounts) ? bankAccounts : []
                 : cashLedgerAccounts
-              ).map((account) => ({ value: String(account.id), name: account.name }))}
+              ).flatMap((account) =>
+                account.name?.trim() ? [{ value: String(account.id), name: account.name }] : []
+              )}
               value={paymentAccountId || ""}
               onChange={setPaymentAccountId}
               disabled={!!posUser}
