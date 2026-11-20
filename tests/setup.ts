@@ -61,6 +61,7 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "empadv",
   "prodblk",
   "shiprow",
+  "shipsearch",
   "ordcrud",
   "priorityscanw1",
   "priorityscanpal",

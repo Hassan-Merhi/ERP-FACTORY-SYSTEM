@@ -38,18 +38,18 @@ export function registerShippingContainerRowRoutesPart1(app: Express) {
         params.push(`%${normalizeSearchText(rawSearch)}%`);
         const compactIndex = params.length;
         clauses.push(`(
-          COALESCE(co.invoice_number, '') ILIKE ${index}
-          OR COALESCE(c.legal_name, '') ILIKE ${index}
-          OR COALESCE(co.container_number, '') ILIKE ${index}
-          OR COALESCE(co.shipping_company, '') ILIKE ${index}
-          OR COALESCE(co.destination, '') ILIKE ${index}
-          OR COALESCE(r.anything, '') ILIKE ${index}
-          OR regexp_replace(lower(COALESCE(co.invoice_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
-          OR regexp_replace(lower(COALESCE(c.legal_name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
-          OR regexp_replace(lower(COALESCE(co.container_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
-          OR regexp_replace(lower(COALESCE(co.shipping_company, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
-          OR regexp_replace(lower(COALESCE(co.destination, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
-          OR regexp_replace(lower(COALESCE(r.anything, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
+          COALESCE(co.invoice_number, '') ILIKE $${index}
+          OR COALESCE(c.legal_name, '') ILIKE $${index}
+          OR COALESCE(co.container_number, '') ILIKE $${index}
+          OR COALESCE(co.shipping_company, '') ILIKE $${index}
+          OR COALESCE(co.destination, '') ILIKE $${index}
+          OR COALESCE(r.anything, '') ILIKE $${index}
+          OR regexp_replace(lower(COALESCE(co.invoice_number, '')), '[^[:alnum:]]+', '', 'g') LIKE $${compactIndex}
+          OR regexp_replace(lower(COALESCE(c.legal_name, '')), '[^[:alnum:]]+', '', 'g') LIKE $${compactIndex}
+          OR regexp_replace(lower(COALESCE(co.container_number, '')), '[^[:alnum:]]+', '', 'g') LIKE $${compactIndex}
+          OR regexp_replace(lower(COALESCE(co.shipping_company, '')), '[^[:alnum:]]+', '', 'g') LIKE $${compactIndex}
+          OR regexp_replace(lower(COALESCE(co.destination, '')), '[^[:alnum:]]+', '', 'g') LIKE $${compactIndex}
+          OR regexp_replace(lower(COALESCE(r.anything, '')), '[^[:alnum:]]+', '', 'g') LIKE $${compactIndex}
         )`);
       }
       const whereSql = clauses.join(" AND ");
