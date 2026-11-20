@@ -34,7 +34,17 @@ function git(args, { allowFailure = false } = {}) {
 
 function allBlockBodies(source, openTag, closeTag) {
   const blocks = [];
-  const start = new RegExp(`<${openTag}(?=[\\s>])`, "g");
+  // Only the three audited JSX tags are accepted. Use literal patterns so
+  // repository source cannot ever be interpolated into a dynamic regexp.
+  const starts = {
+    Select: /<Select(?=[\\s>])/g,
+    select: /<select(?=[\\s>])/g,
+    CommandItem: /<CommandItem(?=[\\s>])/g,
+  };
+  if (openTag !== closeTag || !Object.hasOwn(starts, openTag)) {
+    throw new TypeError("Unsupported account selector tag");
+  }
+  const start = starts[openTag];
   for (const match of source.matchAll(start)) {
     const end = source.indexOf(`</${closeTag}>`, match.index);
     if (end < 0) continue;
