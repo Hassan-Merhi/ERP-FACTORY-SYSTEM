@@ -221,7 +221,7 @@ describe("company selection across browser tabs", () => {
     sender.close();
   });
 
-  it("immediately gates the old company when another tab commits a switch", async () => {
+  it("immediately covers old records and switches only after server confirmation", async () => {
     const { result } = await renderOnCompanyOne();
     let resolveSession!: (value: { companyId: number }) => void;
     harness.fetchSessionCompany.mockImplementationOnce(
@@ -232,8 +232,8 @@ describe("company selection across browser tabs", () => {
       otherTabSwitchedTo(2);
     });
     expect(result.current.selectedCompany?.id).toBe(1);
-    expect(result.current.isLoading).toBe(true);
-    expect(result.current.isCheckingCompanySession).toBe(false);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isCheckingCompanySession).toBe(true);
     await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
 
     await act(async () => { resolveSession({ companyId: 2 }); });
