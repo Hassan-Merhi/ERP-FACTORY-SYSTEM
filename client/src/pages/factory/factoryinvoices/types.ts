@@ -37,6 +37,7 @@ export interface CustomerOrder {
   destination?: string | null;
   containerNotes?: string | null;
   bookingInfo?: string | null;
+  agentName?: string | null;
   isHidden?: boolean;
 }
 

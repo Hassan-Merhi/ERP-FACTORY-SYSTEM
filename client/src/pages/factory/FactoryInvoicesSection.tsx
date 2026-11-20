@@ -66,6 +66,9 @@ export function FactoryInvoicesSection({
                 Booking Info
               </TableHead>
             )}
+            {isColumnVisible("agent") && (
+              <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Agent</TableHead>
+            )}
             {isColumnVisible("destination") && (
               <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Destination
