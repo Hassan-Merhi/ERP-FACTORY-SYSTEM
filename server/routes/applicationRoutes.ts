@@ -79,7 +79,6 @@ import { registerDispatchBatchRoutes } from "./factory/dispatch-batches";
 import { registerFactoryInvoiceLoadingRoutes } from "./factory/invoice-loading";
 import { registerFactoryInsuranceRoutes } from "./factory/factoryInsuranceRoutes";
 import { registerInsuranceHistoricalRepairRoutes } from "./factory/insuranceHistoricalRepairRoutes";
-import { registerPhase3HistoricalRepairRoutes } from "./accounting-integrity/phase3HistoricalRepairRoutes";
 import { registerStockAdjustmentInventorySideRoutes } from "./accounting-integrity/stockAdjustmentInventorySideRoutes";
 import { registerLegacyPlugAndBackfillRoutes } from "./accounting-integrity/legacyPlugAndBackfillRoutes";
 import { registerAttributionHistoricalRepairRoutes } from "./factory/attributionHistoricalRepairRoutes";
@@ -128,7 +127,6 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerLabelBannersRoutes(app, requireAuth);
   registerFactoryInsuranceRoutes(app);
   registerInsuranceHistoricalRepairRoutes(app);
-  registerPhase3HistoricalRepairRoutes(app);
   registerStockAdjustmentInventorySideRoutes(app);
   registerLegacyPlugAndBackfillRoutes(app);
   registerAttributionHistoricalRepairRoutes(app);

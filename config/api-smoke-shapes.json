@@ -125,10 +125,6 @@
       "status": 200,
       "shape": "[]"
     },
-    "/api/accounting/phase3-historical/plan": {
-      "status": 403,
-      "shape": "{message:scalar}"
-    },
     "/api/accounting/rentals/contracts": {
       "status": 403,
       "shape": "{code:scalar,message:scalar}"

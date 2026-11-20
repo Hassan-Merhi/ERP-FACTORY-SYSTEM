@@ -6,7 +6,7 @@
  *      transaction, company-scoped, closed periods skipped, audited); the SP
  *      container trigger no longer moves the supplier of posted lines and the
  *      integrity diagnostic lists the mismatch; the Phase 3 historical repair
- *      is a preview/apply too;
+ *      tool (a finished one-off) has been removed;
  *   2  POST /api/reverse-po-credits is gone; a system-removed voucher is
  *      retired (soft delete with its lines, audited, number and posting
  *      identity released) and a linked journal posted again keeps its old
@@ -15,6 +15,9 @@
  *      restorable;
  *   3  a location holding stock cannot be permanently deleted.
  */
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import { sql } from "drizzle-orm";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -399,37 +402,21 @@ describe("SP supplier links: no rewrite of posted lines, listed, reviewed apply 
   });
 });
 
-describe("Phase 3 historical repair is no longer a boot step (decision 1)", () => {
-  it("previews a legacy PO without a debit and applies it with the reviewed hash, audited", async () => {
-    const credit = await ledgerAccount(`${TEST_PREFIX} PO credit`, "Liability");
-    const purchases = await ledgerAccount("Purchases", "Expense");
-    const po = await withFixtureTransaction(
-      async (client) => {
-        const { rows } = await client.query<{ id: number }>(
-          `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, source_module)
-           VALUES ($1, $2, 'Purchase', '2026-09-07', 25, 'USD', 'ERP') RETURNING id`,
-          [ctx.companyId, `PO-PO-${TEST_PREFIX}-${next()}`]
-        );
-        await client.query(
-          `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount) VALUES ($1, $2, 0, 25)`,
-          [rows[0].id, credit]
-        );
-        return rows[0].id;
-      },
-      { legacyUnbalanced: true }
-    );
+describe("Phase 3 historical repair tool is removed (decision 1)", () => {
+  it("has no service, route module or routes left", async () => {
+    for (const file of [
+      "server/services/accounting/phase3HistoricalRepair.ts",
+      "server/services/accounting/phase3HistoricalRepairDerivePlan.ts",
+      "server/services/accounting/phase3HistoricalRepairDerivePlanHelpers.ts",
+      "server/routes/accounting-integrity/phase3HistoricalRepairRoutes.ts",
+    ]) {
+      expect(existsSync(path.join(process.cwd(), file)), file).toBe(false);
+    }
     const preview = await agent.get("/api/accounting/phase3-historical/plan");
-    expect(preview.status).toBe(200);
-    expect(preview.body.purchaseDebits).toContainEqual(expect.objectContaining({ voucherId: po, amount: "25.00" }));
+    expect(preview.status).toBe(404);
     const applied = await agent
       .post("/api/accounting/phase3-historical/apply")
-      .send({ confirm: true, planHash: preview.body.planHash });
-    expect(applied.status).toBe(200);
-    const { rows } = await pool.query(
-      `SELECT ledger_account_id, debit_amount::text AS d FROM voucher_entries WHERE voucher_id = $1 AND debit_amount > 0`,
-      [po]
-    );
-    expect(rows).toEqual([{ ledger_account_id: purchases, d: "25.00" }]);
-    expect(await auditRows("record_identifier = 'phase3-historical-repair'", [])).toHaveLength(1);
+      .send({ confirm: true, planHash: "0".repeat(64) });
+    expect(applied.status).toBe(404);
   });
 });
