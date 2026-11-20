@@ -299,7 +299,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     }
 
     void fetchSessionCompany()
-      .catch(() => ({ companyId: null }))
+      .catch(() => ({ companyId: null, companyRevision: undefined }))
       .then(async ({ companyId: sessionCompanyId, companyRevision }) => {
         if (selectedCompanyRef.current) return;
         // A confirmed external switch during bootstrap takes precedence over a
