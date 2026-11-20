@@ -11,6 +11,7 @@ import { companyBusinessDate } from "../services/accounting/companyBusinessDate"
 import { datedMonetaryRateTx, fxDay, MonetaryFxError } from "../services/accounting/monetaryFxRates";
 import { monetaryAccountValuationTx } from "../services/accounting/monetaryFxValuation";
 import { getManualFxCorrectionPreflight } from "../services/accounting/manualFxCorrectionPreflight";
+import { verifyManualFxCorrection } from "../services/accounting/manualFxCorrectionVerification";
 import { previewRealizedFxTx, listRealizedFxTx, recognizeRealizedFxTx } from "../services/accounting/realizedFxService";
 import {
   UNIFIED_FINANCIAL_POSTING_LOCKED,
@@ -88,6 +89,19 @@ export function registerMonetaryFxRoutes(app: Express): void {
       const { voucherId } = z.object({ voucherId: positive }).parse(req.query);
       const preview = await getManualFxCorrectionPreflight(c, voucherId);
       return res.status(preview.status === "not_found" ? 404 : 200).json(preview);
+    } catch (e) {
+      return fail(res, e);
+    }
+  });
+
+  // Phase 4: read-only, company-scoped proof of a reviewed FX recovery.
+  // This GET never posts, reclassifies, reverses or accepts a company override.
+  app.get("/api/accounting/monetary-fx/manual-revaluation/verify", ...gate, async (req, res) => {
+    try {
+      const c = company(req);
+      const { voucherId } = z.object({ voucherId: positive }).parse(req.query);
+      const evidence = await verifyManualFxCorrection(c, voucherId);
+      return res.status(evidence.blockers.includes("ORIGINAL_VOUCHER_NOT_FOUND") ? 404 : 200).json(evidence);
     } catch (e) {
       return fail(res, e);
     }
