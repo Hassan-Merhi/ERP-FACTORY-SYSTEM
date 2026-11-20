@@ -34,6 +34,7 @@ import { resultRows } from "../../lib/queryResult";
 import { isAutomaticFxRevaluationVoucherTx } from "./automaticFxVoucherGuard";
 import { readVoucherAuditState } from "../../routes/helpers/voucherAuditTrail";
 import { writeAuditEvent } from "../audit";
+import { getDatabaseScopeRuntimeContext } from "../security/databaseScopeRuntimeContext";
 import { assertTransactionCompanyScope } from "../security/transactionCompanyScope";
 import { isDispatchFinancialVoucherTx } from "../factory/dispatchTripFinancialGuards";
 import { postBalancedVoucherTx, type CentralPostingDependencies } from "./centralPostingEngine";
@@ -90,6 +91,17 @@ export function sendVoucherCorrectionRefusal(res: Response, error: unknown): boo
   if (!(error instanceof VoucherCorrectionError)) return false;
   res.status(error.statusCode).json(error.body());
   return true;
+}
+
+/**
+ * True when the active database scope is a tenant scope whose primary company
+ * is a different one and which explicitly authorizes `companyId` as a secondary
+ * company. Only request code that has membership-checked that company creates
+ * such a scope.
+ */
+function isAuthorizedSecondaryCompany(companyId: number): boolean {
+  const scope = getDatabaseScopeRuntimeContext();
+  return scope?.kind === "tenant" && scope.companyId !== companyId && scope.authorizedCompanyIds.includes(companyId);
 }
 
 /**
@@ -160,7 +172,16 @@ export async function assertVoucherEditableTx(
   // rebuilds lines as USD/IDENTITY, silently manufacturing native USD movements.
   // Reject ordinary edits/deletion of these engine-owned journals. Repairs must
   // use a dedicated audited path that preserves the original currency evidence.
-  await assertTransactionCompanyScope(tx, voucher.companyId);
+  //
+  // The intercompany counterpart edit checks the other company's voucher inside
+  // a transaction its caller already scoped to both companies, after verifying
+  // the editor's access to the other one. Re-asserting there would move the
+  // transaction to the counterpart's company and is refused by the request
+  // boundary, so that established scope is kept. Every other caller gets the
+  // explicit assertion.
+  if (!isAuthorizedSecondaryCompany(voucher.companyId)) {
+    await assertTransactionCompanyScope(tx, voucher.companyId);
+  }
   if (await isAutomaticFxRevaluationVoucherTx(tx, voucher.companyId, voucherId)) {
     throw new VoucherCorrectionError(
       409,
