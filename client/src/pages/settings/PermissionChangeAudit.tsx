@@ -4,7 +4,7 @@ import { ClipboardList, RefreshCw } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { permissionAuditDiff, type AuditRule } from "./permissionAuditDiff";
 
 type AuditRecord = {
@@ -62,12 +62,12 @@ export function PermissionChangeAudit() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Input
+          <SearchField
             aria-label="Filter permission audit"
             placeholder="Filter by actor, role, user, revision or reason"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="min-w-[180px] flex-1"
+            onValueChange={setSearch}
+            wrapperClassName="min-w-[180px] flex-1"
           />
           <Button
             size="sm"
