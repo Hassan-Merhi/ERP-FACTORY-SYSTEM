@@ -55,8 +55,8 @@ function allBlockBodies(source, openTag, closeTag) {
 
 // Explicit account-option collections. A generic 'accounts' list can also be
 // a list of customers, products, roles, or chart-of-accounts administration.
-const ACCOUNT_COLLECTION = /\b(?:ledgerAccounts|cashAccounts|bankAccounts|postingAccounts|paymentAccounts|parentFreightAccounts|freightAccounts|cashLedgerAccounts|supplierAccounts|accountOptions|eligibleAccounts|accounts\?\.ledgers|accounts\.ledgers|accounts\?\.banks|accounts\.banks)\s*\??\.\s*(?:map|filter)\s*\(/i;
-const ACCOUNT_MAP = /(?:\b(?:accounts|ledgers|banks)\s*\??\.\s*map\s*\(\s*\(?\s*(?:account|acct|acc)\b|ACCOUNT_OPTIONS)/i;
+const ACCOUNT_COLLECTION = /\b(?:ledgerAccounts|cashAccounts|bankAccounts|postingAccounts|paymentAccounts|parentFreightAccounts|freightAccounts|cashLedgerAccounts|supplierAccounts|accountOptions|eligibleAccounts|accounts\?\.ledgers|accounts\.ledgers|accounts\?\.banks|accounts\.banks)\s*\??\.\s*(?:map|flatMap|filter)\s*\(/i;
+const ACCOUNT_MAP = /(?:\b(?:accounts|ledgers|banks)\s*\??\.\s*(?:map|flatMap)\s*\(\s*\(?\s*(?:account|acct|acc)\b|ACCOUNT_OPTIONS)/i;
 const NAMED_ACCOUNT = /\b(?:account|acct|acc|ledger|bankAccount|cashAccount|a)\.(?:name|accountName|code|accountType|subType)\b/;
 const VISIBLE_CODE_OR_TYPE = /\b(?:account|acct|acc|ledger|bankAccount|cashAccount|a)\.(?:code|accountType|subType)\b|\baccount\.(?:type|category)\b/;
 
