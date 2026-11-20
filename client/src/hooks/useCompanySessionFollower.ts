@@ -112,7 +112,10 @@ export function useCompanySessionFollower({
       // During first activation the entire app is already hidden. Its startup
       // path reconciles the server, so do not introduce a permanent second gate.
       if (!selectedCompanyRef.current) return;
-      onTransitionStart(signal);
+      // A notification is only a hint, even when it names a new company.
+      // Cover the view first; only a confirmed server mismatch may discard
+      // drafts, dialogs, and local state.
+      onTransitionStart("resume");
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = null;
       if (inProgress) {
