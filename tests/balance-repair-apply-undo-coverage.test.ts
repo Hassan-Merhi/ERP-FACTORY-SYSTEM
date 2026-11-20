@@ -110,6 +110,66 @@ describe("balance repair apply and undo", () => {
       expect(again.body.snapshot.voucherEntriesAdded).toEqual([]);
     }));
 
+  it("leaves another company's vouchers alone when the active company's rows point at them", () =>
+    withFactoryWorld(async (w) => {
+      const seed = await seedBalanceRepair(w);
+      // A payment of the active company that points at another company's
+      // soft-deleted, empty voucher: apply must not un-delete it or post into it.
+      const [foreign] = await w.q<{ id: number }>(
+        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, description, deleted_at)
+         VALUES ($1, $2, 'Receipt', '2026-05-10', '15.00', 'foreign', now()) RETURNING id`,
+        [seed.otherCompanyId, `${w.tag}-FX`]
+      );
+      await w.q(
+        `INSERT INTO property_payments (company_id, module, contract_id, unit_id, amount, payment_date, for_year, for_month,
+           voucher_id, cash_account_id)
+         VALUES ($1, 'PROPERTIES', $2, $3, '15.00', '2026-05-10', 2026, 4, $4, $5)`,
+        [w.companyId, seed.contractId, seed.warehouseUnitId, foreign.id, seed.cashId]
+      );
+      // A transfer whose TO side names an empty voucher of the FROM company:
+      // apply must not retire a voucher that is not the TO company's.
+      const [wrongSide] = await w.q<{ id: number }>(
+        `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, description)
+         VALUES ($1, $2, 'Receipt', '2026-05-10', '70.00', 'wrong side') RETURNING id`,
+        [w.companyId, `${w.tag}-WS`]
+      );
+      const [fromGood] = await w.q<{ id: number }>(
+        `SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number = $2`,
+        [w.companyId, `${w.tag}-TF3`]
+      );
+      const [toCash] = await w.q<{ id: number }>(
+        `SELECT id FROM ledger_accounts WHERE company_id = $1 ORDER BY id LIMIT 1`,
+        [seed.otherCompanyId]
+      );
+      const [wrongTransfer] = await w.q<{ id: number }>(
+        `INSERT INTO inter_company_transfers (transfer_type, from_company_id, to_company_id, transfer_date, amount,
+           from_ledger_account_id, to_ledger_account_id, from_voucher_id, to_voucher_id, description)
+         VALUES ('Cash', $1, $2, '2026-05-10', 70, $3, $4, $5, $6, 'wrong side') RETURNING id`,
+        [w.companyId, seed.otherCompanyId, seed.cashId, toCash.id, fromGood.id, wrongSide.id]
+      );
+
+      const res = await w.agent.post(APPLY).send({});
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body.snapshot.vouchersUndeleted).toEqual([{ id: seed.deletedShopVoucherId }]);
+      expect(res.body.orphansFixed).toBe(2);
+      const ids = res.body.snapshot.orphanedVouchersDeleted.map((v: { id: number }) => v.id);
+      expect(ids).not.toContain(wrongSide.id);
+
+      const vouchers = await w.q(
+        `SELECT id, deleted_at IS NOT NULL AS deleted, voucher_number AS number,
+                (SELECT COUNT(*)::int FROM voucher_entries e WHERE e.voucher_id = v.id) AS lines
+           FROM vouchers v WHERE id = ANY($1::int[]) ORDER BY id`,
+        [[foreign.id, wrongSide.id]]
+      );
+      expect(vouchers).toEqual([
+        { id: foreign.id, deleted: true, number: `${w.tag}-FX`, lines: 0 },
+        { id: wrongSide.id, deleted: false, number: `${w.tag}-WS`, lines: 0 },
+      ]);
+      expect(await w.q(`SELECT id FROM inter_company_transfers WHERE id = $1`, [wrongTransfer.id])).toEqual([
+        { id: wrongTransfer.id },
+      ]);
+    }));
+
   it("undo restores the applied snapshot, and a repeated undo changes nothing more", () =>
     withFactoryWorld(async (w) => {
       const seed = await seedBalanceRepair(w);

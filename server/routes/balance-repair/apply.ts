@@ -94,7 +94,7 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
               (SELECT COUNT(*) FROM voucher_entries ve WHERE ve.voucher_id = pp.voucher_id) AS entry_count,
               pu.unit_type
             FROM property_payments pp
-            JOIN vouchers v ON v.id = pp.voucher_id
+            JOIN vouchers v ON v.id = pp.voucher_id AND v.company_id = pp.company_id
             LEFT JOIN property_units pu ON pu.id = pp.unit_id
             WHERE pp.company_id = ${companyId} AND pp.voucher_id IS NOT NULL
           `);
@@ -130,7 +130,9 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
             // If voucher was soft-deleted, un-delete it first
             if (isDeleted) {
               snapshot.vouchersUndeleted.push({ id: vid });
-              await tx.execute(sql`UPDATE vouchers SET deleted_at = NULL WHERE id = ${vid}`);
+              await tx.execute(
+                sql`UPDATE vouchers SET deleted_at = NULL WHERE id = ${vid} AND company_id = ${companyId}`
+              );
             }
 
             // Re-insert entries only if there are none (after potential un-delete)
@@ -266,7 +268,11 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
 
             // Save the orphaned voucher's data for undo
             const orphanedVid = fromBroken ? Number(row.from_voucher_id) : Number(row.to_voucher_id);
+            const sideCompanyId = fromBroken ? Number(row.from_company_id) : Number(row.to_company_id);
             const [orphVoucher] = await tx.select().from(vouchers).where(eq(vouchers.id, orphanedVid));
+            // A side naming a voucher of some other company is corrupt data, not
+            // an orphan: leave the transfer and that voucher untouched.
+            if (orphVoucher && orphVoucher.companyId !== sideCompanyId) continue;
             const orphEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, orphanedVid));
 
             // A voucher that was already soft-deleted stays as it is: retiring it
