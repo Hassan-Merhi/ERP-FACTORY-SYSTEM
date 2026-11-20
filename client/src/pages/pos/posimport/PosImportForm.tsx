@@ -142,7 +142,7 @@ export function PosImportForm({ model }: { model: PosImportModel }) {
                     value={model.selectedCashAccount}
                     onChange={model.setSelectedCashAccount}
                     placeholder={"Select cash account"}
-                    id={"cashAccount"}
+                    id="cashAccount"
                     testId={"select-cash-account"}
                     />
             </div>
