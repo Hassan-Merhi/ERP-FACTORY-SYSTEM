@@ -24,6 +24,7 @@ import { db } from "../server/db";
 import { registerLedgerAccountReadRoutes } from "../server/routes/ledger/reads";
 import { registerLedgerAccountPaginationRoutes } from "../server/routes/ledgerAccountPaginationRoutes";
 import { registerFactoryTransporterRoutes } from "../server/routes/factory/factoryTransporterRoutes";
+import { registerFactoryContainerListRoutes } from "../server/routes/factory/containers/list";
 import { registerAccountVoucherSidebarRoutes } from "../server/routes/accounts/voucher-sidebar";
 import { assertPostingLedgerLeavesTx } from "../server/services/accounting/postableLedgerAccountPolicy";
 import { PostingValidationError } from "../server/services/accounting/centralPostingEngine";
@@ -42,6 +43,11 @@ registerAccountVoucherSidebarRoutes(app as never);
 const paginatedHandlers = new Map<string, Handler>();
 registerLedgerAccountPaginationRoutes({
   get: (path: string, ...chain: Handler[]) => paginatedHandlers.set(path, chain[chain.length - 1]),
+} as never);
+
+const factoryContainerHandlers = new Map<string, Handler>();
+registerFactoryContainerListRoutes({
+  get: (path: string, ...chain: Handler[]) => factoryContainerHandlers.set(path, chain[chain.length - 1]),
 } as never);
 
 const transporterHandlers = new Map<string, Handler>();
@@ -216,6 +222,23 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
     expect(idsReturned).not.toContain(ids.groupTag);
     expect(idsReturned).not.toContain(ids.legacyParent);
     expect(idsReturned).not.toContain(ids.deletedChild);
+  });
+
+  it("Factory container account data retains historical group names but marks them unavailable for posting", async () => {
+    const handler = factoryContainerHandlers.get("/api/factory/containers/account-options")!;
+    const rows = (await callFiltered(handler, companyId)) as unknown as Array<{
+      id: number;
+      name: string;
+      isPostingLeaf: boolean;
+    }>;
+    const eligible = new Map(rows.map((account) => [account.id, account.isPostingLeaf]));
+    expect(eligible.get(ids.cash)).toBe(true);
+    expect(eligible.get(ids.groupTag)).toBe(false);
+    expect(eligible.get(ids.legacyParent)).toBe(false);
+    expect(eligible.get(ids.legacyChild)).toBe(true);
+    // A parent whose only child was soft-deleted remains a valid leaf.
+    expect(eligible.get(ids.staleParent)).toBe(true);
+    expect(rows.find((account) => account.id === ids.groupTag)?.name).toContain("GROUP-TAG");
   });
 
 });
