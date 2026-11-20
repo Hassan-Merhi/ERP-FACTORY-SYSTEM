@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { useAccountSidebarState, type AccountSidebarProps } from "./useAccountSidebarState";
 export type { Account, VoucherEntry } from "./useAccountSidebarState";
 
@@ -88,23 +88,15 @@ export default function AccountSidebar({
           )}
         </div>
 
-        <div className="relative">
-          {isAutoCreating ? (
-            <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
-          ) : (
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          )}
-          <Input
-            ref={searchInputRef}
-            placeholder={isFactoryCompany ? "Type expense name & Enter..." : "Search accounts..."}
-            value={searchValue}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="pl-9"
-            data-testid="input-search-account"
-            disabled={isAutoCreating}
-          />
-        </div>
+        <SearchField
+          ref={searchInputRef}
+          placeholder={isFactoryCompany ? "Type expense name & Enter..." : "Search accounts..."}
+          value={searchValue}
+          onValueChange={onSearchChange}
+          onKeyDown={handleKeyDown}
+          loading={isAutoCreating}
+          data-testid="input-search-account"
+        />
 
         <div className="flex items-center justify-between gap-2 mt-2">
           <p className="text-[11px] text-muted-foreground font-mono tabular-nums" data-testid="text-account-count">
