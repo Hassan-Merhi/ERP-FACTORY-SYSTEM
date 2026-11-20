@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { useFactorySuppliersModel } from "./useFactorySuppliersModel";
 
 type FactorySuppliersModel = ReturnType<typeof useFactorySuppliersModel>;
@@ -206,21 +207,13 @@ export function SupplierPaymentFxDialogs({
 
             <div>
               <Label>Paid From Account</Label>
-              <Select
+              <UnifiedAccountPicker
+                options={(ledgerAccounts ?? []).map((account) => ({ value: String(account.id), name: account.name }))}
                 value={paymentForm.paidFromAccountId}
-                onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, paidFromAccountId: v }))}
-              >
-                <SelectTrigger data-testid="select-payment-account">
-                  <SelectValue placeholder="Select account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ledgerAccounts?.map((acc) => (
-                    <SelectItem key={acc.id} value={String(acc.id)}>
-                      {acc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(v) => setPaymentForm((prev) => ({ ...prev, paidFromAccountId: v }))}
+                placeholder="Select account"
+                testId="select-payment-account"
+              />
             </div>
 
             <div>
