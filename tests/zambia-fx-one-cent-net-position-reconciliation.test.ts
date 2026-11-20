@@ -26,15 +26,15 @@ function valuation(rows: MonetaryFxValuationRow[]): MonetaryFxValuationResult {
 function cashReport(): MonetaryNetPositionPayload {
   return {
     forUs: {
-      total: 181001.29, accounts: [
+      total: 181001.28, accounts: [
         { id: 4334, name: "KITWE CASH", category: "Cash", value: 3278.95 },
         { id: 4335, name: "LUSAKA CASH", category: "Cash", value: 7705.73 },
-        { code: "INVENTORY", name: "Inventory", category: "Inventory", value: 170016.61 },
+        { code: "INVENTORY", name: "Inventory", category: "Inventory", value: 170016.60 },
       ],
-      breakdown: [{ name: "Cash", value: 10984.68 }, { name: "Inventory", value: 170016.61 }],
+      breakdown: [{ name: "Cash", value: 10984.68 }, { name: "Inventory", value: 170016.60 }],
     },
     onUs: { total: 177540.38, accounts: [{ code: "LIABILITIES", name: "Liabilities", value: 177540.38 }] },
-    netPosition: 3460.91,
+    netPosition: 3460.90,
   };
 }
 
@@ -50,8 +50,8 @@ describe("Zambia posted FX revaluation 1-cent report reconciliation", () => {
     expect(result.payload.forUs?.accounts.find((r) => r.id === 4335)?.value).toBe(7705.74);
     expect(result.payload.forUs?.accounts.find((r) => r.code === "FX_UNREALIZED_GAIN")).toBeUndefined();
     expect(result.payload.onUs?.accounts.find((r) => r.code === "FX_UNREALIZED_LOSS")).toBeUndefined();
-    expect(result.payload.forUsTotal).toBe(181001.3);
-    expect(result.payload.netPosition).toBe(3460.92);
+    expect(result.payload.forUsTotal).toBe(181001.29);
+    expect(result.payload.netPosition).toBe(3460.91);
     expect(result.payload.forUs?.breakdown?.find((r) => r.name === "Cash")?.value).toBe(10984.69);
   });
 
