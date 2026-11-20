@@ -3,8 +3,8 @@
  * HTTP in one rolled-back factory company per test: single scans with and
  * without a location, the missing-reference, non-bale-product and duplicate
  * refusals, bulk scans (empty, blank, excluded, alias fields, duplicate), the
- * live status read, and the scoped deletes, including another company's scan id
- * and location id.
+ * live status read, the scoped deletes including another company's scan id, and
+ * the refusal of another company's (or an invalid) location id.
  */
 import { describe, expect, it } from "vitest";
 
@@ -108,11 +108,11 @@ describe("ground scan single and bulk scans", () => {
           {},
           { refCode: excludedRef },
           // The unique (company, location, reference) index swallows the
-          // duplicate, yet the route still counts it as inserted.
+          // duplicate, so it counts as skipped rather than inserted.
           { refCode: "B-1" },
         ],
       });
-      expect(res.body).toEqual({ inserted: 3, skipped: 3 });
+      expect(res.body).toEqual({ inserted: 2, skipped: 4 });
       expect(await scans(w)).toEqual([
         { reference_number: "B-1", location_id: w.locationId },
         { reference_number: "B-2", location_id: w.locationId },
@@ -179,7 +179,7 @@ describe("ground scan deletes", () => {
       expect(foreignLeft.n).toBe(1);
     }));
 
-  it("accepts another company's location id on a scan (pinned: no location ownership check)", () =>
+  it("refuses another company's location and an invalid location id on single and bulk scans", () =>
     withFactoryWorld(async (w) => {
       const other = await w.one(
         `INSERT INTO companies (code, name, company_type, base_currency) VALUES ($1::varchar, $1::text, 'factory', 'USD') RETURNING id`,
@@ -189,8 +189,23 @@ describe("ground scan deletes", () => {
         `INSERT INTO locations (company_id, code, name) VALUES ($1, $2, 'Foreign yard') RETURNING id`,
         [other, `${w.tag}QL`]
       );
-      const res = await w.agent.post(BASE).send({ referenceNumber: "X-1", locationId: String(foreignLocation) });
-      expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({ company_id: String(w.companyId), location_id: foreignLocation });
+      const single = await w.agent.post(BASE).send({ referenceNumber: "X-1", locationId: String(foreignLocation) });
+      expect(single.status).toBe(404);
+      expect(single.body.message).toBe("Location not found");
+      const bulk = await w.agent
+        .post(`${BASE}/bulk`)
+        .send({ locationId: foreignLocation, items: [{ refCode: "X-2" }, { refCode: "X-3" }] });
+      expect(bulk.status).toBe(404);
+      expect(bulk.body.message).toBe("Location not found");
+      for (const locationId of ["abc", "0", "-3", "1.5"]) {
+        expect((await w.agent.post(BASE).send({ referenceNumber: "X-4", locationId })).status).toBe(400);
+        expect((await w.agent.post(`${BASE}/bulk`).send({ locationId, items: [{ refCode: "X-5" }] })).status).toBe(400);
+      }
+      expect(await scans(w)).toEqual([]);
+      const [written] = await w.q(
+        `SELECT count(*)::int AS n FROM factory_ground_scan_items WHERE location_id = $1 OR company_id = $2`,
+        [foreignLocation, String(other)]
+      );
+      expect(written.n).toBe(0);
     }));
 });
