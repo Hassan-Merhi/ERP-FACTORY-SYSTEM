@@ -333,7 +333,7 @@ export function BulkDialogs({
                     : bankAccounts ?? []
                   ).map((account) => ({
                     value: String(account.id),
-                    name: "accountName" in account ? String(account.accountName) : account.name,
+                    name: String(account.accountName ?? account.name ?? account.bankName ?? "Unnamed account"),
                   }))}
                   value={bulkWithdrawalAccountId}
                   onChange={setBulkWithdrawalAccountId}
