@@ -61,6 +61,7 @@ export interface ManualFxCorrectionPreflight {
   /** Machine-readable blockers, never silent accounting guesses. */
   blockers: string[];
   manualFxCounterDebitUsd: string;
+  manualCashMovementUsd: string;
   fxCounterAccount: { id: number; code: string; type: string } | null;
   candidates: ManualFxCorrectionCandidate[];
   candidateNetAdjustmentUsd: string;
@@ -81,6 +82,7 @@ export function classifyManualFxCorrectionPreflight(input: {
   unresolvedAccountCount: number;
   baseCurrency: string;
   nonEmptyCandidates: boolean;
+  amountsReconcile: boolean;
 }): { status: ManualFxCorrectionPreflight["status"]; blockers: string[] } {
   if (!input.found) return { status: "not_found", blockers: ["VOUCHER_NOT_FOUND"] };
   const blockers: string[] = [];
@@ -93,6 +95,7 @@ export function classifyManualFxCorrectionPreflight(input: {
   if (input.unresolvedAccountCount > 0) blockers.push("MONETARY_FX_UNRESOLVED");
   if (input.otherLegacyVoucherCount > 0) blockers.push("OTHER_MANUAL_FX_VOUCHERS");
   if (!input.nonEmptyCandidates) blockers.push("NO_FX_CORRECTION_CANDIDATES");
+  if (!input.amountsReconcile) blockers.push("FX_CORRECTION_AMOUNT_MISMATCH");
   if (input.reversed) return { status: "already_reversed", blockers };
   if (blockers.some((code) => code !== "FX_ACCOUNT_RECLASSIFICATION_REQUIRED")) {
     return { status: "blocked", blockers };
@@ -204,6 +207,20 @@ export async function getManualFxCorrectionPreflight(
   const netAdjustment = candidates.reduce(
     (sum, row) => sum.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0)
   );
+  const cashMovement = monetaryMovements.reduce(
+    (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount), new Decimal(0)
+  );
+  const originalCounter = fxCounter
+    ? new Decimal(fxCounter.debit_amount).minus(fxCounter.credit_amount) : new Decimal(0);
+  const wholeVoucher = snapshot.lines.reduce(
+    (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount), new Decimal(0)
+  );
+  // A legacy cash/FX journal may not be equivalent to today's outstanding
+  // amount if other movements or rates have changed. Flag it for independent
+  // accounting review; never silently treat it as a safe correction.
+  const amountsReconcile = wholeVoucher.abs().lt("0.005") &&
+    cashMovement.plus(originalCounter).abs().lt("0.005") &&
+    netAdjustment.minus(cashMovement).abs().lt("0.005");
   const classified = classifyManualFxCorrectionPreflight({
     found: snapshot.header !== null,
     sourceType: snapshot.header?.source_type ?? null,
@@ -217,6 +234,7 @@ export async function getManualFxCorrectionPreflight(
     unresolvedAccountCount: unresolved,
     baseCurrency: valuation.baseCurrency,
     nonEmptyCandidates: candidates.length > 0,
+    amountsReconcile,
   });
   return {
     companyId,
@@ -229,9 +247,8 @@ export async function getManualFxCorrectionPreflight(
     })),
     status: classified.status,
     blockers: classified.blockers,
-    manualFxCounterDebitUsd: fxCounter
-      ? new Decimal(fxCounter.debit_amount).minus(fxCounter.credit_amount).toFixed(2)
-      : "0.00",
+    manualFxCounterDebitUsd: originalCounter.toFixed(2),
+    manualCashMovementUsd: cashMovement.toFixed(2),
     fxCounterAccount: fxCounter?.ledger_account_id ? {
       id: fxCounter.ledger_account_id, code: fxCounter.account_code ?? "", type: fxCounter.account_type ?? "",
     } : null,
