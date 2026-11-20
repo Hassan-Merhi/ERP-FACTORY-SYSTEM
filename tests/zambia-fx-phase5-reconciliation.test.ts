@@ -93,6 +93,17 @@ describe("Phase 5 Zambia Sales ↔ Net Position diagnostic bridge", () => {
     );
   });
 
+  it("fails closed when no unique FX counter account can be identified", () => {
+    const report = bridgeSalesToNetPosition({
+      ...zambia,
+      fxCounterAccountType: null,
+    });
+    expect(report.status).toBe("needs_review");
+    expect(report.fx.misclassified).toBe(true);
+    expect(report.blockers).toContain("FX_ACCOUNT_CLASSIFICATION_REQUIRED");
+    expect(report.reportedNetPositionUsd).toBeNull();
+  });
+
   it("detects one-cent source changes with exact decimal arithmetic", () => {
     const report = bridgeSalesToNetPosition({
       ...zambia,
