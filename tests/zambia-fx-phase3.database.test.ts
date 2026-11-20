@@ -194,7 +194,19 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
     expect(result.candidates).toHaveLength(2);
     expect(result.candidates.map((x) => x.accountKey).sort()).toEqual([`ledger:${kitwe}`, `ledger:${lusaka}`].sort());
     const sum = result.candidates.reduce((acc, row) => acc.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0));
-    expect(sum.toFixed(2)).toBe(result.candidateNetAdjustmentUsd);
+    expect(sum.toFixed(2)).toBe("-45.63");
+    expect(result.candidateNetAdjustmentUsd).toBe("-45.63");
+    const candidate = new Map(result.candidates.map((row) => [row.accountKey, row]));
+    expect(candidate.get(`ledger:${kitwe}`)).toMatchObject({
+      bookBeforeManualUsd: "3290.55",
+      translatedAfterManualReversalUsd: expect.any(String),
+      expectedBaseOnlyAdjustmentUsd: "-11.60",
+    });
+    expect(candidate.get(`ledger:${lusaka}`)).toMatchObject({
+      bookBeforeManualUsd: "7739.77",
+      expectedBaseOnlyAdjustmentUsd: "-34.03",
+    });
+    expect(result.blockers).not.toContain("FX_CORRECTION_AMOUNT_MISMATCH");
     expect(
       await Promise.all([
         countRows("vouchers"),
