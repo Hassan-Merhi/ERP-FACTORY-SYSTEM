@@ -44,8 +44,6 @@
   "sourceTextAssertionDelta": {
     "additionalSourceCoupledTests": [
       "tests/account-migration-round-trip.test.ts",
-      "tests/company-mutation-session-revision.test.ts",
-      "tests/ui/company-navigation-authority.test.ts",
       "tests/company-deletion-contract.test.ts",
       "tests/factory-loading-soft-delete-overload-regression.test.ts",
       "tests/net-position-equity-visibility.test.ts",

@@ -216,13 +216,7 @@ const PAGES: Array<{
     factory: true,
     seedRoutes: { "/whatsapp-preview": () => ({ files: [], defaultMessage: "" }) },
   },
-  {
-    name: "FactoryInvoices",
-    load: () => import("@/pages/factory/FactoryInvoices"),
-    factory: true,
-    // The loading-agent list is a plain array of names, not records.
-    seedRoutes: { "/api/factory/loading-agents": () => ["Coastal Agency", "Port Line"] },
-  },
+  { name: "FactoryInvoices", load: () => import("@/pages/factory/FactoryInvoices"), factory: true },
   { name: "WasteDispatch", load: () => import("@/pages/factory/WasteDispatch"), factory: true },
   { name: "StockEntryTab", load: () => import("@/pages/factory/bale-stock-entry/StockEntryTab"), factory: true },
   {

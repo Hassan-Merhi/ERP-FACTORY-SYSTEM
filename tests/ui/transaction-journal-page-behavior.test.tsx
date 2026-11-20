@@ -3,8 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
-  // Resolves true like the CompanyProvider once the server commits the switch.
-  selectCompany: vi.fn(async () => true),
+  selectCompany: vi.fn(),
   setLocation: vi.fn(),
   apiRequest: vi.fn(),
   toast: vi.fn(),
