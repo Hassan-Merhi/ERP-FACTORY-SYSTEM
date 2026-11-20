@@ -110,7 +110,7 @@ export function AccountMultiSelect({ accounts, selectedIds, onChange, disabled }
         options={sorted.map((account) => ({ value: String(account.id), name: account.name }))}
         selectedValues={selectedIds.map(String)}
         onSelectedValuesChange={(values) => onChange(values.map(Number))}
-        placeholder="Search and select accounts…"
+        placeholder="Search accounts..."
         searchPlaceholder="Search account name..."
         contentClassName="w-[min(560px,calc(100vw-2rem))]"
         testId="select-accounts"
