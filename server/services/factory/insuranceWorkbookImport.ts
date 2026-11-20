@@ -1,5 +1,5 @@
 import type { ExcelWorkbook } from "../../excelHelper";
-import { createWorkbook, sheetToJson } from "../../excelHelper";
+import { createWorkbook, sheetToJsonWithRowNumbers } from "../../excelHelper";
 
 export interface InsuranceImportRow {
   sheetName: string;
@@ -205,10 +205,9 @@ export function parseInsuranceWorkbook(workbook: ExcelWorkbook, defaultYear?: nu
     }
 
     const worksheet = workbook.Sheets[sheetName];
-    const sourceRows = sheetToJson<Record<string, unknown>>(worksheet);
+    const sourceRows = sheetToJsonWithRowNumbers<Record<string, unknown>>(worksheet);
     let validRows = 0;
-    sourceRows.forEach((sourceRow, index) => {
-      const rowNumber = index + 2;
+    sourceRows.forEach(({ rowNumber, data: sourceRow }) => {
       const name = cellText(findValue(sourceRow, ["name", "full name", "member name", "employee name"]));
       const amount = normalizeAmount(
         findValue(sourceRow, ["monthly amount", "month amount", "insurance amount", "monthly", "amount"])

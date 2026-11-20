@@ -24,8 +24,21 @@ export async function readExcel(buffer: Buffer): Promise<ExcelWorkbook> {
   return { workbook, SheetNames, Sheets };
 }
 
-export function sheetToJson<T = Record<string, unknown>>(worksheet: ExcelJS.Worksheet): T[] {
-  const data: T[] = [];
+export interface SheetJsonRow<T = Record<string, unknown>> {
+  /** The 1-based worksheet row number the data came from (blank rows are skipped, so not index + 2). */
+  rowNumber: number;
+  data: T;
+}
+
+/**
+ * sheetToJson with the real worksheet row number of each record, for callers
+ * that report errors by row: ExcelJS eachRow skips blank rows, so a record's
+ * array index does not map to its sheet row.
+ */
+export function sheetToJsonWithRowNumbers<T = Record<string, unknown>>(
+  worksheet: ExcelJS.Worksheet
+): SheetJsonRow<T>[] {
+  const data: SheetJsonRow<T>[] = [];
   const headers: string[] = [];
 
   worksheet.eachRow((row, rowNumber) => {
@@ -45,11 +58,15 @@ export function sheetToJson<T = Record<string, unknown>>(worksheet: ExcelJS.Work
           rowData[header] = value;
         }
       });
-      if (Object.keys(rowData).length > 0) data.push(rowData as T);
+      if (Object.keys(rowData).length > 0) data.push({ rowNumber, data: rowData as T });
     }
   });
 
   return data;
+}
+
+export function sheetToJson<T = Record<string, unknown>>(worksheet: ExcelJS.Worksheet): T[] {
+  return sheetToJsonWithRowNumbers<T>(worksheet).map((row) => row.data);
 }
 
 export function createWorkbook(): ExcelJS.Workbook {
