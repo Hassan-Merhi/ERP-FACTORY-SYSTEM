@@ -3,72 +3,41 @@ import { styleFactoryOperationalWorkbook } from "@shared/universal-excel/factory
 import * as XLSX from "@/lib/excelHelper";
 import type { Cell, Row } from "exceljs";
 import type { useGroundScanState } from "./useGroundScanState";
+import type { GroundScanItem } from "./groundscan/types";
+import { rowToScannedBale } from "./groundscan/utils";
+import { reconcileGroundScan, type GroundExpectedBale } from "./groundscan/reconciliation";
 
 export async function exportGroundScanWorkbook({
   selectedLocationId,
-  scannedBales,
   stockLocations,
-  totalWeight,
 }: {
   selectedLocationId: ReturnType<typeof useGroundScanState>["selectedLocationId"];
-  scannedBales: ReturnType<typeof useGroundScanState>["scannedBales"];
   stockLocations: ReturnType<typeof useGroundScanState>["stockLocations"];
-  totalWeight: ReturnType<typeof useGroundScanState>["totalWeight"];
 }) {
-  const locParam = selectedLocationId && selectedLocationId !== "all" ? `?locationId=${selectedLocationId}` : "";
-  const res = await fetch(`/api/factory/stock-entry/in-stock${locParam}`, { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to fetch system stock");
-  const allFetched: {
-    referenceNumber: string;
-    articleCode: string;
-    productName?: string;
-    weightKg: string;
-    isInLoadingOrder?: boolean;
-    stockEntryDate?: string | null;
-    workerName?: string | null;
-  }[] = await res.json();
-  const systemBales = allFetched.filter((b) => !b.isInLoadingOrder);
+  // The report must use live verification rows, not a potentially stale UI
+  // query or scans previously taken before bales were loaded onto a truck.
+  const locationQuery = selectedLocationId !== "all"
+    ? `&locationId=${encodeURIComponent(selectedLocationId)}`
+    : "";
+  const [stockResponse, scanResponse] = await Promise.all([
+    fetch(`/api/factory/stock-entry/in-stock?groundScan=1${locationQuery}`, { credentials: "include" }),
+    fetch(`/api/factory/ground-scan-items?locationId=${encodeURIComponent(selectedLocationId)}`, { credentials: "include" }),
+  ]);
+  if (!stockResponse.ok) throw new Error("Failed to fetch available system stock");
+  if (!scanResponse.ok) throw new Error("Failed to fetch current ground scans");
 
-  const scannedRefs = new Set(scannedBales.map((b) => b.refCode.toUpperCase()));
-  const systemRefs = new Set(systemBales.map((b) => (b.referenceNumber || "").toUpperCase()));
-
-  type ArticleRow = {
-    articleCode: string;
-    productName: string;
-    systemQty: number;
-    systemWt: number;
-    scannedQty: number;
-    scannedWt: number;
-  };
-  const articleMap = new Map<string, ArticleRow>();
-  const ensure = (key: string, name: string) => {
-    if (!articleMap.has(key))
-      articleMap.set(key, {
-        articleCode: key,
-        productName: name,
-        systemQty: 0,
-        systemWt: 0,
-        scannedQty: 0,
-        scannedWt: 0,
-      });
-    return articleMap.get(key)!;
-  };
-  for (const b of systemBales) {
-    const r = ensure(b.articleCode || "UNKNOWN", b.productName || "");
-    r.systemQty++;
-    r.systemWt += parseFloat(b.weightKg || "0");
-  }
-  for (const b of scannedBales) {
-    const r = ensure(b.articleCode || "UNKNOWN", b.productName || "");
-    r.scannedQty++;
-    r.scannedWt += b.weightKg;
-  }
-
-  const missingBales = systemBales.filter((b) => !scannedRefs.has((b.referenceNumber || "").toUpperCase()));
-  const extraBales = scannedBales.filter((b) => !systemRefs.has(b.refCode.toUpperCase()));
-  const totalSystemWt = systemBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0);
-  const totalMissingWt = missingBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0);
-  const summaryArticles = [...articleMap.values()].sort((a, b) => a.articleCode.localeCompare(b.articleCode));
+  const expected: GroundExpectedBale[] = await stockResponse.json();
+  const freshScans = ((await scanResponse.json()) as GroundScanItem[]).map(rowToScannedBale);
+  const {
+    systemBales,
+    scannedBales,
+    missingBales,
+    extraBales,
+    summaryArticles,
+    totalSystemWt,
+    totalMissingWt,
+    totalScannedWt: totalWeight,
+  } = reconcileGroundScan(expected, freshScans);
 
   const dateStr = new Date().toISOString().slice(0, 10);
   const timeStr = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -210,11 +179,7 @@ export async function exportGroundScanWorkbook({
   });
 
   summaryArticles.forEach((r, idx) => {
-    const missingQty = Math.max(0, r.systemQty - r.scannedQty);
-    const missingWt = missingBales
-      .filter((b) => (b.articleCode || "UNKNOWN") === r.articleCode)
-      .reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0);
-    const hasMissing = missingQty > 0;
+    const hasMissing = r.missingQty > 0;
     const dataRow = ws1.addRow([
       r.articleCode,
       r.productName,
@@ -222,8 +187,8 @@ export async function exportGroundScanWorkbook({
       +r.systemWt.toFixed(3),
       r.scannedQty,
       +r.scannedWt.toFixed(3),
-      missingQty,
-      +missingWt.toFixed(3),
+      r.missingQty,
+      +r.missingWt.toFixed(3),
     ]);
     styleDataRow(dataRow, idx % 2 === 0, hasMissing ? { argb: LRED } : undefined);
     [3, 4, 5, 6, 7, 8].forEach((col) => {
