@@ -2,6 +2,7 @@ import { installPermissionRevalidationListener } from "./permissionRevalidation"
 import {
   addCompanyMutationHeaders,
   assertCompanyMutationSnapshot,
+  assertPreparedCompanyMutationStillCurrent,
   assertCompanyReadSnapshot,
   captureCompanyMutationSnapshot,
   captureCompanyReadSnapshot,
@@ -352,6 +353,7 @@ export async function apiRequestPrivileged(
     // Retry once with a fresh token, as apiRequest does. Without the guard a server
     // that keeps rejecting the token turned one approval into an endless request loop.
     if (!_isRetry && (await isCsrfTokenMismatch(res))) {
+      assertPreparedCompanyMutationStillCurrent(prepared.init.headers);
       resetCsrfToken();
       return apiRequestPrivileged(method, url, data, timeoutMs, true);
     }
