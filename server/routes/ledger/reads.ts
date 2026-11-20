@@ -39,10 +39,8 @@ export function registerLedgerAccountReadRoutes(app: Express) {
           if (searchCondition) conditions.push(searchCondition);
         }
         if (includeHidden !== "true") conditions.push(eq(ledgerAccounts.isHidden, false));
-        if (req.query.profile === "voucher-picker" || req.query.profile === "picker") {
-          // Both posting-picker profiles must omit explicit Group and untagged legacy parents.
-          conditions.push(ledgerPostingLeafCondition(effectiveCompanyId));
-        }
+        // Both posting-picker profiles must omit explicit Group and untagged legacy parents.
+        conditions.push(ledgerPostingLeafCondition(effectiveCompanyId));
 
         const accounts = await db
           .select({
