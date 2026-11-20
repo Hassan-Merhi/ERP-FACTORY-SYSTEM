@@ -199,7 +199,7 @@ export default function FactoryInvoices() {
           <SearchField
             value={searchTerm}
             onValueChange={setSearchTerm}
-            placeholder="Search customer, loading, container, destination..."
+            placeholder="Search customer, booking info, agent, container..."
             wrapperClassName="min-w-[210px] flex-1"
             className="h-9 rounded-lg border-border/70 bg-background/80 text-xs"
             data-testid="input-invoice-search"

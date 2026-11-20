@@ -1,13 +1,13 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 5500,
+    "scannedFiles": 5524,
     "perRoot": {
-      "server": 3172,
+      "server": 3181,
       "shared": 182,
       "scripts": 287,
       "migrations": 109,
-      "tests": 1747
+      "tests": 1762
     },
     "totalSites": 1243,
     "byCategory": {
@@ -2357,7 +2357,7 @@
       "findingId": "RSQL-0098",
       "id": "2a374fe72e0fd3449f9e",
       "path": "scripts/run-phase7-browser-e2e.mjs",
-      "line": 204,
+      "line": 213,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "setLanguage",

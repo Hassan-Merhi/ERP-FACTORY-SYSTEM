@@ -8,12 +8,50 @@ import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { customerOrders } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { resultRows } from "../../../lib/queryResult";
 import { canViewBookingInfo, isValidBookingInfo } from "./bookingInfo";
 import { registerOrderCrudRoutesPart4 } from "./registerOrderCrudRoutesPart4";
 
 export function registerOrderCrudRoutesPart3(app: Express) {
   registerOrderCrudRoutesPart4(app);
+
+  // Company-scoped, reusable shipping agent names. Same visibility as booking info.
+  app.get("/api/factory/loading-agents", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (!canViewBookingInfo(req.session)) return res.status(403).json({ message: "Not authorized" });
+      const result = await db.execute(sql`
+        SELECT name FROM factory_loading_agents WHERE company_id = ${companyId}
+        ORDER BY lower(name), id
+      `);
+      res.json(resultRows(result).map((row) => String(row.name)));
+    } catch (error: unknown) {
+      logger.error("Error listing loading agents:", { error });
+      sendHttpError(res, error);
+    }
+  });
+
+  app.post("/api/factory/loading-agents", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (!canViewBookingInfo(req.session)) return res.status(403).json({ message: "Not authorized" });
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      if (!name || name.length > 200) return res.status(400).json({ message: "Agent name must be 1-200 characters" });
+      const result = await db.execute(sql`
+        INSERT INTO factory_loading_agents (company_id, name)
+        VALUES (${companyId}, ${name})
+        ON CONFLICT (company_id, lower(name)) DO UPDATE SET name = factory_loading_agents.name
+        RETURNING name
+      `);
+      res.status(201).json({ name: String(resultRows(result)[0].name) });
+    } catch (error: unknown) {
+      logger.error("Error creating loading agent:", { error });
+      sendHttpError(res, error);
+    }
+  });
 
   app.patch("/api/factory/customer-orders/:id/date", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -74,7 +112,7 @@ export function registerOrderCrudRoutesPart3(app: Express) {
 
       const orderId = parseId(req.params.id);
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-      const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body || {};
+      const { containerNumber, shippingCompany, containerNotes, bookingInfo, agentName, destination } = req.body || {};
       // Existing loading forms may submit an empty bookingInfo along with
       // unrelated changes. Treat that as omitted for non-privileged staff;
       // never let them change or clear the private stored value.
@@ -102,12 +140,26 @@ export function registerOrderCrudRoutesPart3(app: Express) {
         return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
       }
       const normalizedBooking = normalizeText(requestedBookingInfo, 2000, "Booking info");
+      if (agentName !== undefined && !canViewBookingInfo(req.session)) {
+        return res.status(403).json({ message: "Only Admin, Owner or Developer can edit agent" });
+      }
+      const normalizedAgent = normalizeText(agentName, 200, "Agent");
+      if (normalizedAgent) {
+        const matching = await db.execute(sql`
+          SELECT name FROM factory_loading_agents WHERE company_id = ${companyId}
+          AND lower(name) = lower(${normalizedAgent}) LIMIT 1
+        `);
+        if (!resultRows(matching).length) {
+          return res.status(400).json({ message: "Select an agent from the saved list" });
+        }
+      }
       const normalizedDestination = normalizeText(destination, 500, "Destination");
       const updateData: Partial<typeof customerOrders.$inferInsert> = {};
       if (normalizedContainer !== undefined) updateData.containerNumber = normalizedContainer;
       if (normalizedShipping !== undefined) updateData.shippingCompany = normalizedShipping;
       if (normalizedNotes !== undefined) updateData.containerNotes = normalizedNotes;
       if (normalizedBooking !== undefined) updateData.bookingInfo = normalizedBooking;
+      if (normalizedAgent !== undefined) updateData.agentName = normalizedAgent;
       if (normalizedDestination !== undefined) updateData.destination = normalizedDestination;
       if (!Object.keys(updateData).length) return res.status(400).json({ message: "No fields to update" });
 
@@ -125,6 +177,7 @@ export function registerOrderCrudRoutesPart3(app: Express) {
           "shippingCompany",
           "containerNotes",
           "bookingInfo",
+          "agentName",
           "destination",
         ] as const;
         for (const field of fieldNames) {
@@ -154,7 +207,7 @@ export function registerOrderCrudRoutesPart3(app: Express) {
         return written;
       });
       // Booking information is private even when the caller edits other fields.
-      res.json(canViewBookingInfo(req.session) ? updated : { ...updated, bookingInfo: null });
+      res.json(canViewBookingInfo(req.session) ? updated : { ...updated, bookingInfo: null, agentName: null });
     } catch (error: unknown) {
       logger.error("Error updating container details:", { error });
       sendHttpError(res, error);

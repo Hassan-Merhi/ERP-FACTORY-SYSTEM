@@ -1,3 +1,4 @@
+import { assertCompanyReadSnapshot, captureCompanyReadSnapshot, companyReadCacheIdentity } from "./companyCacheScope";
 import {
   resolveFetchUrl as resolveUrl,
   replaceFetchInputUrl as replaceInputUrl,
@@ -34,7 +35,7 @@ let statementSnapshot: AccountStatementPaginationSnapshot | null = null;
 const statementListeners = new Set<() => void>();
 
 export function getAccountStatementPaginationSnapshot(): AccountStatementPaginationSnapshot | null {
-  return statementSnapshot;
+  return statementSnapshot?.key.startsWith(`${companyReadCacheIdentity()}|`) ? statementSnapshot : null;
 }
 
 export function subscribeAccountStatementPagination(listener: () => void): () => void {
@@ -84,10 +85,13 @@ if (typeof window !== "undefined" && !window.__erpAccountStatementPaginationInst
     url.searchParams.set("page", "1");
     url.searchParams.set("limit", String(LEGACY_LIMIT));
 
+    const scope = captureCompanyReadSnapshot();
+    assertCompanyReadSnapshot(scope);
     const response = await previousFetch(replaceInputUrl(input, url), init);
     if (!response.ok) return response;
     try {
       const payload = (await response.clone().json()) as StatementPage;
+      assertCompanyReadSnapshot(scope);
       if (!payload || !Array.isArray(payload.transactions) || payload.total === undefined) return response;
       updateStatementSnapshot({
         key: baseKey(url),
@@ -103,7 +107,8 @@ if (typeof window !== "undefined" && !window.__erpAccountStatementPaginationInst
           ? Number(payload.closingNetBalance)
           : null,
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
       // Preserve the original response when a legacy payload cannot be inspected.
     }
     return response;
