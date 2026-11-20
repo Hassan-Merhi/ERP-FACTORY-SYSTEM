@@ -93,6 +93,28 @@ describe("toast() and useToast()", () => {
     expect(result.current.toasts[0].open).toBe(false);
   });
 
+  it("keeps the toast open when it reports it is still open", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => {
+      toast({ title: "Still open" });
+    });
+
+    act(() => result.current.toasts[0].onOpenChange?.(true));
+
+    expect(result.current.toasts[0].open).toBe(true);
+  });
+
+  it("removes every notice at once on a company switch, with no closing delay", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => {
+      toast({ title: "Previous company's balance" });
+    });
+
+    act(() => clearAllToasts());
+
+    expect(result.current.toasts).toEqual([]);
+  });
+
   it("dismisses everything through the hook", () => {
     const { result } = renderHook(() => useToast());
     act(() => {
