@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -222,18 +223,13 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
             </label>
             <label className="min-w-[220px] flex-1 space-y-1 text-xs text-muted-foreground">
               Pay from Cash / Bank (USD)
-              <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger aria-label="Pay bonus from account">
-                  <SelectValue placeholder="Select paying account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts.map((account) => (
-                    <SelectItem key={account.id} value={String(account.id)}>
-                      {account.name} ({account.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                value={accountId}
+                onChange={setAccountId}
+                placeholder={"Select paying account"}
+                ariaLabel={"Pay bonus from account"}
+              />
             </label>
           </div>
           {!datesValid && (
@@ -418,18 +414,13 @@ export function ProductionTargetBonusPaymentsPanel({ initialDate }: { initialDat
             </div>
             <label className="space-y-1 text-sm">
               Pay from Cash / Bank (USD)
-              <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger aria-label="Confirm daily bonus paying account">
-                  <SelectValue placeholder="Choose paying account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cashAccounts.map((account) => (
-                    <SelectItem key={account.id} value={String(account.id)}>
-                      {account.name} ({account.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                value={accountId}
+                onChange={setAccountId}
+                placeholder={"Choose paying account"}
+                ariaLabel={"Confirm daily bonus paying account"}
+              />
             </label>
             <AlertDialogFooter>
               <AlertDialogCancel disabled={postMutation.isPending}>Cancel</AlertDialogCancel>
