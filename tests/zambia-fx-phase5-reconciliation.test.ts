@@ -3,7 +3,10 @@
  * Pure decimal fixtures from the read-only audit, no production DB access.
  */
 import { describe, expect, it } from "vitest";
-import { bridgeSalesToNetPosition, type SalesNetPositionBridgeInput } from "../server/services/accounting/salesNetPositionBridge";
+import {
+  bridgeSalesToNetPosition,
+  type SalesNetPositionBridgeInput,
+} from "../server/services/accounting/salesNetPositionBridge";
 
 const zambia: SalesNetPositionBridgeInput = {
   salesItemsUsd: "11030.31",
