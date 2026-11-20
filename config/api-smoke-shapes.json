@@ -279,7 +279,7 @@
     },
     "/api/auth/session-company": {
       "status": 200,
-      "shape": "{companyId:scalar}"
+      "shape": "{companyId:scalar,companyRevision:scalar}"
     },
     "/api/bale-product-categories": {
       "status": 200,

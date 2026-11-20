@@ -2,7 +2,7 @@
  * Phase 4 verification against a fresh, disposable CI PostgreSQL company.
  * Never use production Render credentials or known production IDs.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import { pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
@@ -95,7 +95,8 @@ async function linkPosting(voucherId: number, source: string, suffix: string): P
   await pool.query(
     `INSERT INTO accounting_posting_requests
      (company_id,idempotency_key,source_type,source_id,request_fingerprint,voucher_id)
-     VALUES ($1,$2,$3,$4,$5,$6)`,
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (company_id, idempotency_key) DO NOTHING`,
     [companyId, `${prefix}:${suffix}`, source, `${prefix}:${suffix}`, "b".repeat(64), voucherId]
   );
 }
@@ -108,7 +109,7 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
   beforeAll(async () => {
     const company = await pool.query<{ id: number }>(
       `INSERT INTO companies (code, name, company_type, base_currency, display_currency)
-       VALUES ($1,$1,'erp','USD','ZMW') RETURNING id`,
+       VALUES ($1::text,$1::text,'erp','USD','ZMW') RETURNING id`,
       [prefix]
     );
     companyId = company.rows[0].id;
@@ -130,11 +131,16 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
     await receipt("KIT209", kitwe, "18080", "20.9");
     await receipt("LUS208", lusaka, "147910", "20.8");
     await receipt("LUS209", lusaka, "13140", "20.9");
-    originalId = await journal("MANUALFX", [
-      { ledger: kitwe, debit: "0", credit: "11.60" },
-      { ledger: lusaka, debit: "0", credit: "34.03" },
-      { ledger: fxAccount, debit: "45.63", credit: "0" },
-    ], null, "Manual FX revaluation 20.8 to 20.9");
+    originalId = await journal(
+      "MANUALFX",
+      [
+        { ledger: kitwe, debit: "0", credit: "11.60" },
+        { ledger: lusaka, debit: "0", credit: "34.03" },
+        { ledger: fxAccount, debit: "45.63", credit: "0" },
+      ],
+      null,
+      "Manual FX revaluation 20.8 to 20.9"
+    );
     await linkPosting(originalId, "manual-journal", "manual");
   }, 120_000);
 
@@ -149,6 +155,13 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
     await pool.query("DELETE FROM companies WHERE id=$1", [companyId]);
   }, 120_000);
 
+  // The shared test bridge (tests/voucherRequestIdentityTestBridge.mjs) deletes
+  // posting requests after every test, so the original voucher's source identity
+  // is linked again before each one.
+  beforeEach(async () => {
+    if (originalId) await linkPosting(originalId, "manual-journal", "manual");
+  });
+
   it("reports account reclassification before any financial posting", async () => {
     const start = await verify();
     expect(start.status).toBe("reclassify_fx_account");
@@ -159,17 +172,23 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
 
   it("reports original reversal needed after a reviewed P&L account correction", async () => {
     await pool.query("UPDATE ledger_accounts SET account_type='Indirect Expense' WHERE company_id=$1 AND id=$2", [
-      companyId, fxAccount,
+      companyId,
+      fxAccount,
     ]);
     expect((await verify()).status).toBe("reverse_original");
   });
 
   it("verifies exact audited reversal and refuses a second native-USD FX journal", async () => {
-    const reversingId = await journal("REVERSE", [
-      { ledger: kitwe, debit: "11.60", credit: "0" },
-      { ledger: lusaka, debit: "34.03", credit: "0" },
-      { ledger: fxAccount, debit: "0", credit: "45.63" },
-    ], originalId, "Exact reverse of the old native-USD FX journal");
+    const reversingId = await journal(
+      "REVERSE",
+      [
+        { ledger: kitwe, debit: "11.60", credit: "0" },
+        { ledger: lusaka, debit: "34.03", credit: "0" },
+        { ledger: fxAccount, debit: "0", credit: "45.63" },
+      ],
+      originalId,
+      "Exact reverse of the old native-USD FX journal"
+    );
     await linkPosting(reversingId, "voucher-reversal", "reversal");
     const before = await verify();
     expect(before.status).toBe("post_base_only");
