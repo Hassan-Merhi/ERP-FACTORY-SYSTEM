@@ -73,7 +73,7 @@ export function bridgeSalesToNetPosition(input: SalesNetPositionBridgeInput): Sa
   }
   if (input.unsupportedAccountCount > 0) blockers.push("ADDITIONAL_LEDGER_ACCOUNT_ACTIVITY");
   if (input.balanceOpeningCount > 0) blockers.push("NONZERO_OPENING_BALANCES");
-  if (input.fxCounterAccountType !== null && input.fxCounterAccountType !== "Indirect Expense") {
+  if (input.fxCounterAccountType !== "Indirect Expense") {
     blockers.push("FX_ACCOUNT_CLASSIFICATION_REQUIRED");
   }
 
