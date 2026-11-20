@@ -85,7 +85,8 @@ describe("RetailPaymentPanel Split", () => {
     const { unmount } = render(
       <Harness total={10} initial={[{ method: "cash", amount: 10, tenderedAmount: 10 }]} onChange={() => {}} />
     );
-    expect(screen.queryByRole("option", { name: /customer credit/i })).toBeNull();
+    fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
+    expect(screen.queryByText(/customer credit/i)).toBeNull();
     unmount();
     render(
       <Harness
@@ -95,7 +96,8 @@ describe("RetailPaymentPanel Split", () => {
         onChange={() => {}}
       />
     );
-    expect(screen.getByRole("option", { name: /customer credit/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
+    expect(screen.getByText(/customer credit/i)).toBeTruthy();
   });
 });
 
@@ -120,7 +122,9 @@ describe("Retail money account selection", () => {
         onChange={(next) => changes.push(next)}
       />
     );
-    fireEvent.change(screen.getByRole("combobox", { name: /account/i }), { target: { value: "bank:21" } });
+    fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
+    expect(screen.queryByText("B-002")).toBeNull();
+    fireEvent.click(screen.getByText("Bank Current"));
     expect(changes.at(-1)?.[0]).toMatchObject({ method: "bank", bankAccountId: 21, amount: 100 });
     expect(changes.at(-1)?.[0].ledgerAccountId).toBeUndefined();
   });
