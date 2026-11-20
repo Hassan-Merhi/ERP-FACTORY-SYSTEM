@@ -63,25 +63,27 @@ export function publishCompanySessionCommit(companyId: number): void {
  * Observe confirmed switches and reconcile on tab resume in case the browser
  * suspended delivery of a storage or BroadcastChannel event.
  */
-export function subscribeToCompanySessionChanges(onChange: () => void): () => void {
+export type CompanySessionSignal = "selection" | "resume";
+
+export function subscribeToCompanySessionChanges(onChange: (signal: CompanySessionSignal) => void): () => void {
   if (typeof window === "undefined") return () => {};
 
   const onStorage = (event: StorageEvent) => {
     if (event.key === "selectedCompanyId") {
-      if (event.newValue && validCompanyId(Number(event.newValue))) onChange();
+      if (event.newValue && validCompanyId(Number(event.newValue))) onChange("selection");
       return;
     }
     if (event.key !== COMPANY_SESSION_STORAGE_PULSE) return;
     try {
       const message: unknown = JSON.parse(event.newValue ?? "null");
-      if (isCompanySessionMessage(message) && message.sourceId !== sourceId) onChange();
+      if (isCompanySessionMessage(message) && message.sourceId !== sourceId) onChange("selection");
     } catch {
       // Ignore unrelated or malformed storage events.
     }
   };
 
   const onResume = () => {
-    if (typeof document === "undefined" || document.visibilityState === "visible") onChange();
+    if (typeof document === "undefined" || document.visibilityState === "visible") onChange("resume");
   };
 
   let channel: BroadcastChannel | null = null;
@@ -89,7 +91,7 @@ export function subscribeToCompanySessionChanges(onChange: () => void): () => vo
     try {
       channel = new BroadcastChannel(COMPANY_SESSION_CHANNEL);
       channel.addEventListener("message", (event: MessageEvent<unknown>) => {
-        if (isCompanySessionMessage(event.data) && event.data.sourceId !== sourceId) onChange();
+        if (isCompanySessionMessage(event.data) && event.data.sourceId !== sourceId) onChange("selection");
       });
     } catch {
       // Resume and storage handlers still work without BroadcastChannel.
