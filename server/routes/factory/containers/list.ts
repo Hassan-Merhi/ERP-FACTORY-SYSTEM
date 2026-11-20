@@ -11,6 +11,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factorySuppliers, factoryContainers, ledgerAccounts } from "@shared/schema";
 import { eq, and, asc, desc, sql, isNull } from "drizzle-orm";
+import { ledgerPostingLeafCondition } from "../../../services/accounting/postableLedgerAccountPolicy";
 
 export function registerFactoryContainerListRoutes(app: Express) {
   app.get("/api/factory/containers", requireAuth, async (req: Request, res: Response) => {
@@ -154,6 +155,7 @@ export function registerFactoryContainerListRoutes(app: Express) {
           id: ledgerAccounts.id,
           code: ledgerAccounts.code,
           name: ledgerAccounts.name,
+          isPostingLeaf: ledgerPostingLeafCondition(companyId),
           accountType: ledgerAccounts.accountType,
         })
         .from(ledgerAccounts)
