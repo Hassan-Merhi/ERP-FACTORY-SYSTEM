@@ -20,6 +20,8 @@ import { useServerRestart } from "@/hooks/use-server-restart";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { AuthenticatedApp } from "@/app/AuthenticatedApp";
+import { useCompany } from "@/contexts/CompanyContext";
+import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
@@ -213,6 +215,40 @@ function DeferredAuthenticatedUtilities() {
   );
 }
 
+/**
+ * Unmount every company-owned provider, page and portal when a company switch
+ * begins, not only the active route shell. Portaled dialogs disappear with
+ * their owner and all local selections are recreated for the new company.
+ * The CompanyProvider itself stays mounted to finish server reconciliation.
+ */
+function CompanyWorkspaceBoundary({
+  user,
+  handleLogout,
+}: {
+  user: AuthenticatedUser;
+  handleLogout: () => Promise<void>;
+}) {
+  const { selectedCompany, isLoading: companyLoading } = useCompany();
+
+  if (companyLoading || !selectedCompany) {
+    return <AppLoadingState message="Switching company" />;
+  }
+
+  return (
+    <LocationProvider key={`${user.id}:${selectedCompany.id}`}>
+      <DateFormatProvider>
+        <CurrencyProvider>
+          <CursorNavProvider>
+            <LegacyQueueRecoveryPanel />
+            <AuthenticatedApp user={user} handleLogout={handleLogout} />
+            <DeferredAuthenticatedUtilities />
+          </CursorNavProvider>
+        </CurrencyProvider>
+      </DateFormatProvider>
+    </LocationProvider>
+  );
+}
+
 function AuthenticatedRoot() {
   const { user, isLoading, error, handleLogout } = useAuthenticatedUser();
   // Plan batch 5: with no connection at all, a laptop with a cold-start ticket
@@ -234,20 +270,10 @@ function AuthenticatedRoot() {
   return (
     <ApplicationLanguageProvider>
       <CompanyProvider>
-        <LocationProvider>
-          <DateFormatProvider>
-            <CurrencyProvider>
-              <CursorNavProvider>
-                <ServerRestartWatcher />
-                <ColdStartReadOnlyBanner />
-                <LegacyQueueRecoveryPanel />
-                <AuthenticatedApp user={user} handleLogout={handleLogout} />
-                <DeferredAuthenticatedUtilities />
-                <UpdateBanner key={`${user.id}:${user.role}`} />
-              </CursorNavProvider>
-            </CurrencyProvider>
-          </DateFormatProvider>
-        </LocationProvider>
+        <ServerRestartWatcher />
+        <ColdStartReadOnlyBanner />
+        <CompanyWorkspaceBoundary user={user} handleLogout={handleLogout} />
+        <UpdateBanner key={`${user.id}:${user.role}`} />
       </CompanyProvider>
     </ApplicationLanguageProvider>
   );
