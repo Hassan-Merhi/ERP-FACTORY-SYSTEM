@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 
 import { PeriodFilter } from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
@@ -128,11 +128,10 @@ export default function SalesReport() {
           />
         }
         quick={
-          <Input
+          <SearchField
             placeholder="Search..."
             value={sr.searchTerm}
-            onChange={(e) => sr.setSearchTerm(e.target.value)}
-            className="w-full"
+            onValueChange={sr.setSearchTerm}
             data-testid="input-search"
           />
         }
@@ -158,11 +157,12 @@ export default function SalesReport() {
               <SalesReportFilterControls {...sr.salesReportFilterControls} showSeparator />
 
               {/* Search */}
-              <Input
+              <SearchField
                 placeholder="Search..."
                 value={sr.searchTerm}
-                onChange={(e) => sr.setSearchTerm(e.target.value)}
-                className="w-40 h-9"
+                onValueChange={sr.setSearchTerm}
+                wrapperClassName="w-40"
+                className="h-9"
                 data-testid="input-search"
               />
 
