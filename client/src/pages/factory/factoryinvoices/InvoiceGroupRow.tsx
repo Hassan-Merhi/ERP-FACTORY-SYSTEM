@@ -78,6 +78,7 @@ export function InvoiceGroupRow({
         {orderRowContext.isColumnVisible("proforma") && <TableCell />}
         {orderRowContext.isColumnVisible("container") && <TableCell />}
         {orderRowContext.isColumnVisible("bookingInfo") && <TableCell />}
+        {orderRowContext.isColumnVisible("agent") && <TableCell />}
         {orderRowContext.isColumnVisible("destination") && <TableCell />}
         {orderRowContext.isColumnVisible("notes") && <TableCell />}
         {orderRowContext.isColumnVisible("date") && <TableCell />}

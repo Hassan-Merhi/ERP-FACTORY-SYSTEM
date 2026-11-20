@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConfirmDialog, type ConfirmDialogTone } from "@/components/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { COMPANY_WORKSPACE_TRANSITION_EVENT } from "@/lib/companyWorkspaceEvents";
 
 export interface ConfirmActionOptions {
   title: string;
@@ -71,10 +72,31 @@ export function promptText(options: PromptTextOptions): Promise<string | null> {
 
 export function ConfirmHost() {
   const [queue, setQueue] = useState<HostRequest[]>([]);
+  const currentQueue = useRef<HostRequest[]>([]);
   const [answer, setAnswer] = useState("");
   // ConfirmDialog closes itself after onConfirm, which also fires onOpenChange;
   // settle each request once so that close does not dismiss the next one.
   const settled = useRef<HostRequest | null>(null);
+
+  useEffect(() => {
+    currentQueue.current = queue;
+  }, [queue]);
+
+  useEffect(() => {
+    const cancelPendingForCompanyChange = () => {
+      // The global host survives company-scoped workspace unmounts. A prompt
+      // opened for Company A must never be approved after Company B activates.
+      settled.current = currentQueue.current[0] ?? null;
+      for (const request of currentQueue.current) {
+        if (request.kind === "confirm") request.resolve(false);
+        else request.resolve(null);
+      }
+      currentQueue.current = [];
+      setQueue([]);
+    };
+    window.addEventListener(COMPANY_WORKSPACE_TRANSITION_EVENT, cancelPendingForCompanyChange);
+    return () => window.removeEventListener(COMPANY_WORKSPACE_TRANSITION_EVENT, cancelPendingForCompanyChange);
+  }, []);
 
   useEffect(() => {
     const push = (request: HostRequest) => setQueue((current) => [...current, request]);

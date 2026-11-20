@@ -1,4 +1,5 @@
 import type { Express, Request } from "express";
+import { randomUUID } from "node:crypto";
 
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
@@ -10,11 +11,14 @@ import { companies } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { registerCompanyAccessRoutesPart1 } from "./registerCompanyAccessRoutesPart1";
+import { LEGACY_COMPANY_REVISION } from "../../security/companyMutationScope";
 
 declare module "express-session" {
   interface SessionData {
     /** Display name of the active company, cached for presence/session reads. Set below when the company is switched. */
     currentCompanyName?: string | null;
+    /** Opaque per-switch write revision shared by all tabs in this authenticated session. */
+    companyRevision?: string;
   }
 }
 
@@ -93,6 +97,7 @@ function registerCompanyAccessRoutesPart2(app: Express) {
       req.session.canAccessCustomers = userRole.canAccessCustomers;
       req.session.canDeleteRecords = userRole.canDeleteRecords;
       req.session.currentCompanyName = companyRow?.name ?? null;
+      req.session.companyRevision = randomUUID();
 
       try {
         await saveSession(req);
@@ -101,7 +106,11 @@ function registerCompanyAccessRoutesPart2(app: Express) {
         return res.status(500).json({ message: "Failed to save session" });
       }
 
-      res.json({ message: "Company set successfully", companyId });
+      res.json({
+        message: "Company set successfully",
+        companyId,
+        companyRevision: req.session.companyRevision ?? LEGACY_COMPANY_REVISION,
+      });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

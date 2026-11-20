@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { resultRows } from "../lib/queryResult";
 import {
@@ -273,6 +273,7 @@ export function registerPasskeyRoutes(app: Express) {
         req.session.userId = userId;
         req.session.username = cred.username;
         req.session.csrfToken = randomBytes(32).toString("hex");
+        req.session.companyRevision = randomUUID();
         req.session.ip =
           (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || null;
         req.session.userAgent = req.headers["user-agent"] || null;

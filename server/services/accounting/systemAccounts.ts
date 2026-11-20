@@ -26,6 +26,7 @@ import { logger } from "../../lib/logger";
 import { runWithDatabaseMaintenanceScope } from "../security/databaseScopeRuntimeContext";
 import { runInCompanyPostingScope } from "./scheduledPostingScope";
 import { ACCOUNTING_CONTROL_ACCOUNTS, isRentalPostingAccountCode } from "./unifiedAccountingFoundation";
+import { statusForSameNamedSystemAccount } from "./systemAccountNameStatus";
 
 export interface SystemAccountDefinition {
   code: string;
@@ -412,7 +413,7 @@ function statusFor(definition: SystemAccountDefinition, rows: ExistingRow[]): Sy
     return { code: definition.code, state: "ok", accountId: byCode.id };
   }
   const byName = rows.find((row) => !row.deleted && row.name === definition.name);
-  if (byName) return { code: definition.code, state: "reused_by_name", accountId: byName.id, actualCode: byName.code };
+  if (byName) return statusForSameNamedSystemAccount(definition, byName);
   return { code: definition.code, state: "missing" };
 }
 

@@ -38,6 +38,7 @@ vi.mock("@/contracts/sessionQueryContracts", () => ({
 }));
 
 import { queryClient } from "@/lib/queryClient";
+import { _testOnly_resetCompanyCacheScope, captureCompanyMutationSnapshot } from "@/lib/companyCacheScope";
 import { CompanyProvider, useCompany } from "@/contexts/CompanyContext";
 
 function assignment(id: number, overrides: Record<string, unknown> = {}) {
@@ -71,6 +72,7 @@ const prefetched = () =>
 let sessionCompanyId: number | null = 1;
 
 beforeEach(() => {
+  _testOnly_resetCompanyCacheScope();
   localStorage.clear();
   harness.assignments = [assignment(1), assignment(2), assignment(3)];
   harness.listError = null;
@@ -84,6 +86,7 @@ beforeEach(() => {
 
 afterEach(() => {
   queryClient.clear();
+  _testOnly_resetCompanyCacheScope();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -131,14 +134,19 @@ describe("initial company selection", () => {
     expect(switchCalls()).toHaveLength(1);
   });
 
-  it("adopts the session's own company when the switch to the saved one is refused", async () => {
+  it("adopts the session's own company and write revision when the saved switch is refused", async () => {
     localStorage.setItem("selectedCompanyId", "3");
     sessionCompanyId = 2;
+    harness.fetchSessionCompany.mockResolvedValue({
+      companyId: 2,
+      companyRevision: "verified-company-two",
+    });
     harness.apiRequest.mockResolvedValue({ ok: false });
     const { result } = renderHook(() => useCompany(), { wrapper });
 
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
     expect(switchCalls()).toHaveLength(1);
+    expect(captureCompanyMutationSnapshot("POST", "/api/vouchers")?.serverRevision).toBe("verified-company-two");
   });
 
   it("retries after two seconds when the switch is refused and the session company is not the user's", async () => {
@@ -230,6 +238,23 @@ describe("selectCompany", () => {
     expect(harness.refreshRealtimeSessionScope).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the server-returned revision to scope the next voucher write", async () => {
+    const { result } = await renderOnCompanyOne();
+    harness.apiRequest.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({ companyId: 2, companyRevision: "confirmed-company-two" }),
+    }));
+
+    await act(async () => {
+      expect(await result.current.selectCompany(result.current.companies[1])).toBe(true);
+    });
+
+    expect(captureCompanyMutationSnapshot("POST", "/api/vouchers")).toMatchObject({
+      companyId: 2,
+      serverRevision: "confirmed-company-two",
+    });
+  });
+
   it("keeps the current company and reports failure when the server refuses the switch", async () => {
     const { result } = await renderOnCompanyOne();
     harness.apiRequest.mockResolvedValue({ ok: false });
@@ -278,6 +303,30 @@ describe("selectCompany", () => {
 
     expect(result.current.selectedCompany?.id).toBe(3);
     expect(switchCalls()).toHaveLength(0);
+  });
+
+  it("hides the previous workspace while an explicit company switch is pending", async () => {
+    const { result } = await renderOnCompanyOne();
+    let resolveServerSwitch!: (value: { ok: boolean }) => void;
+    harness.apiRequest.mockImplementation(
+      () => new Promise<{ ok: boolean }>((resolve) => { resolveServerSwitch = resolve; })
+    );
+
+    let selection!: Promise<boolean>;
+    await act(async () => {
+      selection = result.current.selectCompany(result.current.companies[1]);
+    });
+
+    expect(result.current.selectedCompany?.id).toBe(1);
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      resolveServerSwitch({ ok: true });
+      expect(await selection).toBe(true);
+    });
+
+    expect(result.current.selectedCompany?.id).toBe(2);
+    expect(result.current.isLoading).toBe(false);
   });
 
   it("applies rapid switches in order, ending on the last one", async () => {

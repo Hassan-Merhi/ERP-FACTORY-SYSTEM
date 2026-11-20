@@ -3,6 +3,11 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { MutationCache } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import {
+  addCompanyMutationHeaders,
+  assertCompanyMutationSnapshot,
+  captureCompanyMutationSnapshot,
+} from "./companyCacheScope";
 
 /* ── Timezone-aware date utility ───────────────────────────────────────────── */
 // Stores the configured timezone for the current company.
@@ -155,6 +160,12 @@ export async function prepareApiRequest(
   data: unknown,
   timeoutMs: number
 ): Promise<PreparedApiRequest> {
+  // The expected company belongs to the original action, before awaiting
+  // CSRF or anything else that could allow another tab to change the session.
+  const upMethod = method.toUpperCase();
+  const isStateChanging = upMethod !== "GET" && upMethod !== "HEAD" && upMethod !== "OPTIONS";
+  const pathname = new URL(url, "http://localhost").pathname;
+  const companyScope = captureCompanyMutationSnapshot(upMethod, pathname);
   const controller = new AbortController();
   let intentionalAbort = false;
   const timeoutId = setTimeout(() => {
@@ -162,32 +173,35 @@ export async function prepareApiRequest(
     controller.abort();
   }, timeoutMs);
 
-  let body: string | undefined;
-  if (data) {
-    body = JSON.stringify(data);
-  }
-
-  // Attach CSRF token for state-changing methods.
-  const upMethod = method.toUpperCase();
-  const isStateChanging = upMethod !== "GET" && upMethod !== "HEAD" && upMethod !== "OPTIONS";
-  const csrfToken = isStateChanging ? await ensureCsrfToken() : null;
-
-  const _apiUrl = _CAPACITOR_API_BASE && url.startsWith("/") ? `${_CAPACITOR_API_BASE}${url}` : url;
-  const init: RequestInit = {
-    method,
-    headers: {
+  try {
+    const body = data ? JSON.stringify(data) : undefined;
+    const csrfToken = isStateChanging ? await ensureCsrfToken() : null;
+    // A token refresh may take time. A late callback must never silently post
+    // the old company's voucher while the next company is being selected.
+    assertCompanyMutationSnapshot(companyScope);
+    if (controller.signal.aborted) throw new DOMException("Request timed out.", "AbortError");
+    const headers = new Headers({
       ...(data ? { "Content-Type": "application/json" } : {}),
       "X-Client-Date": getAppDate(),
       ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
-    },
-    body,
-    credentials: "include",
-    signal: controller.signal,
-    // Logout must survive an immediate tab/browser close after the click.
-    // keepalive asks the browser to finish this tiny request during unload.
-    keepalive: upMethod === "POST" && url === "/api/auth/logout",
-  };
-  return { url: _apiUrl, init, timeoutId, didTimeout: () => intentionalAbort };
+    });
+    addCompanyMutationHeaders(headers, companyScope);
+
+    const _apiUrl = _CAPACITOR_API_BASE && url.startsWith("/") ? `${_CAPACITOR_API_BASE}${url}` : url;
+    const init: RequestInit = {
+      method,
+      headers,
+      body,
+      credentials: "include",
+      signal: controller.signal,
+      // Logout must survive an immediate tab/browser close after the click.
+      keepalive: upMethod === "POST" && url === "/api/auth/logout",
+    };
+    return { url: _apiUrl, init, timeoutId, didTimeout: () => intentionalAbort };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
 }
 
 /**
@@ -213,6 +227,13 @@ export type UnauthorizedBehavior = "returnNull" | "throw";
 // error._handledGlobally.
 export const globalMutationCache = new MutationCache({
   onError: (error: ClientErrorLike) => {
+    if (error?.code === "COMPANY_SESSION_CHANGED" || error?.code === "COMPANY_SCOPE_INVALID") {
+      // Never queue or replay this write. Preserve the form's inputs so the
+      // operator can review which company owns the draft before resubmitting.
+      error._handledGlobally = true;
+      toast({ title: error.message, variant: "destructive" });
+      return;
+    }
     if (error?.name === "OfflineQueued") {
       error._handledGlobally = true;
       const label = error.description ? `${error.description} saved` : "Action saved";

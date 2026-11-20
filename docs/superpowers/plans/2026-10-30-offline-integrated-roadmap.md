@@ -243,7 +243,10 @@ plan are in the plan document and the
 - Accounting Sales vouchers on a PC (protected central path: USD, active),
   posted through the central generic voucher service the live route now
   shares.
-- Next: purchases; then Phases C to E.
+- Accounting Purchase vouchers on a PC, the same way, as their own kind
+  (`voucher.purchase.v1`). This completes step 1 (the voucher types). Container
+  purchase orders stay online-only.
+- Next: Phases C to E.
 
 ## Resume checklist (next session)
 

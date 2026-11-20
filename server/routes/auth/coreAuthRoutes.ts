@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 
 import { requireAuth, requireLogin } from "../../auth";
 import { db } from "../../db";
@@ -153,6 +153,7 @@ export function registerCoreAuthRoutes(app: Express) {
       req.session.userAgent = userAgentForSession;
       req.session.loginAt = new Date().toISOString();
       req.session.csrfToken = randomBytes(32).toString("hex");
+      req.session.companyRevision = randomUUID();
 
       if (userCompanies.length > 0) {
         const firstCompany = userCompanies[0];

@@ -7,6 +7,15 @@ import {
   removeCompanySessionQueries,
 } from "@/lib/companyQueryScope";
 import { createCompanySwitchQueue, type CompanySwitchQueue } from "@/lib/companySwitchQueue";
+import { publishCompanySessionCommit, type CompanySessionSignal } from "@/lib/companySessionSync";
+import { announceCompanyWorkspaceTransition } from "@/lib/companyWorkspaceEvents";
+import {
+  activateCompanyCacheScope,
+  beginCompanyCacheTransition,
+  rememberVerifiedServerCompanyRevision,
+  resumeCompanyCacheScope,
+} from "@/lib/companyCacheScope";
+import { useCompanySessionFollower } from "@/hooks/useCompanySessionFollower";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { stableReferenceQueryPolicy } from "@/lib/queryPolicies";
 import { refreshRealtimeSessionScope } from "@/hooks/use-ws-invalidation";
@@ -63,6 +72,8 @@ interface CompanyContextType {
   selectedCompany: Company | null;
   companies: Company[];
   isLoading: boolean;
+  /** True while checking a resumed tab, without discarding unchanged forms. */
+  isCheckingCompanySession: boolean;
   error: Error | null;
   selectCompany: (company: Company, options?: CompanySelectionOptions) => Promise<boolean>;
 }
@@ -70,6 +81,7 @@ interface CompanyContextType {
 interface CompanyCommitOptions {
   prefetch: boolean;
   serverSynced: boolean;
+  revision?: string | null;
   /** False when another tab already wrote the selection to localStorage. */
   persist?: boolean;
 }
@@ -102,27 +114,47 @@ function parseSavedCompanyId(value: string | null): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-async function switchCompanyOnServer(companyId: number): Promise<boolean> {
+async function switchCompanyOnServer(companyId: number): Promise<{ ok: boolean; revision?: string }> {
   try {
     const response = await apiRequest("POST", "/api/auth/set-company", { companyId });
-    return response.ok;
+    let revision: string | undefined;
+    if (response.ok && typeof response.json === "function") {
+      try {
+        const payload: unknown = await response.json();
+        const value = (payload as { companyRevision?: unknown } | null)?.companyRevision;
+        if (typeof value === "string") revision = value;
+      } catch {
+        // Older servers do not return a revision; use legacy compatibility.
+      }
+    }
+    return { ok: response.ok, revision };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [isSyncingCompany, setIsSyncingCompany] = useState(false);
+  const [externalSessionState, setExternalSessionState] = useState<"idle" | "checking" | "switching">("idle");
+  // A fast same-company tab resume must not flash a blocking verification screen.
+  // Keep reads and writes fenced immediately; only show the cover if the
+  // authoritative check takes long enough to affect the operator.
+  const [showResumeVerificationCover, setShowResumeVerificationCover] = useState(false);
+  const resumeVerificationCoverTimer = useRef<number | null>(null);
   const [initialSyncAttempt, setInitialSyncAttempt] = useState(0);
   const selectedCompanyRef = useRef<Company | null>(null);
   const lastSyncedCompanyId = useRef<number | null>(null);
   const initialSyncStarted = useRef(false);
+  const externalChangeObservedRef = useRef(false);
   const initialRetryTimer = useRef<number | null>(null);
   const switchQueueRef = useRef<CompanySwitchQueue | null>(null);
 
   if (!switchQueueRef.current) {
-    switchQueueRef.current = createCompanySwitchQueue(setIsSyncingCompany);
+    switchQueueRef.current = createCompanySwitchQueue((busy) => {
+      if (busy) announceCompanyWorkspaceTransition();
+      setIsSyncingCompany(busy);
+    });
   }
 
   const {
@@ -141,6 +173,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   companiesRef.current = companies;
 
   const commitCompanySelection = useCallback((company: Company, options: CompanyCommitOptions) => {
+    activateCompanyCacheScope(company.id);
+    if (options.serverSynced) rememberVerifiedServerCompanyRevision(company.id, options.revision);
     setAppTimezone(null);
     lastSyncedCompanyId.current = options.serverSynced ? company.id : null;
     selectedCompanyRef.current = company;
@@ -161,8 +195,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
    * belongs to this user and this company. Just commit the selection.
    */
   const adoptServerCompany = useCallback(
-    (company: Company) => {
-      commitCompanySelection(company, { prefetch: true, serverSynced: true });
+    (company: Company, revision?: string | null) => {
+      commitCompanySelection(company, { prefetch: true, serverSynced: true, revision });
     },
     [commitCompanySelection]
   );
@@ -174,43 +208,57 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       }
 
       const isInitialActivation = selectedCompanyRef.current === null;
-      await cancelCompanySessionQueries(queryClient);
+      let refusedSwitch = false;
+      if (!isInitialActivation) beginCompanyCacheTransition();
+      try {
+        await cancelCompanySessionQueries(queryClient);
 
-      if (options.offline) {
+        if (options.offline) {
+          removeCompanySessionQueries(queryClient, {
+            resetAuthenticatedUser: !isInitialActivation,
+          });
+          commitCompanySelection(company, { prefetch: false, serverSynced: false });
+          return true;
+        }
+
+        const switched = await switchCompanyOnServer(company.id);
+        if (!switched.ok) {
+          refusedSwitch = true;
+          return false;
+        }
+
         removeCompanySessionQueries(queryClient, {
           resetAuthenticatedUser: !isInitialActivation,
         });
-        commitCompanySelection(company, { prefetch: false, serverSynced: false });
+        commitCompanySelection(company, { prefetch: true, serverSynced: true, revision: switched.revision });
+        publishCompanySessionCommit(company.id);
+        // The WebSocket's company/user scope is captured when it connects. Since
+        // company switching is now SPA-native (no page reload), replace the socket
+        // after the server session changes so realtime events follow this company.
+        refreshRealtimeSessionScope();
+
+        if (isInitialActivation) {
+          void queryClient.invalidateQueries({
+            queryKey: ["/api/auth/me"],
+            exact: true,
+            refetchType: "active",
+          });
+        }
+
         return true;
+      } finally {
+        // A denied switch or transport error must reopen the existing
+        // company's read scope without exposing a stale in-flight response.
+        resumeCompanyCacheScope();
+        // Do not start recovery reads until the old company's scope is
+        // verified again. They would otherwise fail against transition mode.
+        if (refusedSwitch) {
+          void queryClient.invalidateQueries({
+            predicate: (query) => isCompanySessionQueryKey(query.queryKey),
+            refetchType: "active",
+          });
+        }
       }
-
-      const ok = await switchCompanyOnServer(company.id);
-      if (!ok) {
-        void queryClient.invalidateQueries({
-          predicate: (query) => isCompanySessionQueryKey(query.queryKey),
-          refetchType: "active",
-        });
-        return false;
-      }
-
-      removeCompanySessionQueries(queryClient, {
-        resetAuthenticatedUser: !isInitialActivation,
-      });
-      commitCompanySelection(company, { prefetch: true, serverSynced: true });
-      // The WebSocket's company/user scope is captured when it connects. Since
-      // company switching is now SPA-native (no page reload), replace the socket
-      // after the server session changes so realtime events follow this company.
-      refreshRealtimeSessionScope();
-
-      if (isInitialActivation) {
-        void queryClient.invalidateQueries({
-          queryKey: ["/api/auth/me"],
-          exact: true,
-          refetchType: "active",
-        });
-      }
-
-      return true;
     },
     [commitCompanySelection]
   );
@@ -256,11 +304,23 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     }
 
     void fetchSessionCompany()
-      .catch(() => ({ companyId: null }))
-      .then(async ({ companyId: sessionCompanyId }) => {
+      .catch(() => ({ companyId: null, companyRevision: undefined }))
+      .then(async ({ companyId: sessionCompanyId, companyRevision }) => {
+        if (selectedCompanyRef.current) return;
+        // A confirmed external switch during bootstrap takes precedence over a
+        // saved startup preference. Do not write the session back to an old tab.
+        if (externalChangeObservedRef.current) {
+          const serverCompany = companiesRef.current.find((company) => company.id === sessionCompanyId);
+          if (serverCompany) {
+            await switchQueueRef.current!.enqueue(async () => {
+              if (!selectedCompanyRef.current) adoptServerCompany(serverCompany, companyRevision);
+            });
+            return;
+          }
+        }
         if (sessionCompanyId === target.id) {
           await switchQueueRef.current!.enqueue(async () => {
-            adoptServerCompany(target);
+            adoptServerCompany(target, companyRevision);
           });
           return;
         }
@@ -273,7 +333,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
           // The switch was refused, so the session still points where it did
           // and the requests already in flight were made against it.
           await switchQueueRef.current!.enqueue(async () => {
-            adoptServerCompany(serverCompany);
+            adoptServerCompany(serverCompany, companyRevision);
           });
           return;
         }
@@ -287,64 +347,87 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       });
   }, [adoptServerCompany, companies, initialSyncAttempt, scheduleInitialSyncRetry, selectCompany, selectedCompany]);
 
-  // The company lives in the server session, which every tab of this browser
-  // shares. When another tab switches company, this tab's next request would
-  // carry its old company and be refused (CROSS_COMPANY_ACCESS_DENIED), and the
-  // page would sit on data from a company the session has left. The other
-  // tab's localStorage write (made only after its switch committed) fires a
-  // storage event here; on it, adopt whatever company the session points at
-  // now. A follower never writes the session or localStorage itself, so it
-  // cannot race a newer switch back to an older company, and reading the
-  // session rather than the event value makes the order of events irrelevant.
-  useEffect(() => {
-    let retryTimer: number | null = null;
-
-    const followSession = (attempt: number) => {
-      void switchQueueRef.current!.enqueue(async () => {
-        let sessionCompanyId: number | null;
-        try {
-          ({ companyId: sessionCompanyId } = await fetchSessionCompany());
-        } catch (error: unknown) {
-          if (attempt < 3) {
-            retryTimer = window.setTimeout(() => followSession(attempt + 1), 2000);
-          } else {
-            console.error("[Company] Could not read the session company after another tab switched.", error);
-          }
-          return;
-        }
-        if (!sessionCompanyId || sessionCompanyId === selectedCompanyRef.current?.id) return;
-        const company = companiesRef.current.find((candidate) => candidate.id === sessionCompanyId);
-        if (!company) return;
-
-        await cancelCompanySessionQueries(queryClient);
-        removeCompanySessionQueries(queryClient, { resetAuthenticatedUser: true });
-        commitCompanySelection(company, { prefetch: true, serverSynced: true, persist: false });
-        refreshRealtimeSessionScope();
-      });
-    };
-
-    const followOtherTab = (event: StorageEvent) => {
-      if (event.key !== "selectedCompanyId" || !selectedCompanyRef.current) return;
-      const companyId = parseSavedCompanyId(event.newValue);
-      if (!companyId || companyId === selectedCompanyRef.current.id) return;
-      if (retryTimer !== null) window.clearTimeout(retryTimer);
-      retryTimer = null;
-      followSession(0);
-    };
-
-    window.addEventListener("storage", followOtherTab);
-    return () => {
-      window.removeEventListener("storage", followOtherTab);
-      if (retryTimer !== null) window.clearTimeout(retryTimer);
-    };
+  const adoptOtherTabCompany = useCallback((company: Company, revision?: string | null) => {
+    commitCompanySelection(company, { prefetch: true, serverSynced: true, revision });
+    refreshRealtimeSessionScope();
   }, [commitCompanySelection]);
+
+  const clearResumeVerificationCoverTimer = useCallback(() => {
+    if (resumeVerificationCoverTimer.current !== null) {
+      window.clearTimeout(resumeVerificationCoverTimer.current);
+      resumeVerificationCoverTimer.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearResumeVerificationCoverTimer(), [clearResumeVerificationCoverTimer]);
+
+  const beginExternalSessionVerification = useCallback((signal: CompanySessionSignal | "hint") => {
+    // The cache fence is immediate even when the cover is delayed: a response
+    // or submitted voucher must never cross an unverified company session.
+    beginCompanyCacheTransition();
+    if (signal === "selection") {
+      // This is an authoritative mismatch, not merely another tab's hint.
+      clearResumeVerificationCoverTimer();
+      setShowResumeVerificationCover(false);
+      announceCompanyWorkspaceTransition();
+      setExternalSessionState("switching");
+      return;
+    }
+    if (signal === "hint") {
+      // A confirmed cross-tab commit notification might mean a new company.
+      // Hide old records now, but retain drafts until the server confirms it.
+      clearResumeVerificationCoverTimer();
+      setShowResumeVerificationCover(true);
+    } else if (resumeVerificationCoverTimer.current === null) {
+      // Foreground-only tab returns usually verify in milliseconds. Avoid the
+      // repeated full-screen flash; still fail closed on slow or failed probes.
+      resumeVerificationCoverTimer.current = window.setTimeout(() => {
+        resumeVerificationCoverTimer.current = null;
+        setShowResumeVerificationCover(true);
+      }, 350);
+    }
+    setExternalSessionState((current) => current === "switching" ? current : "checking");
+  }, [clearResumeVerificationCoverTimer]);
+  const finishExternalSessionVerification = useCallback(() => {
+    clearResumeVerificationCoverTimer();
+    setShowResumeVerificationCover(false);
+    resumeCompanyCacheScope();
+    setExternalSessionState("idle");
+    // The verification fence can reject requests that happened to be in flight
+    // when a background tab resumes. Once the same company is verified, retry
+    // only failed mounted company queries; never repeat mutations or flood all
+    // pages with a full refetch on every focus event.
+    void queryClient.invalidateQueries({
+      predicate: (query) => query.state.status === "error" && isCompanySessionQueryKey(query.queryKey),
+      refetchType: "active",
+    });
+  }, [clearResumeVerificationCoverTimer]);
+  const rememberExternalSessionRevision = useCallback((companyId: number, revision?: string | null) => {
+    rememberVerifiedServerCompanyRevision(companyId, revision);
+  }, []);
+
+  useCompanySessionFollower({
+    companiesRef,
+    selectedCompanyRef,
+    switchQueueRef,
+    externalChangeObservedRef,
+    onTransitionStart: beginExternalSessionVerification,
+    onTransitionVerified: finishExternalSessionVerification,
+    onVerifiedScope: rememberExternalSessionRevision,
+    onAdopt: adoptOtherTabCompany,
+  });
 
   return (
     <CompanyContext.Provider
       value={{
         selectedCompany,
         companies,
-        isLoading: isLoading || isSyncingCompany || (companies.length > 0 && !selectedCompany),
+        isLoading:
+          isLoading || isSyncingCompany || externalSessionState === "switching" || (companies.length > 0 && !selectedCompany),
+        // Pending local changes stay covered rather than unmounting forms.
+        // A confirmed external company mismatch still hard-gates the workspace.
+        isCheckingCompanySession:
+          isSyncingCompany || (externalSessionState === "checking" && showResumeVerificationCover),
         error: companyAssignmentsError instanceof Error ? companyAssignmentsError : null,
         selectCompany,
       }}

@@ -1,7 +1,7 @@
 /**
  * A protected generic voucher (USD, active, with a client request id), posted
  * the one way both the live route (POST /api/vouchers/with-entries, central
- * path) and the offline replay (server/edge/phase9SalesVoucherApply.ts) post
+ * path) and the offline replay (server/edge/phase9AccountingVoucherApply.ts) post
  * it: customer lines take the customer's linked ledger, the central posting
  * engine posts it (a repeat of the same client request id is a replay), and
  * employee balances and the audit row are written, all on the caller's

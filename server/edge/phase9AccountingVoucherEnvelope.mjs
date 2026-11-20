@@ -1,7 +1,7 @@
 /**
- * Full offline mode: typed, immutable evidence for an accounting Sales voucher
- * entered offline on a PC (POST /api/vouchers/with-entries, the protected
- * central path). Only what that path accepts is accepted: an active (not
+ * Full offline mode: typed, immutable evidence for an accounting Sales or
+ * Purchase voucher entered offline on a PC (POST /api/vouchers/with-entries,
+ * the protected central path); one kind per voucher type. Only what that path accepts is accepted: an active (not
  * optional) USD voucher of at least two lines, each a debit or a credit with
  * at most two decimals. The cloud posts it through the same service as the
  * live route (server/services/accounting/centralGenericVoucherCreate.ts).
@@ -22,6 +22,12 @@ const LINK_FIELDS = Object.freeze([
 ]);
 
 export const PHASE9_SALES_VOUCHER_KIND = "voucher.sales.v1";
+export const PHASE9_PURCHASE_VOUCHER_KIND = "voucher.purchase.v1";
+/** Voucher type -> its offline kind. */
+export const PHASE9_ACCOUNTING_VOUCHER_KINDS = Object.freeze({
+  Sales: PHASE9_SALES_VOUCHER_KIND,
+  Purchase: PHASE9_PURCHASE_VOUCHER_KIND,
+});
 
 const FIELDS = Object.freeze([
   "actorUserId",
@@ -35,10 +41,10 @@ const FIELDS = Object.freeze([
 const VOUCHER_FIELDS = Object.freeze(["description", "exchangeRate", "locationId", "voucherDate", "voucherType"]);
 const ENTRY_FIELDS = Object.freeze([...LINK_FIELDS, "creditAmount", "debitAmount", "narration"].sort());
 
-export class Phase9SalesVoucherRefusal extends Error {
+export class Phase9AccountingVoucherRefusal extends Error {
   constructor(code) {
     super(code);
-    this.name = "Phase9SalesVoucherRefusal";
+    this.name = "Phase9AccountingVoucherRefusal";
   }
 }
 
@@ -57,7 +63,7 @@ function validDay(date) {
 }
 
 function refuse() {
-  throw new Phase9SalesVoucherRefusal("PHASE9_SALES_VOUCHER_EVIDENCE_INVALID");
+  throw new Phase9AccountingVoucherRefusal("PHASE9_ACCOUNTING_VOUCHER_EVIDENCE_INVALID");
 }
 
 function entryOf(entry) {
@@ -77,8 +83,8 @@ function entryOf(entry) {
   return Object.fromEntries(ENTRY_FIELDS.map((field) => [field, entry[field]]));
 }
 
-/** The canonical Sales voucher evidence, or Phase9SalesVoucherRefusal. */
-export function phase9SalesVoucherEnvelope(evidence) {
+/** The canonical voucher evidence of that type, or Phase9AccountingVoucherRefusal. */
+function accountingVoucherEnvelope(evidence, voucherType) {
   const v = evidence?.voucher;
   if (
     !keys(evidence, FIELDS) ||
@@ -89,7 +95,7 @@ export function phase9SalesVoucherEnvelope(evidence) {
     typeof evidence.requestId !== "string" ||
     !UUID.test(evidence.requestId) ||
     !keys(v, VOUCHER_FIELDS) ||
-    v.voucherType !== "Sales" ||
+    v.voucherType !== voucherType ||
     !validDay(v.voucherDate) ||
     (v.description !== null && !text(v.description, 2000)) ||
     (v.locationId !== null && !ref(v.locationId)) ||
@@ -101,14 +107,14 @@ export function phase9SalesVoucherEnvelope(evidence) {
     refuse();
   }
   return {
-    kind: PHASE9_SALES_VOUCHER_KIND,
+    kind: PHASE9_ACCOUNTING_VOUCHER_KINDS[voucherType],
     requestId: evidence.requestId,
     companyId: evidence.companyId,
     actorUserId: evidence.actorUserId,
     actorUsername: evidence.actorUsername,
     localVoucherId: evidence.localVoucherId,
     voucher: {
-      voucherType: "Sales",
+      voucherType,
       voucherDate: v.voucherDate,
       description: v.description,
       locationId: v.locationId,
@@ -117,3 +123,6 @@ export function phase9SalesVoucherEnvelope(evidence) {
     entries: evidence.entries.map(entryOf),
   };
 }
+
+export const phase9SalesVoucherEnvelope = (evidence) => accountingVoucherEnvelope(evidence, "Sales");
+export const phase9PurchaseVoucherEnvelope = (evidence) => accountingVoucherEnvelope(evidence, "Purchase");

@@ -167,6 +167,15 @@ async function selectCompany(page, companyCode) {
     window.localStorage.setItem("selectedCompanyId", String(companyId));
     return { companyId, companyCode: targetCode };
   }, companyCode);
+  // This disposable test helper writes the shared server session directly.
+  // Reload so CompanyProvider adopts its new write revision before the next
+  // voucher, inventory, POS or supplier-partner operation. Production company
+  // switches use CompanySelector and never require a page reload.
+  await page.reload({ waitUntil: "domcontentloaded", timeout: timeoutMs });
+  await page.waitForFunction(
+    () => Boolean(document.getElementById("main-content")),
+    { timeout: timeoutMs }
+  );
   return result;
 }
 

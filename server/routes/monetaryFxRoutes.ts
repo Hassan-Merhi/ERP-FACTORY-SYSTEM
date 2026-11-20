@@ -11,6 +11,9 @@ import { emptyQuery, stringIdParams, validateRequest, type RequestSchemas } from
 import { companyBusinessDate } from "../services/accounting/companyBusinessDate";
 import { datedMonetaryRateTx, fxDay, MonetaryFxError } from "../services/accounting/monetaryFxRates";
 import { monetaryAccountValuationTx } from "../services/accounting/monetaryFxValuation";
+import { getManualFxCorrectionPreflight } from "../services/accounting/manualFxCorrectionPreflight";
+import { verifyManualFxCorrection } from "../services/accounting/manualFxCorrectionVerification";
+import { getZambiaSalesNetPositionReconciliation } from "../services/accounting/zambiaSalesNetPositionReconciliation";
 import { previewRealizedFxTx, listRealizedFxTx, recognizeRealizedFxTx } from "../services/accounting/realizedFxService";
 import {
   UNIFIED_FINANCIAL_POSTING_LOCKED,
@@ -86,6 +89,42 @@ export function registerMonetaryFxRoutes(app: Express): void {
       return fail(res, e);
     }
   });
+  // Phase 3 recovery: inspect an old manual FX journal without writing, reclassifying
+  // accounts, deleting vouchers or creating an automatic FX journal.
+  app.get("/api/accounting/monetary-fx/manual-revaluation/preflight", ...gate, async (req, res) => {
+    try {
+      const c = company(req);
+      const { voucherId } = z.object({ voucherId: positive }).parse(req.query);
+      const preview = await getManualFxCorrectionPreflight(c, voucherId);
+      return res.status(preview.status === "not_found" ? 404 : 200).json(preview);
+    } catch (e) {
+      return fail(res, e);
+    }
+  });
+
+  // Phase 4: read-only, company-scoped proof of a reviewed FX recovery.
+  // This GET never posts, reclassifies, reverses or accepts a company override.
+  app.get("/api/accounting/monetary-fx/manual-revaluation/verify", ...gate, async (req, res) => {
+    try {
+      const c = company(req);
+      const { voucherId } = z.object({ voucherId: positive }).parse(req.query);
+      const evidence = await verifyManualFxCorrection(c, voucherId);
+      return res.status(evidence.blockers.includes("ORIGINAL_VOUCHER_NOT_FOUND") ? 404 : 200).json(evidence);
+    } catch (e) {
+      return fail(res, e);
+    }
+  });
+
+  // Phase 5: read-only Sales Report, actual inventory-cost and Net Position
+  // bridge. Never accepts a company override or makes a correcting journal.
+  app.get("/api/accounting/monetary-fx/sales-net-position/reconciliation", ...gate, async (req, res) => {
+    try {
+      return res.json(await getZambiaSalesNetPositionReconciliation(company(req)));
+    } catch (e) {
+      return fail(res, e);
+    }
+  });
+
   app.get("/api/accounting/monetary-fx/cash-bank", ...gate, async (req, res) => {
     try {
       const input = cashBank.parse(req.query),

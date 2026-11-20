@@ -14,12 +14,14 @@ import { LocationProvider } from "@/contexts/LocationContext";
 import { DateFormatProvider } from "@/contexts/DateFormatContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { CursorNavProvider } from "@/contexts/CursorNavContext";
-import { ApplicationLanguageProvider } from "@/contexts/ApplicationLanguageContext";
+import { ApplicationLanguageProvider, useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { useServerRestart } from "@/hooks/use-server-restart";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { AuthenticatedApp } from "@/app/AuthenticatedApp";
+import { useCompany } from "@/contexts/CompanyContext";
+import type { AuthenticatedUser } from "@/contracts/sessionContracts";
 import { AppLoadingState } from "@/app/AppLoadingState";
 import { useAuthenticatedUser } from "@/app/useAuthenticatedUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
@@ -213,6 +215,78 @@ function DeferredAuthenticatedUtilities() {
   );
 }
 
+/**
+ * A resumed tab must verify its shared session before displaying records.
+ * Cover the view and take keyboard focus during that brief verification,
+ * preserving draft form state if the company is still the same.
+ */
+function CompanySessionVerificationCover() {
+  const { t } = useApplicationLanguage();
+  const coverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    coverRef.current?.focus();
+    return () => {
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      ref={coverRef}
+      role="alertdialog"
+      aria-modal="true"
+      aria-label={t("company.verifyingSession")}
+      tabIndex={-1}
+      className="fixed inset-0 z-[2147483647] overflow-auto bg-background"
+      data-testid="company-session-verification-cover"
+    >
+      <AppLoadingState message={t("company.verifyingSession")} />
+    </div>
+  );
+}
+
+/**
+ * Unmount every company-owned provider, page and portal when a company switch
+ * begins, not only the active route shell. Portaled dialogs disappear with
+ * their owner and all local selections are recreated for the new company.
+ * The CompanyProvider itself stays mounted to finish server reconciliation.
+ */
+function CompanyWorkspaceBoundary({
+  user,
+  handleLogout,
+}: {
+  user: AuthenticatedUser;
+  handleLogout: () => Promise<void>;
+}) {
+  const { selectedCompany, isLoading: companyLoading, isCheckingCompanySession } = useCompany();
+  const { t } = useApplicationLanguage();
+
+  if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) {
+    return <AppLoadingState message={t("company.switching")} />;
+  }
+
+  return (
+    <>
+      <LocationProvider key={`${user.id}:${selectedCompany.id}`}>
+        <DateFormatProvider>
+          <CurrencyProvider>
+            <CursorNavProvider>
+              <LegacyQueueRecoveryPanel />
+              <AuthenticatedApp user={user} handleLogout={handleLogout} />
+              <DeferredAuthenticatedUtilities />
+            </CursorNavProvider>
+          </CurrencyProvider>
+        </DateFormatProvider>
+      </LocationProvider>
+      {isCheckingCompanySession && <CompanySessionVerificationCover />}
+    </>
+  );
+}
+
 function AuthenticatedRoot() {
   const { user, isLoading, error, handleLogout } = useAuthenticatedUser();
   // Plan batch 5: with no connection at all, a laptop with a cold-start ticket
@@ -234,20 +308,10 @@ function AuthenticatedRoot() {
   return (
     <ApplicationLanguageProvider>
       <CompanyProvider>
-        <LocationProvider>
-          <DateFormatProvider>
-            <CurrencyProvider>
-              <CursorNavProvider>
-                <ServerRestartWatcher />
-                <ColdStartReadOnlyBanner />
-                <LegacyQueueRecoveryPanel />
-                <AuthenticatedApp user={user} handleLogout={handleLogout} />
-                <DeferredAuthenticatedUtilities />
-                <UpdateBanner key={`${user.id}:${user.role}`} />
-              </CursorNavProvider>
-            </CurrencyProvider>
-          </DateFormatProvider>
-        </LocationProvider>
+        <ServerRestartWatcher />
+        <ColdStartReadOnlyBanner />
+        <CompanyWorkspaceBoundary user={user} handleLogout={handleLogout} />
+        <UpdateBanner key={`${user.id}:${user.role}`} />
       </CompanyProvider>
     </ApplicationLanguageProvider>
   );
