@@ -15,6 +15,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { searchAny } from "@shared/searchNormalization";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -92,14 +94,8 @@ export function ContainerExtraItemsDialog({
   const manualPriceValid =
     !priceInput.trim() || (/^\d+(?:\.\d{1,4})?$/.test(priceInput.trim()) && Number(priceInput) <= 99999999);
   const matchingProducts = useMemo(() => {
-    const term = search.trim().toLowerCase();
     return products
-      .filter(
-        (p) =>
-          p.articleCode &&
-          p.active !== false &&
-          (!term || p.articleCode.toLowerCase().includes(term) || p.name.toLowerCase().includes(term))
-      )
+      .filter((p) => p.articleCode && p.active !== false && searchAny(search, p.articleCode, p.name))
       .slice(0, 60);
   }, [products, search]);
 
@@ -165,10 +161,10 @@ export function ContainerExtraItemsDialog({
 
         <div className="space-y-3">
           <Label htmlFor="extra-article-search">Find article by code or product name</Label>
-          <Input
+          <SearchField
             id="extra-article-search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onValueChange={setSearch}
             placeholder="Search articles..."
             data-testid="input-container-extra-search"
           />
