@@ -227,6 +227,13 @@ export type UnauthorizedBehavior = "returnNull" | "throw";
 // error._handledGlobally.
 export const globalMutationCache = new MutationCache({
   onError: (error: ClientErrorLike) => {
+    if (error?.code === "COMPANY_SESSION_CHANGED" || error?.code === "COMPANY_SCOPE_INVALID") {
+      // Never queue or replay this write. Preserve the form's inputs so the
+      // operator can review which company owns the draft before resubmitting.
+      error._handledGlobally = true;
+      toast({ title: error.message, variant: "destructive" });
+      return;
+    }
     if (error?.name === "OfflineQueued") {
       error._handledGlobally = true;
       const label = error.description ? `${error.description} saved` : "Action saved";
