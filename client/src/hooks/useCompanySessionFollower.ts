@@ -13,13 +13,27 @@ const COMPANY_SESSION_ERROR_CODES = {
   unassigned: "COMPANY_SESSION_UNASSIGNED",
 } as const;
 
+/**
+ * Every committed switch writes the shared saved selection, so a tab that
+ * slept through the notification can still tell, without a request, that
+ * another tab has moved the session to a different company.
+ */
+function savedSelectionDiffers(currentCompanyId: number): boolean {
+  try {
+    const saved = Number(window.localStorage.getItem("selectedCompanyId"));
+    return Number.isSafeInteger(saved) && saved > 0 && saved !== currentCompanyId;
+  } catch {
+    return false;
+  }
+}
+
 interface CompanySessionFollowerOptions {
   companiesRef: RefObject<Company[]>;
   selectedCompanyRef: RefObject<Company | null>;
   switchQueueRef: RefObject<CompanySwitchQueue | null>;
   externalChangeObservedRef: RefObject<boolean>;
-  /** Hide the current workspace before any session probe can resolve. */
-  onTransitionStart: (signal: CompanySessionSignal | "hint") => void;
+  /** Fence the workspace: a switch was notified ("hint") or confirmed ("selection"). */
+  onTransitionStart: (signal: "selection" | "hint") => void;
   /** Reveal the workspace only after the server scope was verified. */
   onTransitionVerified: () => void;
   onVerifiedScope: (companyId: number, revision?: string | null) => void;
@@ -27,9 +41,10 @@ interface CompanySessionFollowerOptions {
 }
 
 /**
- * Other tabs share a server session but not React state. Treat every switch
- * notification and tab resume as a possible scope change. Hide old data until
- * a fresh server read (and, if needed, cache eviction) has completed.
+ * Other tabs share a server session but not React state. A switch notification
+ * hides old data until a fresh server read (and, if needed, cache eviction) has
+ * completed. A plain tab return only re-reads the session in the background
+ * and leaves the page alone unless that read shows a different company.
  */
 export function useCompanySessionFollower({
   companiesRef,
@@ -128,10 +143,14 @@ export function useCompanySessionFollower({
       // During first activation the entire app is already hidden. Its startup
       // path reconciles the server, so do not introduce a permanent second gate.
       if (!selectedCompanyRef.current) return;
-      // A cross-tab commit hint needs immediate privacy protection. Ordinary
-      // tab resumes keep reads/writes fenced but delay the visible cover; only
-      // a confirmed mismatch discards drafts and changes the workspace.
-      onTransitionStart(signal === "selection" ? "hint" : "resume");
+      // A cross-tab commit hint needs immediate privacy protection. An ordinary
+      // tab return is checked quietly instead: fencing every read and write
+      // on each return aborted the page's own requests ("failed to load
+      // data") and, when the probe was slow or failed, left the workspace
+      // locked. The fence still closes the moment the probe finds a mismatch.
+      if (signal === "selection" || savedSelectionDiffers(selectedCompanyRef.current.id)) {
+        onTransitionStart("hint");
+      }
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = null;
       if (inProgress) {

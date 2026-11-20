@@ -82,7 +82,6 @@ describe("frontend company-state isolation wiring", () => {
     expect(root).toContain("<LegacyQueueRecoveryPanel />");
     expect(root).toContain("<DeferredAuthenticatedUtilities />");
     expect(context).toContain('externalSessionState === "switching"');
-    // #3367: an ordinary tab resume only shows the cover after its grace period.
     expect(context).toContain(
       'isSyncingCompany || (externalSessionState === "checking" && showResumeVerificationCover)'
     );

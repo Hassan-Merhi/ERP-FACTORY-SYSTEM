@@ -250,7 +250,8 @@ export function registerCreditNoteRoutesPart3(app: Express) {
         });
 
         const variance = subtractInventoryValues(totalRefundAmount, totalInventoryValue);
-        if (variance.abs().greaterThan("0.01")) {
+        // Include an exact one-cent difference: the deferred voucher guard requires balanced entries.
+        if (variance.abs().greaterThanOrEqualTo("0.01")) {
           const salesReturnsAccountId = await getOrCreateSalesReturnsAccount(companyId, tx);
           if (salesReturnsAccountId) {
             const debit =

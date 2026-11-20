@@ -33,6 +33,7 @@ vi.mock("@/contracts/sessionQueryContracts", () => ({
 }));
 
 import { COMPANY_SESSION_CHANNEL, COMPANY_SESSION_STORAGE_PULSE } from "@/lib/companySessionSync";
+import { assertCompanyReadSnapshot, captureCompanyReadSnapshot } from "@/lib/companyCacheScope";
 
 class FakeBroadcastChannel {
   static instances = new Set<FakeBroadcastChannel>();
@@ -300,7 +301,7 @@ describe("company selection across browser tabs", () => {
     });
   });
 
-  it("only covers a slow resumed tab after the grace period and preserves same-company drafts", async () => {
+  it("keeps a resumed tab loading and unmasked while a slow same-company check runs", async () => {
     const { result } = await renderOnCompanyOne();
     let resolveSession!: (value: { companyId: number }) => void;
     harness.fetchSessionCompany.mockImplementationOnce(
@@ -309,20 +310,64 @@ describe("company selection across browser tabs", () => {
           resolveSession = resolve;
         })
     );
+    const before = captureCompanyReadSnapshot();
 
     await returnFromAnotherBrowserTab();
-    expect(result.current.selectedCompany?.id).toBe(1);
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+    // However long the probe takes, the page keeps reading and saving:
+    // requests already on their way and new ones are both still admitted.
+    await new Promise((resolve) => setTimeout(resolve, 500));
     expect(result.current.isCheckingCompanySession).toBe(false);
     expect(result.current.isLoading).toBe(false);
-    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(true), { timeout: 1200 });
+    expect(() => assertCompanyReadSnapshot(before)).not.toThrow();
+    expect(captureCompanyReadSnapshot().transitioning).toBe(false);
 
     await act(async () => {
       resolveSession({ companyId: 1 });
     });
-    await waitFor(() => expect(result.current.isCheckingCompanySession).toBe(false));
+    expect(() => assertCompanyReadSnapshot(before)).not.toThrow();
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("leaves a resumed tab working when the session check cannot reach the server", async () => {
+    const { result } = await renderOnCompanyOne();
+    harness.fetchSessionCompany.mockRejectedValue(new Error("offline"));
+    const before = captureCompanyReadSnapshot();
+
+    await returnFromAnotherBrowserTab();
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+
+    expect(() => assertCompanyReadSnapshot(before)).not.toThrow();
+    expect(result.current.isCheckingCompanySession).toBe(false);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.selectedCompany?.id).toBe(1);
+  });
+
+  it("fences a resumed tab at once when the saved selection shows a missed switch", async () => {
+    const { result } = await renderOnCompanyOne();
+    let resolveSession!: (value: { companyId: number }) => void;
+    harness.fetchSessionCompany.mockImplementationOnce(
+      () =>
+        new Promise<{ companyId: number }>((resolve) => {
+          resolveSession = resolve;
+        })
+    );
+    // Another tab switched while this one was suspended; its event never arrived.
+    sessionCompanyId = 2;
+    localStorage.setItem("selectedCompanyId", "2");
+    const before = captureCompanyReadSnapshot();
+
+    await returnFromAnotherBrowserTab();
+    expect(result.current.isCheckingCompanySession).toBe(true);
+    expect(() => assertCompanyReadSnapshot(before)).toThrow();
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      resolveSession({ companyId: 2 });
+    });
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    expect(result.current.isCheckingCompanySession).toBe(false);
   });
 
   it("does not wait to mask records when another tab sends a company-switch hint", async () => {
@@ -340,14 +385,38 @@ describe("company selection across browser tabs", () => {
     });
     expect(result.current.isCheckingCompanySession).toBe(true);
     expect(result.current.selectedCompany?.id).toBe(1);
-
-    // The cover is immediate; the session probe itself is debounced by a tick.
     await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+
     await act(async () => {
       resolveSession({ companyId: 2 });
     });
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
     expect(result.current.isCheckingCompanySession).toBe(false);
+  });
+
+  it("starts on the company another tab switched to while this tab was still loading", async () => {
+    // Saved preference says 1, but the shared session moved to 2 during startup.
+    let resolveSession!: (value: { companyId: number }) => void;
+    harness.fetchSessionCompany.mockImplementationOnce(
+      () =>
+        new Promise<{ companyId: number }>((resolve) => {
+          resolveSession = resolve;
+        })
+    );
+    const { result } = renderHook(() => useCompany(), { wrapper });
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+    expect(result.current.selectedCompany).toBeNull();
+
+    await act(async () => {
+      otherTabSwitchedTo(2);
+    });
+    await act(async () => {
+      resolveSession({ companyId: 2 });
+    });
+
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    // The old tab must not write its saved company back over the session.
+    expect(harness.apiRequest).not.toHaveBeenCalled();
   });
 
   it("does not reveal an unassigned session company", async () => {

@@ -142,15 +142,14 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
     );
   }, 120_000);
 
-  // The suite-wide hook in tests/voucherRequestIdentityTestBridge.mjs deletes
-  // posting requests after every case, so the original journal's identity is
-  // registered before each one rather than once.
+  // The shared afterEach in voucherRequestIdentityTestBridge clears posting
+  // identities between test cases; restore the original journal's before each.
   beforeEach(async () => {
-    const linked = await pool.query("SELECT 1 FROM accounting_posting_requests WHERE company_id=$1 AND voucher_id=$2", [
+    await pool.query("DELETE FROM accounting_posting_requests WHERE company_id=$1 AND idempotency_key=$2", [
       companyId,
-      originalId,
+      `${prefix}:manual`,
     ]);
-    if (linked.rowCount === 0) await linkPosting(originalId, "manual-journal", "manual");
+    await linkPosting(originalId, "manual-journal", "manual");
   });
 
   afterAll(async () => {

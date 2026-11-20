@@ -12,6 +12,8 @@ declare module "express-session" {
     /** Cached display name for the pinned factory company (hint only). */
     factoryCompanyName?: string;
     currentCompanyName?: string | null;
+    /** Epoch ms of the last company switch; orders concurrent session writes. */
+    companySelectedAt?: number;
     ip?: string | null;
     userAgent?: string | null;
     loginAt?: string;

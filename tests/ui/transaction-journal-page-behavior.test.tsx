@@ -3,8 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
-  // The provider resolves true once the switch is committed; navigation waits for it.
-  selectCompany: vi.fn(async () => true),
+  selectCompany: vi.fn(),
   setLocation: vi.fn(),
   apiRequest: vi.fn(),
   toast: vi.fn(),
@@ -92,7 +91,7 @@ vi.mock("wouter", () => ({ useLocation: () => ["/transaction-journal", harness.s
 vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => ({
     selectCompany: harness.selectCompany,
-    // Cross-company navigation only targets assigned, active companies.
+    // Drilldowns only switch to an assigned, active company.
     companies: [
       { id: 4, name: "GC Lshi", active: true },
       { id: 5, name: "GC #2", active: true },
@@ -169,6 +168,8 @@ import TransactionJournal from "@/pages/TransactionJournal";
 describe("transaction journal page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The provider reports whether the server accepted the switch.
+    harness.selectCompany.mockResolvedValue(true);
     harness.queryError = null;
     harness.hiddenJournalVoucherIds = [];
     harness.detail = null;

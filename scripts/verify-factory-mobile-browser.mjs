@@ -210,6 +210,25 @@ async function selectFactoryCompany(page) {
   }, COMPANY_CODE);
 }
 
+/** Reloads the app and waits until it is running on the company just selected. */
+async function openSelectedCompanyWorkspace(page, companyId) {
+  // Vouchers is a Factory page allowed to use the shared accounting endpoints
+  // the seeding needs (ledger accounts, journal vouchers).
+  await page.goto(`${BASE_URL}/factory/vouchers`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_MS });
+  await page.waitForFunction(() => Boolean(document.getElementById("main-content")), {
+    timeout: TIMEOUT_MS,
+    polling: 100,
+  });
+  await settle(page);
+  const session = await page.evaluate(async () => {
+    const response = await fetch("/api/auth/session-company", { credentials: "include", cache: "no-store" });
+    return response.ok ? response.json() : null;
+  });
+  if (Number(session?.companyId) !== companyId) {
+    throw new Error(`${COMPANY_CODE} is not the active session company after reload`);
+  }
+}
+
 /** Resolves ids for seeded routes from read-only Factory list endpoints. */
 async function resolveSeeds(page, companyId) {
   let provided = {};
@@ -693,6 +712,12 @@ try {
       await login(page);
       stage = `select ${COMPANY_CODE}`;
       const companyId = await selectFactoryCompany(page);
+      // The switch above went to the server directly, so the loaded app still
+      // holds the previous company. Its writes carry the company they were made
+      // under and the server refuses them after a switch, which left every seed
+      // uncreated. Load the app again so it starts on the selected company.
+      stage = `open ${COMPANY_CODE} workspace`;
+      await openSelectedCompanyWorkspace(page, companyId);
       if (!routes) {
         stage = "resolve seeded records";
         report.seeds = await resolveSeeds(page, companyId);

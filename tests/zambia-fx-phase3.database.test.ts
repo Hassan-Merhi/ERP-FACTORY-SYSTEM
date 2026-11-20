@@ -155,17 +155,18 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
     ]);
   }, 120_000);
 
-  // The suite-wide hook in tests/voucherRequestIdentityTestBridge.mjs deletes
-  // posting requests after every case, so the manual journal's identity is
-  // registered before each one rather than once.
+  // The shared afterEach in voucherRequestIdentityTestBridge clears posting
+  // identities between test cases; the manual journal's identity is what every
+  // case here reads, so it is restored before each one.
   beforeEach(async () => {
+    await pool.query("DELETE FROM accounting_posting_requests WHERE company_id=$1 AND idempotency_key=$2", [
+      companyId,
+      `${unique}:manual-fx`,
+    ]);
     await pool.query(
       `INSERT INTO accounting_posting_requests
        (company_id, idempotency_key, source_type, source_id, request_fingerprint, voucher_id)
-       SELECT $1, $2, 'manual-journal', $3, $4, $5
-        WHERE NOT EXISTS (
-          SELECT 1 FROM accounting_posting_requests WHERE company_id = $1 AND voucher_id = $5
-        )`,
+       VALUES ($1, $2, 'manual-journal', $3, $4, $5)`,
       [companyId, `${unique}:manual-fx`, `${unique}:manual-fx`, "a".repeat(64), manualVoucherId]
     );
   });

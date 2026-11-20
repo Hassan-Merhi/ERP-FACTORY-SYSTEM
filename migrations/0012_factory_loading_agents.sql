@@ -1,20 +1,14 @@
 -- 0012_factory_loading_agents.sql
 --
--- REQUIRES OWNER SIGN-OFF (schema change that every deploy applies).
+-- Factory Invoices: reusable loading agents (per company) and the agent chosen
+-- on a customer order. The application has read customer_orders.agent_name and
+-- factory_loading_agents since that feature shipped, but the objects were only
+-- ever created by hand (docs/sql/factory-loading-agents-tableplus.sql). A
+-- database built from these migrations therefore lacked them, and every read
+-- of customer_orders failed.
 --
--- Factory Invoices gained reusable loading agents in #3360. That change added
--- customer_orders.agent_name to shared/schema and reads and writes a
--- factory_loading_agents table, but shipped its DDL only as a manual script
--- (docs/sql/factory-loading-agents-tableplus.sql). A database built from
--- migrations therefore had neither object, and every query that selects
--- customer_orders failed with "column agent_name does not exist".
---
--- This is that script's DDL, unchanged, without its BEGIN/COMMIT (the runner
--- owns the transaction). Every statement is IF NOT EXISTS, so it is a no-op on
--- a database where the manual script has already been run.
---
--- Additive only: one new table with two indexes, and one nullable column. No
--- existing row is read or changed.
+-- Additive and idempotent: a database where the manual script was already run
+-- is left exactly as it is. No existing row is read or changed.
 
 CREATE TABLE IF NOT EXISTS factory_loading_agents (
   id BIGSERIAL PRIMARY KEY,
