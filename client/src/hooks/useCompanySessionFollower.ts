@@ -22,7 +22,8 @@ interface CompanySessionFollowerOptions {
   onTransitionStart: (signal: CompanySessionSignal) => void;
   /** Reveal the workspace only after the server scope was verified. */
   onTransitionVerified: () => void;
-  onAdopt: (company: Company) => void;
+  onVerifiedScope: (companyId: number, revision?: string | null) => void;
+  onAdopt: (company: Company, revision?: string | null) => void;
 }
 
 /**
@@ -37,6 +38,7 @@ export function useCompanySessionFollower({
   externalChangeObservedRef,
   onTransitionStart,
   onTransitionVerified,
+  onVerifiedScope,
   onAdopt,
 }: CompanySessionFollowerOptions): void {
   useEffect(() => {
@@ -56,12 +58,16 @@ export function useCompanySessionFollower({
 
       inProgress = true;
       let verified = false;
+      let verifiedCompanyId: number | null = null;
+      let verifiedRevision: string | null | undefined;
       void (async () => {
         // Do not trust the broadcast's company ID or browser storage. The
         // authenticated server session is the authoritative identity.
         const initialSession = await fetchSessionCompany();
         if (disposed) return;
         if (!initialSession.companyId) throw new Error(COMPANY_SESSION_ERROR_CODES.unavailable);
+        verifiedCompanyId = initialSession.companyId;
+        verifiedRevision = initialSession.companyRevision;
 
         if (initialSession.companyId !== selectedCompanyRef.current?.id) {
           // A resume probe detected an actual change: unmount all old-company
@@ -71,8 +77,10 @@ export function useCompanySessionFollower({
             if (disposed) return;
             // Another local switch may have completed while waiting in the
             // queue; always re-read after obtaining the session boundary.
-            const { companyId } = await fetchSessionCompany();
+            const { companyId, companyRevision } = await fetchSessionCompany();
             if (disposed) return;
+            verifiedCompanyId = companyId;
+            verifiedRevision = companyRevision;
             const company = companiesRef.current.find((candidate) => candidate.id === companyId);
             if (!company) throw new Error(COMPANY_SESSION_ERROR_CODES.unassigned);
             if (company.id === selectedCompanyRef.current?.id) return;
@@ -80,7 +88,7 @@ export function useCompanySessionFollower({
             await cancelCompanySessionQueries(queryClient);
             if (disposed) return;
             removeCompanySessionQueries(queryClient, { resetAuthenticatedUser: true });
-            onAdopt(company);
+            onAdopt(company, companyRevision);
           });
         }
         if (!disposed) verified = true;
@@ -106,8 +114,9 @@ export function useCompanySessionFollower({
             if (retryTimer !== null) window.clearTimeout(retryTimer);
             retryTimer = null;
             reconcile(0);
-          } else if (verified) {
+          } else if (verified && verifiedCompanyId !== null) {
             onTransitionVerified();
+            onVerifiedScope(verifiedCompanyId, verifiedRevision);
           }
         });
     };
@@ -150,6 +159,7 @@ export function useCompanySessionFollower({
     externalChangeObservedRef,
     onTransitionStart,
     onTransitionVerified,
+    onVerifiedScope,
     onAdopt,
   ]);
 }
