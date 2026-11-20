@@ -118,15 +118,28 @@ export function registerTransporterStatementRoutesPart1(app: Express) {
         })
         .parse(req.body);
 
+      // The voucher line must belong to the caller's company, and a due date
+      // stored by another company is never overwritten or deleted.
+      const owned = await db.execute(
+        sql`SELECT 1 FROM voucher_entries e JOIN vouchers v ON v.id = e.voucher_id
+             WHERE e.id = ${entryId} AND v.company_id = ${companyId}`
+      );
+      if (owned.rows.length === 0) return res.status(404).json({ message: "Entry not found" });
+
       if (dueDate) {
-        await db.execute(
+        const written = await db.execute(
           sql`INSERT INTO transporter_entry_due_dates (voucher_entry_id, company_id, due_date)
               VALUES (${entryId}, ${companyId}, ${dueDate})
               ON CONFLICT (voucher_entry_id)
-              DO UPDATE SET due_date = EXCLUDED.due_date, updated_at = now()`
+              DO UPDATE SET due_date = EXCLUDED.due_date, updated_at = now()
+              WHERE transporter_entry_due_dates.company_id = EXCLUDED.company_id
+              RETURNING voucher_entry_id`
         );
+        if (written.rows.length === 0) return res.status(404).json({ message: "Entry not found" });
       } else {
-        await db.execute(sql`DELETE FROM transporter_entry_due_dates WHERE voucher_entry_id = ${entryId}`);
+        await db.execute(
+          sql`DELETE FROM transporter_entry_due_dates WHERE voucher_entry_id = ${entryId} AND company_id = ${companyId}`
+        );
       }
 
       res.json({ ok: true, dueDate });

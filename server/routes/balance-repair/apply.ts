@@ -22,6 +22,8 @@ import { ApplySnapshot, findOrCreateLedgerAccount } from "./_helpers";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { resultRows } from "../../lib/queryResult";
+import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
+import { ORPHAN_RETIREMENT_REASON } from "./undoScope";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 export function registerBalanceRepairApplyRoutes(app: Express) {
@@ -44,329 +46,344 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           depositSnapshots: [],
         };
 
-        // Re-run scan to get current state
-        // ── 1. Fix ledger drift ───────────────────────────────────────────────
-        const allLedger = await db
-          .select()
-          .from(propertyMonthlyLedger)
-          .where(eq(propertyMonthlyLedger.companyId, companyId));
-        const pmtSumsRows = await db.execute(sql`
-          SELECT ledger_row_id, COALESCE(SUM(amount::numeric), 0) AS total_paid
-          FROM property_payments WHERE company_id = ${companyId} AND ledger_row_id IS NOT NULL
-          GROUP BY ledger_row_id
-        `);
-        // Phase 22 (B), PE13: exact decimals (the sums were floats).
-        const pmtMap = new Map<number, Decimal>();
-        for (const row of resultRows(pmtSumsRows)) {
-          pmtMap.set(Number(row.ledger_row_id), toMoney(row.total_paid as string));
-        }
-        for (const row of allLedger) {
-          const computed = (pmtMap.get(row.id) ?? new MoneyDecimal(0)).toDecimalPlaces(2);
-          const stored = toMoney(row.paidAmount).toDecimalPlaces(2);
-          if (!computed.equals(stored)) {
-            snapshot.ledgerSnapshots.push({ id: row.id, oldPaid: stored.toNumber(), newPaid: computed.toNumber() });
-            await db
-              .update(propertyMonthlyLedger)
-              .set({ paidAmount: computed.toFixed(2) })
-              .where(eq(propertyMonthlyLedger.id, row.id));
+        // One transaction for the whole repair: a failure part-way (for example
+        // the closed-period guard refusing a voucher line) leaves nothing half
+        // applied, and the snapshot only describes writes that committed.
+        let voucherEntriesFixed = 0;
+        await db.transaction(async (tx) => {
+          // Re-run scan to get current state
+          // ── 1. Fix ledger drift ───────────────────────────────────────────────
+          const allLedger = await tx
+            .select()
+            .from(propertyMonthlyLedger)
+            .where(eq(propertyMonthlyLedger.companyId, companyId));
+          const pmtSumsRows = await tx.execute(sql`
+            SELECT ledger_row_id, COALESCE(SUM(amount::numeric), 0) AS total_paid
+            FROM property_payments WHERE company_id = ${companyId} AND ledger_row_id IS NOT NULL
+            GROUP BY ledger_row_id
+          `);
+          // Phase 22 (B), PE13: exact decimals (the sums were floats).
+          const pmtMap = new Map<number, Decimal>();
+          for (const row of resultRows(pmtSumsRows)) {
+            pmtMap.set(Number(row.ledger_row_id), toMoney(row.total_paid as string));
           }
-        }
-
-        // ── 2. Fix missing voucher entries ────────────────────────────────────
-        const contracts = await db.select().from(propertyContracts).where(eq(propertyContracts.companyId, companyId));
-
-        const paymentsRows = await db.execute(sql`
-          SELECT
-            pp.id, pp.voucher_id, pp.contract_id, pp.module, pp.amount, pp.payment_date,
-            pp.cash_account_id, pp.unit_id,
-            v.deleted_at AS voucher_deleted_at,
-            v.total_amount AS voucher_total,
-            v.voucher_type,
-            v.voucher_date,
-            v.description AS voucher_desc,
-            (SELECT COUNT(*) FROM voucher_entries ve WHERE ve.voucher_id = pp.voucher_id) AS entry_count,
-            pu.unit_type
-          FROM property_payments pp
-          JOIN vouchers v ON v.id = pp.voucher_id
-          LEFT JOIN property_units pu ON pu.id = pp.unit_id
-          WHERE pp.company_id = ${companyId} AND pp.voucher_id IS NOT NULL
-        `);
-
-        const seenVouchers = new Set<number>();
-        for (const row of resultRows<{
-          payment_id: number;
-          voucher_id: number;
-          contract_id: number;
-          unit_id: number | null;
-          amount: string | null;
-          payment_date: string;
-          entry_count: string | number | null;
-          voucher_deleted_at: string | null;
-          cash_account_id: number | null;
-          voucher_desc: string | null;
-          voucher_total: string | null;
-          module: string | null;
-          unit_type: string | null;
-        }>(paymentsRows)) {
-          const vid = Number(row.voucher_id);
-          if (seenVouchers.has(vid)) continue;
-          const entryCount = Number(row.entry_count ?? 0);
-          const isDeleted = !!row.voucher_deleted_at;
-          if (entryCount > 0 && !isDeleted) continue;
-          seenVouchers.add(vid);
-
-          const cashAccId = row.cash_account_id ? Number(row.cash_account_id) : null;
-          const amount = row.voucher_total ?? row.amount;
-          const isShop = (row.unit_type ?? "WAREHOUSE") === "SHOP";
-          const module = row.module ?? "PROPERTIES";
-
-          // If voucher was soft-deleted, un-delete it first
-          if (isDeleted) {
-            snapshot.vouchersUndeleted.push({ id: vid });
-            await db.execute(sql`UPDATE vouchers SET deleted_at = NULL WHERE id = ${vid}`);
+          for (const row of allLedger) {
+            const computed = (pmtMap.get(row.id) ?? new MoneyDecimal(0)).toDecimalPlaces(2);
+            const stored = toMoney(row.paidAmount).toDecimalPlaces(2);
+            if (!computed.equals(stored)) {
+              snapshot.ledgerSnapshots.push({ id: row.id, oldPaid: stored.toNumber(), newPaid: computed.toNumber() });
+              await tx
+                .update(propertyMonthlyLedger)
+                .set({ paidAmount: computed.toFixed(2) })
+                .where(eq(propertyMonthlyLedger.id, row.id));
+            }
           }
 
-          // Re-insert entries only if there are none (after potential un-delete)
-          const countAfter = await db.execute(
-            sql`SELECT COUNT(*) AS cnt FROM voucher_entries WHERE voucher_id = ${vid}`
-          );
-          const cnt = Number(resultRows(countAfter)[0]?.cnt ?? 0);
-          if (cnt === 0 && cashAccId) {
-            const amtStr = toMoney(amount).toFixed(2);
-            let incomeOrExpenseId: number | null = null;
+          // ── 2. Fix missing voucher entries ────────────────────────────────────
+          const contracts = await tx.select().from(propertyContracts).where(eq(propertyContracts.companyId, companyId));
 
-            if (isShop) {
-              incomeOrExpenseId = await findOrCreateLedgerAccount(
-                companyId,
-                "Rent Expense - Shops",
-                "Indirect Expense",
-                "SHOP-RENT-EXP"
-              );
-            } else {
-              // Pick income account name matching the module
-              const incomeAccName =
-                module === "ERP"
-                  ? "Rent Income - ERP"
-                  : module === "FACTORY"
-                    ? "Rent Income - Factory"
-                    : "Rental Income";
-              incomeOrExpenseId = await findOrCreateLedgerAccount(
-                companyId,
-                incomeAccName,
-                "Income",
-                "RENT-INC",
-                "Indirect Income"
-              );
+          const paymentsRows = await tx.execute(sql`
+            SELECT
+              pp.id, pp.voucher_id, pp.contract_id, pp.module, pp.amount, pp.payment_date,
+              pp.cash_account_id, pp.unit_id,
+              v.deleted_at AS voucher_deleted_at,
+              v.total_amount AS voucher_total,
+              v.voucher_type,
+              v.voucher_date,
+              v.description AS voucher_desc,
+              (SELECT COUNT(*) FROM voucher_entries ve WHERE ve.voucher_id = pp.voucher_id) AS entry_count,
+              pu.unit_type
+            FROM property_payments pp
+            JOIN vouchers v ON v.id = pp.voucher_id
+            LEFT JOIN property_units pu ON pu.id = pp.unit_id
+            WHERE pp.company_id = ${companyId} AND pp.voucher_id IS NOT NULL
+          `);
+
+          const seenVouchers = new Set<number>();
+          for (const row of resultRows<{
+            payment_id: number;
+            voucher_id: number;
+            contract_id: number;
+            unit_id: number | null;
+            amount: string | null;
+            payment_date: string;
+            entry_count: string | number | null;
+            voucher_deleted_at: string | null;
+            cash_account_id: number | null;
+            voucher_desc: string | null;
+            voucher_total: string | null;
+            module: string | null;
+            unit_type: string | null;
+          }>(paymentsRows)) {
+            const vid = Number(row.voucher_id);
+            if (seenVouchers.has(vid)) continue;
+            const entryCount = Number(row.entry_count ?? 0);
+            const isDeleted = !!row.voucher_deleted_at;
+            if (entryCount > 0 && !isDeleted) continue;
+            seenVouchers.add(vid);
+
+            const cashAccId = row.cash_account_id ? Number(row.cash_account_id) : null;
+            const amount = row.voucher_total ?? row.amount;
+            const isShop = (row.unit_type ?? "WAREHOUSE") === "SHOP";
+            const module = row.module ?? "PROPERTIES";
+
+            // If voucher was soft-deleted, un-delete it first
+            if (isDeleted) {
+              snapshot.vouchersUndeleted.push({ id: vid });
+              await tx.execute(sql`UPDATE vouchers SET deleted_at = NULL WHERE id = ${vid}`);
             }
 
-            const narration = row.voucher_desc ?? (isShop ? `Rent paid` : `Rent received`);
-            let inserted: { id: number }[];
-            if (isShop) {
-              // Debit: expense, Credit: cash
-              inserted = await db
-                .insert(voucherEntries)
-                .values([
-                  {
-                    voucherId: vid,
-                    ledgerAccountId: incomeOrExpenseId!,
-                    debitAmount: amtStr,
-                    creditAmount: "0",
-                    narration,
-                  },
-                  { voucherId: vid, ledgerAccountId: cashAccId, debitAmount: "0", creditAmount: amtStr, narration },
-                ])
-                .returning({ id: voucherEntries.id });
-            } else {
-              // Debit: cash, Credit: income
-              inserted = await db
-                .insert(voucherEntries)
-                .values([
-                  { voucherId: vid, ledgerAccountId: cashAccId, debitAmount: amtStr, creditAmount: "0", narration },
-                  {
-                    voucherId: vid,
-                    ledgerAccountId: incomeOrExpenseId!,
-                    debitAmount: "0",
-                    creditAmount: amtStr,
-                    narration,
-                  },
-                ])
-                .returning({ id: voucherEntries.id });
+            // Re-insert entries only if there are none (after potential un-delete)
+            const countAfter = await tx.execute(
+              sql`SELECT COUNT(*) AS cnt FROM voucher_entries WHERE voucher_id = ${vid}`
+            );
+            const cnt = Number(resultRows(countAfter)[0]?.cnt ?? 0);
+            if (cnt === 0 && cashAccId) {
+              const amtStr = toMoney(amount).toFixed(2);
+              let incomeOrExpenseId: number | null = null;
+
+              if (isShop) {
+                incomeOrExpenseId = await findOrCreateLedgerAccount(
+                  tx,
+                  companyId,
+                  "Rent Expense - Shops",
+                  "Indirect Expense",
+                  "SHOP-RENT-EXP"
+                );
+              } else {
+                // Pick income account name matching the module
+                const incomeAccName =
+                  module === "ERP"
+                    ? "Rent Income - ERP"
+                    : module === "FACTORY"
+                      ? "Rent Income - Factory"
+                      : "Rental Income";
+                incomeOrExpenseId = await findOrCreateLedgerAccount(
+                  tx,
+                  companyId,
+                  incomeAccName,
+                  "Income",
+                  "RENT-INC",
+                  "Indirect Income"
+                );
+              }
+
+              const narration = row.voucher_desc ?? (isShop ? `Rent paid` : `Rent received`);
+              let inserted: { id: number }[];
+              if (isShop) {
+                // Debit: expense, Credit: cash
+                inserted = await tx
+                  .insert(voucherEntries)
+                  .values([
+                    {
+                      voucherId: vid,
+                      ledgerAccountId: incomeOrExpenseId!,
+                      debitAmount: amtStr,
+                      creditAmount: "0",
+                      narration,
+                    },
+                    { voucherId: vid, ledgerAccountId: cashAccId, debitAmount: "0", creditAmount: amtStr, narration },
+                  ])
+                  .returning({ id: voucherEntries.id });
+              } else {
+                // Debit: cash, Credit: income
+                inserted = await tx
+                  .insert(voucherEntries)
+                  .values([
+                    { voucherId: vid, ledgerAccountId: cashAccId, debitAmount: amtStr, creditAmount: "0", narration },
+                    {
+                      voucherId: vid,
+                      ledgerAccountId: incomeOrExpenseId!,
+                      debitAmount: "0",
+                      creditAmount: amtStr,
+                      narration,
+                    },
+                  ])
+                  .returning({ id: voucherEntries.id });
+              }
+              snapshot.voucherEntriesAdded.push(...inserted.map((r) => r.id));
             }
-            snapshot.voucherEntriesAdded.push(...inserted.map((r) => r.id));
           }
-        }
 
-        // ── 3. Fix orphaned transfer sides ────────────────────────────────────
-        // Delete the orphaned voucher (and its entries) and the transfer link.
-        const transferRows = await db.execute(sql`
-          SELECT
-            ict.id, ict.transfer_type, ict.from_company_id, ict.to_company_id,
-            ict.transfer_date, ict.amount, ict.from_ledger_account_id, ict.to_ledger_account_id,
-            ict.from_voucher_id, ict.to_voucher_id, ict.description, ict.source_payment_id,
-            fv.deleted_at AS from_deleted,
-            tv.deleted_at AS to_deleted,
-            (SELECT COUNT(*) FROM voucher_entries ve WHERE ve.voucher_id = ict.from_voucher_id) AS from_entry_count,
-            (SELECT COUNT(*) FROM voucher_entries ve WHERE ve.voucher_id = ict.to_voucher_id)   AS to_entry_count
-          FROM inter_company_transfers ict
-          LEFT JOIN vouchers fv ON fv.id = ict.from_voucher_id
-          LEFT JOIN vouchers tv ON tv.id = ict.to_voucher_id
-          WHERE ict.from_company_id = ${companyId} OR ict.to_company_id = ${companyId}
-        `);
+          // ── 3. Fix orphaned transfer sides ────────────────────────────────────
+          // Delete the orphaned voucher (and its entries) and the transfer link.
+          const transferRows = await tx.execute(sql`
+            SELECT
+              ict.id, ict.transfer_type, ict.from_company_id, ict.to_company_id,
+              ict.transfer_date, ict.amount, ict.from_ledger_account_id, ict.to_ledger_account_id,
+              ict.from_voucher_id, ict.to_voucher_id, ict.description, ict.source_payment_id,
+              fv.deleted_at AS from_deleted,
+              tv.deleted_at AS to_deleted,
+              (SELECT COUNT(*) FROM voucher_entries ve WHERE ve.voucher_id = ict.from_voucher_id) AS from_entry_count,
+              (SELECT COUNT(*) FROM voucher_entries ve WHERE ve.voucher_id = ict.to_voucher_id)   AS to_entry_count
+            FROM inter_company_transfers ict
+            LEFT JOIN vouchers fv ON fv.id = ict.from_voucher_id
+            LEFT JOIN vouchers tv ON tv.id = ict.to_voucher_id
+            WHERE ict.from_company_id = ${companyId} OR ict.to_company_id = ${companyId}
+          `);
 
-        for (const row of resultRows<{
-          id: number;
-          transfer_type: string;
-          from_company_id: number;
-          to_company_id: number;
-          transfer_date: string;
-          amount: string | null;
-          from_ledger_account_id: number;
-          to_ledger_account_id: number;
-          from_voucher_id: number | null;
-          to_voucher_id: number | null;
-          description: string | null;
-          source_payment_id: number | null;
-          from_deleted: string | null;
-          to_deleted: string | null;
-          from_entry_count: string | number | null;
-          to_entry_count: string | number | null;
-        }>(transferRows)) {
-          const fromBroken = !!row.from_deleted || Number(row.from_entry_count ?? 0) === 0;
-          const toBroken = !!row.to_deleted || Number(row.to_entry_count ?? 0) === 0;
-          const fromExists = !!row.from_voucher_id;
-          const toExists = !!row.to_voucher_id;
+          for (const row of resultRows<{
+            id: number;
+            transfer_type: string;
+            from_company_id: number;
+            to_company_id: number;
+            transfer_date: string;
+            amount: string | null;
+            from_ledger_account_id: number;
+            to_ledger_account_id: number;
+            from_voucher_id: number | null;
+            to_voucher_id: number | null;
+            description: string | null;
+            source_payment_id: number | null;
+            from_deleted: string | null;
+            to_deleted: string | null;
+            from_entry_count: string | number | null;
+            to_entry_count: string | number | null;
+          }>(transferRows)) {
+            const fromBroken = !!row.from_deleted || Number(row.from_entry_count ?? 0) === 0;
+            const toBroken = !!row.to_deleted || Number(row.to_entry_count ?? 0) === 0;
+            const fromExists = !!row.from_voucher_id;
+            const toExists = !!row.to_voucher_id;
 
-          const isOrphaned = (fromBroken && toExists && !toBroken) || (toBroken && fromExists && !fromBroken);
-          if (!isOrphaned) continue;
+            const isOrphaned = (fromBroken && toExists && !toBroken) || (toBroken && fromExists && !fromBroken);
+            if (!isOrphaned) continue;
 
-          // Save snapshot of the transfer record before deleting
-          const transferSnap = {
-            id: Number(row.id),
-            transferType: row.transfer_type,
-            fromCompanyId: Number(row.from_company_id),
-            toCompanyId: Number(row.to_company_id),
-            transferDate: row.transfer_date,
-            amount: String(row.amount),
-            fromLedgerAccountId: Number(row.from_ledger_account_id),
-            toLedgerAccountId: Number(row.to_ledger_account_id),
-            fromVoucherId: row.from_voucher_id ? Number(row.from_voucher_id) : null,
-            toVoucherId: row.to_voucher_id ? Number(row.to_voucher_id) : null,
-            description: row.description ?? null,
-            sourcePaymentId: row.source_payment_id ? Number(row.source_payment_id) : null,
-          };
+            // Save snapshot of the transfer record before deleting
+            const transferSnap = {
+              id: Number(row.id),
+              transferType: row.transfer_type,
+              fromCompanyId: Number(row.from_company_id),
+              toCompanyId: Number(row.to_company_id),
+              transferDate: row.transfer_date,
+              amount: String(row.amount),
+              fromLedgerAccountId: Number(row.from_ledger_account_id),
+              toLedgerAccountId: Number(row.to_ledger_account_id),
+              fromVoucherId: row.from_voucher_id ? Number(row.from_voucher_id) : null,
+              toVoucherId: row.to_voucher_id ? Number(row.to_voucher_id) : null,
+              description: row.description ?? null,
+              sourcePaymentId: row.source_payment_id ? Number(row.source_payment_id) : null,
+            };
 
-          // Save the orphaned voucher's data for undo
-          const orphanedVid = fromBroken ? Number(row.from_voucher_id) : Number(row.to_voucher_id);
-          const [orphVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, orphanedVid));
-          const orphEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, orphanedVid));
+            // Save the orphaned voucher's data for undo
+            const orphanedVid = fromBroken ? Number(row.from_voucher_id) : Number(row.to_voucher_id);
+            const [orphVoucher] = await tx.select().from(vouchers).where(eq(vouchers.id, orphanedVid));
+            const orphEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, orphanedVid));
 
-          snapshot.orphanedVouchersDeleted.push({
-            id: orphanedVid,
-            voucherNumber: orphVoucher?.voucherNumber ?? "",
-            companyId: orphVoucher?.companyId ?? 0,
-            totalAmount: String(orphVoucher?.totalAmount ?? "0"),
-            voucherType: orphVoucher?.voucherType ?? "Payment",
-            voucherDate: String(orphVoucher?.voucherDate ?? row.transfer_date),
-            description: orphVoucher?.description ?? null,
-            entries: orphEntries.map((e) => ({
-              ledgerAccountId: e.ledgerAccountId,
-              debitAmount: String(e.debitAmount),
-              creditAmount: String(e.creditAmount),
-              narration: e.narration ?? null,
-            })),
-          });
-          snapshot.transfersDeleted.push(transferSnap);
+            // A voucher that was already soft-deleted stays as it is: retiring it
+            // again and naming it in the snapshot would let undo bring a voucher
+            // deleted on purpose back to life.
+            const retireOrphan = !!orphVoucher && orphVoucher.deletedAt === null;
+            if (retireOrphan) {
+              snapshot.orphanedVouchersDeleted.push({
+                id: orphanedVid,
+                voucherNumber: orphVoucher.voucherNumber,
+                companyId: orphVoucher.companyId,
+                totalAmount: String(orphVoucher.totalAmount ?? "0"),
+                voucherType: orphVoucher.voucherType,
+                voucherDate: String(orphVoucher.voucherDate ?? row.transfer_date),
+                description: orphVoucher.description ?? null,
+                entries: orphEntries.map((e) => ({
+                  ledgerAccountId: e.ledgerAccountId,
+                  debitAmount: String(e.debitAmount),
+                  creditAmount: String(e.creditAmount),
+                  narration: e.narration ?? null,
+                })),
+              });
+            }
+            snapshot.transfersDeleted.push(transferSnap);
 
-          // Transfer row first, then the orphaned voucher. Wave 16 (A): the
-          // voucher is retired (soft delete with its lines, audited, number
-          // released) in the same transaction, not hard-deleted.
-          await db.transaction(async (tx) => {
+            // Transfer row first, then the orphaned voucher. Wave 16 (A): the
+            // voucher is retired (soft delete with its lines, audited, number
+            // released), not hard-deleted.
             await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, Number(row.id)));
-            if (orphVoucher) {
+            if (retireOrphan) {
               await retireVouchersTx(tx, {
                 companyId: orphVoucher.companyId,
                 voucherIds: [orphanedVid],
-                reason: "balance-repair-orphaned-transfer-voucher",
+                reason: ORPHAN_RETIREMENT_REASON,
                 actor: sessionRetirementActor(req),
               });
             }
-          });
-        }
-
-        // ── 4. Fix deposit flags ──────────────────────────────────────────────
-        const guarRows2 = await db.execute(sql`
-          SELECT voucher_number, total_amount FROM vouchers
-          WHERE company_id = ${companyId} AND deleted_at IS NULL AND voucher_number LIKE 'GUAR-%'
-        `);
-        const guarContractIds2 = new Set<number>();
-        const guarAmountMap2 = new Map<number, Decimal>();
-        for (const row of resultRows(guarRows2)) {
-          const parts = String(row.voucher_number ?? "").split("-");
-          const cid = parseInt(parts[parts.length - 1]);
-          if (!isNaN(cid)) {
-            guarContractIds2.add(cid);
-            guarAmountMap2.set(cid, toMoney(row.total_amount as string));
           }
-        }
-        for (const c of contracts) {
-          const gAmt = toMoney(c.guaranteeAmount).toNumber();
-          const flagOn = c.guaranteePostedToStatement;
-          const hasVouc = guarContractIds2.has(c.id);
-          const postedAmtExact = toMoney(c.guaranteePostedAmount ?? String(gAmt));
-          const postedAmt = postedAmtExact.toNumber();
-          const voucherAmtExact = guarAmountMap2.get(c.id) ?? new MoneyDecimal(0);
-          const voucherAmt = voucherAmtExact.toNumber();
 
-          if (flagOn && !hasVouc) {
-            // Reset flag — no voucher entry exists, UI was showing green incorrectly
-            snapshot.depositSnapshots.push({
-              contractId: c.id,
-              oldFlag: true,
-              newFlag: false,
-              oldPostedAmount: postedAmt,
-              newPostedAmount: 0,
-            });
-            await db
-              .update(propertyContracts)
-              .set({ guaranteePostedToStatement: false, guaranteePostedAmount: "0" })
-              .where(eq(propertyContracts.id, c.id));
-          } else if (!flagOn && hasVouc && gAmt > 0) {
-            // Set flag — voucher exists, just the contract flag was stale
-            snapshot.depositSnapshots.push({
-              contractId: c.id,
-              oldFlag: false,
-              newFlag: true,
-              oldPostedAmount: 0,
-              newPostedAmount: gAmt,
-            });
-            await db
-              .update(propertyContracts)
-              .set({ guaranteePostedToStatement: true, guaranteePostedAmount: String(gAmt) })
-              .where(eq(propertyContracts.id, c.id));
-          } else if (flagOn && hasVouc && voucherAmtExact.minus(postedAmtExact).abs().gt("0.01")) {
-            // Sync amount on contract to match actual voucher amount
-            snapshot.depositSnapshots.push({
-              contractId: c.id,
-              oldFlag: true,
-              newFlag: true,
-              oldPostedAmount: postedAmt,
-              newPostedAmount: voucherAmt,
-            });
-            await db
-              .update(propertyContracts)
-              .set({ guaranteePostedAmount: voucherAmtExact.toFixed(2) })
-              .where(eq(propertyContracts.id, c.id));
+          // ── 4. Fix deposit flags ──────────────────────────────────────────────
+          const guarRows2 = await tx.execute(sql`
+            SELECT voucher_number, total_amount FROM vouchers
+            WHERE company_id = ${companyId} AND deleted_at IS NULL AND voucher_number LIKE 'GUAR-%'
+          `);
+          const guarContractIds2 = new Set<number>();
+          const guarAmountMap2 = new Map<number, Decimal>();
+          for (const row of resultRows(guarRows2)) {
+            const parts = String(row.voucher_number ?? "").split("-");
+            const cid = parseInt(parts[parts.length - 1]);
+            if (!isNaN(cid)) {
+              guarContractIds2.add(cid);
+              guarAmountMap2.set(cid, toMoney(row.total_amount as string));
+            }
           }
-        }
+          for (const c of contracts) {
+            const gAmt = toMoney(c.guaranteeAmount).toNumber();
+            const flagOn = c.guaranteePostedToStatement;
+            const hasVouc = guarContractIds2.has(c.id);
+            const postedAmtExact = toMoney(c.guaranteePostedAmount ?? String(gAmt));
+            const postedAmt = postedAmtExact.toNumber();
+            const voucherAmtExact = guarAmountMap2.get(c.id) ?? new MoneyDecimal(0);
+            const voucherAmt = voucherAmtExact.toNumber();
+
+            if (flagOn && !hasVouc) {
+              // Reset flag — no voucher entry exists, UI was showing green incorrectly
+              snapshot.depositSnapshots.push({
+                contractId: c.id,
+                oldFlag: true,
+                newFlag: false,
+                oldPostedAmount: postedAmt,
+                newPostedAmount: 0,
+              });
+              await tx
+                .update(propertyContracts)
+                .set({ guaranteePostedToStatement: false, guaranteePostedAmount: "0" })
+                .where(eq(propertyContracts.id, c.id));
+            } else if (!flagOn && hasVouc && gAmt > 0) {
+              // Set flag — voucher exists, just the contract flag was stale
+              snapshot.depositSnapshots.push({
+                contractId: c.id,
+                oldFlag: false,
+                newFlag: true,
+                oldPostedAmount: 0,
+                newPostedAmount: gAmt,
+              });
+              await tx
+                .update(propertyContracts)
+                .set({ guaranteePostedToStatement: true, guaranteePostedAmount: String(gAmt) })
+                .where(eq(propertyContracts.id, c.id));
+            } else if (flagOn && hasVouc && voucherAmtExact.minus(postedAmtExact).abs().gt("0.01")) {
+              // Sync amount on contract to match actual voucher amount
+              snapshot.depositSnapshots.push({
+                contractId: c.id,
+                oldFlag: true,
+                newFlag: true,
+                oldPostedAmount: postedAmt,
+                newPostedAmount: voucherAmt,
+              });
+              await tx
+                .update(propertyContracts)
+                .set({ guaranteePostedAmount: voucherAmtExact.toFixed(2) })
+                .where(eq(propertyContracts.id, c.id));
+            }
+          }
+          voucherEntriesFixed = seenVouchers.size;
+        });
 
         res.json({
           ledgerFixed: snapshot.ledgerSnapshots.length,
-          voucherEntriesFixed: seenVouchers.size,
+          voucherEntriesFixed,
           orphansFixed: snapshot.transfersDeleted.length,
           depositsFixed: snapshot.depositSnapshots.length,
           snapshot,
         });
       } catch (err: unknown) {
+        const closed = closedPeriodErrorResponse(err);
+        if (closed) return res.status(closed.status).json(closed.body);
         logger.error("[BalanceRepair] apply error:", { error: err });
         res.status(500).json({ message: getErrorMessage(err) });
       }

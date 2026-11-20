@@ -15,6 +15,8 @@ import { eq, and, sql } from "drizzle-orm";
 import { ApplySnapshot, parseNum } from "./_helpers";
 import { retiredVoucherNumber } from "../../services/accounting/voucherRetirement";
 import { writeAuditEvent } from "../../services/audit";
+import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
+import { assertUndoInCompany, ORPHAN_RETIREMENT_REASON, UndoOutsideCompanyError } from "./undoScope";
 
 export function registerBalanceRepairUndoRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/undo ────────────────────────────────
@@ -24,53 +26,69 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
     requireRole("Admin"),
     async (req: Request, res: Response) => {
       try {
+        const companyId: number | undefined = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
         const { snapshot } = req.body as { snapshot: ApplySnapshot };
         if (!snapshot) return res.status(400).json({ message: "No snapshot provided" });
 
-        // 1. Revert ledger drift
-        for (const s of snapshot.ledgerSnapshots ?? []) {
-          await db
-            .update(propertyMonthlyLedger)
-            .set({ paidAmount: s.oldPaid.toFixed(2) })
-            .where(eq(propertyMonthlyLedger.id, s.id));
-        }
-
-        // 2. Remove inserted voucher entries
-        // 3. Re-soft-delete vouchers that were un-deleted
-        // Both run in one transaction so no voucher is left half-reverted at commit.
+        // Every row the snapshot names is checked against the active company
+        // before anything is written, and the whole undo runs in one
+        // transaction: a snapshot naming another company's rows is refused
+        // and changes nothing.
         await db.transaction(async (tx) => {
+          await assertUndoInCompany(tx, companyId, snapshot);
+
+          // 1. Revert ledger drift
+          for (const s of snapshot.ledgerSnapshots ?? []) {
+            await tx
+              .update(propertyMonthlyLedger)
+              .set({ paidAmount: s.oldPaid.toFixed(2) })
+              .where(and(eq(propertyMonthlyLedger.id, s.id), eq(propertyMonthlyLedger.companyId, companyId)));
+          }
+
+          // 2. Remove inserted voucher entries
           for (const entryId of snapshot.voucherEntriesAdded ?? []) {
-            await tx.execute(sql`DELETE FROM voucher_entries WHERE id = ${entryId}`);
+            await tx.execute(sql`
+              DELETE FROM voucher_entries
+               WHERE id = ${entryId}
+                 AND voucher_id IN (SELECT id FROM vouchers WHERE company_id = ${companyId})
+            `);
           }
 
+          // 3. Re-soft-delete vouchers that were un-deleted
           for (const v of snapshot.vouchersUndeleted ?? []) {
-            await tx.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${v.id}`);
+            await tx.execute(
+              sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${v.id} AND company_id = ${companyId}`
+            );
           }
-        });
 
-        // 4. Restore the orphaned vouchers the apply retired. Wave 16 (A): the
-        // apply soft-deletes them with their lines, so the undo clears the
-        // delete and gives the number back, only for a voucher still retired
-        // under the number the snapshot names. It used to insert vouchers and
-        // lines from the request body.
-        for (const ov of snapshot.orphanedVouchersDeleted ?? []) {
-          const voucherId = Number(ov.id);
-          if (!Number.isInteger(voucherId) || voucherId <= 0 || typeof ov.voucherNumber !== "string") continue;
-          const voucherNumber = ov.voucherNumber;
-          await db.transaction(async (tx) => {
+          // 4. Restore the orphaned vouchers the apply retired. Wave 16 (A): the
+          // apply soft-deletes them with their lines, so the undo clears the
+          // delete and gives the number back, only for a voucher still retired
+          // under the number the snapshot names and retired by a balance
+          // repair. It used to insert vouchers and lines from the request body.
+          for (const ov of snapshot.orphanedVouchersDeleted ?? []) {
+            const voucherId = Number(ov.id);
+            if (!Number.isInteger(voucherId) || voucherId <= 0 || typeof ov.voucherNumber !== "string") continue;
+            const voucherNumber = ov.voucherNumber;
             const restored = await tx.execute(sql`
               UPDATE vouchers SET deleted_at = NULL, voucher_number = ${voucherNumber}
                WHERE id = ${voucherId} AND deleted_at IS NOT NULL
                  AND voucher_number = ${retiredVoucherNumber(voucherNumber, voucherId)}
+                 AND EXISTS (
+                   SELECT 1 FROM audit_log a
+                    WHERE a.table_name = 'vouchers' AND a.action = 'delete' AND a.record_id = vouchers.id
+                      AND a.changes -> 'reason' ->> 'new' = ${ORPHAN_RETIREMENT_REASON}
+                 )
               RETURNING company_id
             `);
-            const companyId = Number((restored.rows[0] as { company_id?: unknown } | undefined)?.company_id);
-            if (!companyId) return;
+            const voucherCompanyId = Number((restored.rows[0] as { company_id?: unknown } | undefined)?.company_id);
+            if (!voucherCompanyId) continue;
             await writeAuditEvent(
               {
                 userId: req.session.userId ?? "unknown",
                 username: req.session.username || "unknown",
-                companyId,
+                companyId: voucherCompanyId,
                 action: "restore",
                 tableName: "vouchers",
                 recordId: voucherId,
@@ -83,34 +101,34 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
               },
               tx
             );
-          });
-        }
+          }
 
-        // 5. Re-insert deleted inter_company_transfers rows
-        for (const t of snapshot.transfersDeleted ?? []) {
-          await db.execute(sql`
-            INSERT INTO inter_company_transfers
-              (id, transfer_type, from_company_id, to_company_id, transfer_date, amount,
-               from_ledger_account_id, to_ledger_account_id, from_voucher_id, to_voucher_id,
-               description, source_payment_id)
-            VALUES
-              (${t.id}, ${t.transferType}, ${t.fromCompanyId}, ${t.toCompanyId}, ${t.transferDate}::date, ${t.amount},
-               ${t.fromLedgerAccountId}, ${t.toLedgerAccountId}, ${t.fromVoucherId}, ${t.toVoucherId},
-               ${t.description}, ${t.sourcePaymentId})
-            ON CONFLICT (id) DO NOTHING
-          `);
-        }
+          // 5. Re-insert deleted inter_company_transfers rows
+          for (const t of snapshot.transfersDeleted ?? []) {
+            await tx.execute(sql`
+              INSERT INTO inter_company_transfers
+                (id, transfer_type, from_company_id, to_company_id, transfer_date, amount,
+                 from_ledger_account_id, to_ledger_account_id, from_voucher_id, to_voucher_id,
+                 description, source_payment_id)
+              VALUES
+                (${t.id}, ${t.transferType}, ${t.fromCompanyId}, ${t.toCompanyId}, ${t.transferDate}::date, ${t.amount},
+                 ${t.fromLedgerAccountId}, ${t.toLedgerAccountId}, ${t.fromVoucherId}, ${t.toVoucherId},
+                 ${t.description}, ${t.sourcePaymentId})
+              ON CONFLICT (id) DO NOTHING
+            `);
+          }
 
-        // 6. Revert deposit flags
-        for (const s of snapshot.depositSnapshots ?? []) {
-          await db
-            .update(propertyContracts)
-            .set({
-              guaranteePostedToStatement: s.oldFlag,
-              guaranteePostedAmount: s.oldPostedAmount.toFixed(2),
-            })
-            .where(eq(propertyContracts.id, s.contractId));
-        }
+          // 6. Revert deposit flags
+          for (const s of snapshot.depositSnapshots ?? []) {
+            await tx
+              .update(propertyContracts)
+              .set({
+                guaranteePostedToStatement: s.oldFlag,
+                guaranteePostedAmount: s.oldPostedAmount.toFixed(2),
+              })
+              .where(and(eq(propertyContracts.id, s.contractId), eq(propertyContracts.companyId, companyId)));
+          }
+        });
 
         res.json({
           ledgerRestored: (snapshot.ledgerSnapshots ?? []).length,
@@ -119,6 +137,11 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
           depositsRestored: (snapshot.depositSnapshots ?? []).length,
         });
       } catch (err: unknown) {
+        if (err instanceof UndoOutsideCompanyError) {
+          return res.status(404).json({ code: "REPAIR_SNAPSHOT_OUTSIDE_COMPANY", message: err.message });
+        }
+        const closed = closedPeriodErrorResponse(err);
+        if (closed) return res.status(closed.status).json(closed.body);
         logger.error("[BalanceRepair] undo error:", { error: err });
         res.status(500).json({ message: getErrorMessage(err) });
       }

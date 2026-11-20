@@ -4,8 +4,8 @@
  * transaction per test. Only the WhatsApp provider boundary is mocked.
  *
  * Pinned: id and body validation, account scoping of the WhatsApp summary,
- * the summary totals/overdue line, and (known bug) that a due date is keyed
- * only by voucher entry id, so a company can overwrite or delete a due date
+ * the summary totals/overdue line, and that a due date can only be set or
+ * cleared for a voucher line of the caller's company, never over a due date
  * that another company stored.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -113,9 +113,43 @@ describe("transporter entry due dates", () => {
     });
   });
 
-  // Known bug (pinned): writes are keyed only by voucher_entry_id, so another
-  // company can overwrite or delete this company's due date.
-  it("lets a different company overwrite and delete the due date of a foreign entry", async () => {
+  it("refuses to set or clear the due date of another company's voucher line", async () => {
+    await withFactoryWorld(async (w) => {
+      const other = await w.one(
+        `INSERT INTO companies (code, name, company_type) VALUES ($1::varchar, $1::text, 'factory') RETURNING id`,
+        [`${w.tag}X`]
+      );
+      const account = await loansAccount(w, "Foreign", other);
+      const voucherId = await w.one(
+        `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount)
+         VALUES ($1, 'Journal', $2, '2026-01-05', 0) RETURNING id`,
+        [other, `${w.tag}FJ`]
+      );
+      const entryId = await w.one(
+        `INSERT INTO voucher_entries (company_id, voucher_id, ledger_account_id, debit_amount, credit_amount)
+         VALUES ($1, $2, $3, 0, 100) RETURNING id`,
+        [other, voucherId, account]
+      );
+      await w.q(
+        `INSERT INTO transporter_entry_due_dates (voucher_entry_id, company_id, due_date) VALUES ($1, $2, '2026-02-01')`,
+        [entryId, other]
+      );
+      const url = `/api/transporter-entry-due-dates/${entryId}`;
+      const stored = () =>
+        w.q(`SELECT company_id, due_date::text AS d FROM transporter_entry_due_dates WHERE voucher_entry_id = $1`, [
+          entryId,
+        ]);
+      expect((await w.agent.put(url).send({ dueDate: "2030-01-01" })).status).toBe(404);
+      expect(await stored()).toEqual([{ company_id: other, d: "2026-02-01" }]);
+      expect((await w.agent.put(url).send({ dueDate: null })).status).toBe(404);
+      expect(await stored()).toEqual([{ company_id: other, d: "2026-02-01" }]);
+      expect((await w.agent.put("/api/transporter-entry-due-dates/2147483000").send({ dueDate: null })).status).toBe(
+        404
+      );
+    });
+  });
+
+  it("never overwrites or deletes a due date another company stored for an own voucher line", async () => {
     await withFactoryWorld(async (w) => {
       const account = await loansAccount(w, "Owned");
       const entryId = await entry(w, account, "2026-01-05", "0", "100");
@@ -127,16 +161,15 @@ describe("transporter entry due dates", () => {
         `INSERT INTO transporter_entry_due_dates (voucher_entry_id, company_id, due_date) VALUES ($1, $2, '2026-02-01')`,
         [entryId, other]
       );
-      await w.agent.put(`/api/transporter-entry-due-dates/${entryId}`).send({ dueDate: "2030-01-01" });
-      const [row] = await w.q(
-        `SELECT company_id, due_date::text AS d FROM transporter_entry_due_dates WHERE voucher_entry_id = $1`,
-        [entryId]
-      );
-      expect(row).toEqual({ company_id: other, d: "2030-01-01" });
-      await w.agent.put(`/api/transporter-entry-due-dates/${entryId}`).send({ dueDate: null });
-      expect(await w.q(`SELECT id FROM transporter_entry_due_dates WHERE voucher_entry_id = $1`, [entryId])).toEqual(
-        []
-      );
+      const url = `/api/transporter-entry-due-dates/${entryId}`;
+      const stored = () =>
+        w.q(`SELECT company_id, due_date::text AS d FROM transporter_entry_due_dates WHERE voucher_entry_id = $1`, [
+          entryId,
+        ]);
+      expect((await w.agent.put(url).send({ dueDate: "2030-01-01" })).status).toBe(404);
+      expect(await stored()).toEqual([{ company_id: other, d: "2026-02-01" }]);
+      expect((await w.agent.put(url).send({ dueDate: null })).status).toBe(200);
+      expect(await stored()).toEqual([{ company_id: other, d: "2026-02-01" }]);
     });
   });
 });

@@ -3,7 +3,8 @@
  * rolled-back transaction: what apply repairs (and only in the active
  * company), a second apply that finds nothing, undo of an applied snapshot,
  * undo repeated or of a snapshot that was never applied, apply in a closed
- * period, and the undo route's missing company check (pinned).
+ * period (a clean 409 that leaves nothing half applied), and undo snapshots
+ * naming another company's rows (refused, nothing changed).
  */
 import { describe, expect, it } from "vitest";
 
@@ -82,6 +83,17 @@ describe("balance repair apply and undo", () => {
       );
       expect(retired[0].deleted).toBe(true);
       expect(retired[0].number).not.toBe(`${w.tag}-TT1`);
+      // The FROM-side voucher was already soft-deleted: apply leaves it as it
+      // was and keeps it out of the snapshot, so undo cannot revive it.
+      const [fromSide] = await w.q(
+        `SELECT deleted_at IS NOT NULL AS deleted, voucher_number AS number FROM vouchers
+          WHERE id = $1`,
+        [seed.fromOrphanVoucherId]
+      );
+      expect(fromSide).toEqual({ deleted: true, number: `${w.tag}-TF2` });
+      expect(res.body.snapshot.orphanedVouchersDeleted.map((v: { id: number }) => v.id)).toEqual([
+        seed.toOrphanVoucherId,
+      ]);
 
       expect(await contractFlags(w, seed)).toEqual([
         { id: seed.staleFlagContractId, flag: false, amount: "0.00" },
@@ -121,12 +133,8 @@ describe("balance repair apply and undo", () => {
         )
       );
       expect(after.transfers).toEqual(before.transfers);
-      // BUG (pinned): the FROM-side voucher was already soft-deleted before
-      // apply. Apply retires it again and records it in the snapshot, so undo
-      // brings it back to life - a voucher deleted on purpose reappears.
-      const revived = (v: Record<string, unknown>) =>
-        v.id === seed.fromOrphanVoucherId ? { ...v, deleted: false } : v;
-      expect(after.vouchers).toEqual(before.vouchers.map(revived));
+      // The FROM-side voucher was soft-deleted before apply and stays deleted.
+      expect(after.vouchers).toEqual(before.vouchers);
       expect(after.accounts.length).toBeGreaterThan(before.accounts.length);
 
       const audit = await w.q(
@@ -140,7 +148,7 @@ describe("balance repair apply and undo", () => {
       const afterRepeat = await balanceRepairState(w, seed);
       expect(afterRepeat.ledger).toEqual(before.ledger);
       expect(afterRepeat.transfers).toEqual(before.transfers);
-      expect(afterRepeat.vouchers).toEqual(before.vouchers.map(revived));
+      expect(afterRepeat.vouchers).toEqual(before.vouchers);
       const auditAgain = await w.q(
         `SELECT record_id FROM audit_log WHERE table_name = 'vouchers' AND action = 'restore' AND record_id = $1`,
         [String(seed.toOrphanVoucherId)]
@@ -171,39 +179,103 @@ describe("balance repair apply and undo", () => {
       expect(await balanceRepairState(w, seed)).toEqual(before);
     }));
 
-  it("undo writes to rows of another company named in the snapshot (no company check)", () =>
+  it("refuses an undo whose snapshot names another company's rows and changes nothing", () =>
     withFactoryWorld(async (w) => {
       const seed = await seedBalanceRepair(w);
-      const res = await w.agent.post(UNDO).send({
-        snapshot: {
-          ledgerSnapshots: [{ id: seed.otherLedgerId, oldPaid: 1.5, newPaid: 90 }],
-          depositSnapshots: [
-            {
-              contractId: seed.otherContractId,
-              oldFlag: false,
-              newFlag: true,
-              oldPostedAmount: 0,
-              newPostedAmount: 200,
-            },
-          ],
-        },
-      });
-      expect(res.status).toBe(200);
-      // BUG (pinned): undo.ts updates property_monthly_ledger and
-      // property_contracts by id alone, so an Admin of one company rewrites
-      // another company's rows.
-      const [ledger] = await w.q(`SELECT paid_amount::text AS paid FROM property_monthly_ledger WHERE id = $1`, [
-        seed.otherLedgerId,
-      ]);
-      expect(ledger.paid).toBe("1.50");
-      const [contract] = await w.q(
-        `SELECT guarantee_posted_to_statement AS flag FROM property_contracts WHERE id = $1`,
-        [seed.otherContractId]
+      const [otherEntry] = await w.q<{ id: number }>(
+        `SELECT e.id FROM voucher_entries e JOIN vouchers v ON v.id = e.voucher_id
+          WHERE v.company_id = $1 ORDER BY e.id LIMIT 1`,
+        [seed.otherCompanyId]
       );
-      expect(contract.flag).toBe(false);
+      const [otherAccount] = await w.q<{ id: number }>(
+        `SELECT id FROM ledger_accounts WHERE company_id = $1 ORDER BY id LIMIT 1`,
+        [seed.otherCompanyId]
+      );
+      const [otherVoucher] = await w.q<{ id: number }>(
+        `SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number = $2`,
+        [seed.otherCompanyId, `${w.tag}-TT3`]
+      );
+      const transfer = {
+        id: 2147480000,
+        transferType: "Cash",
+        transferDate: "2026-05-10",
+        amount: "1",
+        fromVoucherId: null,
+        toVoucherId: null,
+        description: "forged",
+        sourcePaymentId: null,
+      };
+      // Each snapshot is valid for the active company except for one row.
+      const ownLedger = { id: seed.driftLedgerId, oldPaid: 7, newPaid: 60 };
+      const snapshots: Array<[string, Record<string, unknown>]> = [
+        ["ledger row", { ledgerSnapshots: [ownLedger, { id: seed.otherLedgerId, oldPaid: 1.5, newPaid: 90 }] }],
+        [
+          "contract",
+          {
+            ledgerSnapshots: [ownLedger],
+            depositSnapshots: [
+              {
+                contractId: seed.otherContractId,
+                oldFlag: false,
+                newFlag: true,
+                oldPostedAmount: 0,
+                newPostedAmount: 0,
+              },
+            ],
+          },
+        ],
+        ["voucher line", { ledgerSnapshots: [ownLedger], voucherEntriesAdded: [otherEntry.id] }],
+        ["voucher", { ledgerSnapshots: [ownLedger], vouchersUndeleted: [{ id: otherVoucher.id }] }],
+        [
+          "transfer between two other companies",
+          {
+            ledgerSnapshots: [ownLedger],
+            transfersDeleted: [
+              {
+                ...transfer,
+                fromCompanyId: seed.otherCompanyId,
+                toCompanyId: seed.otherCompanyId,
+                fromLedgerAccountId: otherAccount.id,
+                toLedgerAccountId: otherAccount.id,
+              },
+            ],
+          },
+        ],
+        [
+          "transfer naming a voucher of the wrong side",
+          {
+            ledgerSnapshots: [ownLedger],
+            transfersDeleted: [
+              {
+                ...transfer,
+                fromCompanyId: w.companyId,
+                toCompanyId: seed.otherCompanyId,
+                fromLedgerAccountId: seed.cashId,
+                toLedgerAccountId: otherAccount.id,
+                fromVoucherId: otherVoucher.id,
+              },
+            ],
+          },
+        ],
+        [
+          "orphaned voucher of another company without its transfer",
+          {
+            ledgerSnapshots: [ownLedger],
+            orphanedVouchersDeleted: [{ id: otherVoucher.id, voucherNumber: `${w.tag}-TT3` }],
+          },
+        ],
+      ];
+      const before = await balanceRepairState(w, seed);
+      for (const [label, snapshot] of snapshots) {
+        const res = await w.agent.post(UNDO).send({ snapshot });
+        expect(res.status, label).toBe(404);
+        expect(res.body.code, label).toBe("REPAIR_SNAPSHOT_OUTSIDE_COMPANY");
+        expect(await balanceRepairState(w, seed), label).toEqual(before);
+        expect(await w.q(`SELECT id FROM inter_company_transfers WHERE id = $1`, [transfer.id]), label).toEqual([]);
+      }
     }));
 
-  it("apply into a closed accounting period fails with the period guard", () =>
+  it("apply into a closed accounting period is refused with 409 and writes nothing", () =>
     withFactoryWorld(async (w) => {
       const seed = await seedBalanceRepair(w, "2025-06-10");
       const retained = await w.one(
@@ -216,10 +288,14 @@ describe("balance repair apply and undo", () => {
          VALUES ($1, '2025-01-01', '2025-12-31', $2, $3, 0, 0, 0, $4)`,
         [w.companyId, w.userId, seed.healthyVoucherId, retained]
       );
-      await w.q(`SAVEPOINT before_apply`);
+      const before = await balanceRepairState(w, seed);
       const res = await w.agent.post(APPLY).send({});
-      expect(res.status).toBe(500);
-      expect(String(res.body.message)).toMatch(/clos|period|lock/i);
-      await w.q(`ROLLBACK TO SAVEPOINT before_apply`);
+      expect(res.status, JSON.stringify(res.body)).toBe(409);
+      expect(res.body.code).toBe("ACCOUNTING_PERIOD_CLOSED");
+      expect(res.body.message).toMatch(/closed through 2025-12-31/);
+      expect(res.body.message).not.toMatch(/Failed query/);
+      // The ledger drift fixed before the refused voucher line is rolled back
+      // with it, and the ledger accounts apply would have created are gone.
+      expect(await balanceRepairState(w, seed)).toEqual(before);
     }));
 });

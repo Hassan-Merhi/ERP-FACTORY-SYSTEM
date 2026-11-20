@@ -3,7 +3,7 @@
  *
  * Extracted verbatim from the former single-file balanceRepairRoutes.ts.
  */
-import { db } from "../../db";
+import type { DatabaseOrTransaction } from "../../db";
 import { ledgerAccounts } from "../../../shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { toMoney } from "../../lib/money";
@@ -15,20 +15,21 @@ export function parseNum(v: unknown): number {
 }
 
 export async function findOrCreateLedgerAccount(
+  exec: DatabaseOrTransaction,
   companyId: number,
   name: string,
   accountType: string,
   code: string,
   subType?: string
 ): Promise<number> {
-  const [existing] = await db
+  const [existing] = await exec
     .select()
     .from(ledgerAccounts)
     .where(
       and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.name, name), isNull(ledgerAccounts.deletedAt))
     );
   if (existing) return existing.id;
-  const [created] = await db
+  const [created] = await exec
     .insert(ledgerAccounts)
     .values({
       companyId,
