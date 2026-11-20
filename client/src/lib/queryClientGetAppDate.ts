@@ -3,6 +3,11 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { MutationCache } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import {
+  addCompanyMutationHeaders,
+  assertCompanyMutationSnapshot,
+  captureCompanyMutationSnapshot,
+} from "./companyCacheScope";
 
 /* ── Timezone-aware date utility ───────────────────────────────────────────── */
 // Stores the configured timezone for the current company.
@@ -170,16 +175,23 @@ export async function prepareApiRequest(
   // Attach CSRF token for state-changing methods.
   const upMethod = method.toUpperCase();
   const isStateChanging = upMethod !== "GET" && upMethod !== "HEAD" && upMethod !== "OPTIONS";
+  const pathname = new URL(url, "http://localhost").pathname;
+  const companyScope = captureCompanyMutationSnapshot(upMethod, pathname);
   const csrfToken = isStateChanging ? await ensureCsrfToken() : null;
+  // A CSRF refresh may take time. Do not send a draft under the next company
+  // if the operator switched while the token request was pending.
+  assertCompanyMutationSnapshot(companyScope);
+  const headers = new Headers({
+    ...(data ? { "Content-Type": "application/json" } : {}),
+    "X-Client-Date": getAppDate(),
+    ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+  });
+  addCompanyMutationHeaders(headers, companyScope);
 
   const _apiUrl = _CAPACITOR_API_BASE && url.startsWith("/") ? `${_CAPACITOR_API_BASE}${url}` : url;
   const init: RequestInit = {
     method,
-    headers: {
-      ...(data ? { "Content-Type": "application/json" } : {}),
-      "X-Client-Date": getAppDate(),
-      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
-    },
+    headers,
     body,
     credentials: "include",
     signal: controller.signal,
