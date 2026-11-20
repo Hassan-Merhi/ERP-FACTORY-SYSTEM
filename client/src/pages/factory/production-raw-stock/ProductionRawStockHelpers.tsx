@@ -2,7 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
-import { Trash2, X, Tag, Plus, Folder, Pencil } from "lucide-react";
+import { Trash2, X, Tag, Plus, Folder, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
