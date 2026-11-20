@@ -110,7 +110,6 @@ describe("validated write routes on the live stack", () => {
 
 describe("audit-write-validation counting rules", () => {
   const config = {
-    maxUnvalidated: 0,
     tiers: [
       { name: "1-vouchers", prefixes: ["/api/vouchers"] },
       { name: "7-other", prefixes: ["/"] },
@@ -170,8 +169,9 @@ describe("audit-write-validation counting rules", () => {
     expect(result.unvalidated).toBe(1);
   });
 
-  it("matches the committed manifest and ratchet", () => {
+  it("finds no unvalidated write route in the committed manifest", () => {
     const result = auditWriteValidation();
-    expect(result.unvalidated).toBe(result.maxUnvalidated);
+    expect(result.tiers.flatMap((tier) => tier.unvalidated)).toEqual([]);
+    expect(result.validated).toBe(result.totalWriteRoutes);
   });
 });

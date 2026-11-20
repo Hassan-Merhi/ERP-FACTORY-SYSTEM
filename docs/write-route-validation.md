@@ -52,17 +52,20 @@ codes.
 
 ## How it is enforced
 
-- `npm run audit:write-validation` reads `config/route-manifest.json` and lists
-  every unique write route (method + path) without `validateRequest` in its
-  chain. `config/write-validation-ratchet.json` holds the count, which may only
-  fall: the audit fails above it and below it. After converting routes, run
-  `UPDATE_ROUTE_MANIFEST=1` and `UPDATE_ROUTE_ACCESS_MANIFEST=1` for the two
-  manifest tests, then `UPDATE_WRITE_VALIDATION_BASELINE=1 npm run audit:write-validation`.
+Every write route is validated; there is no baseline or allowance.
+
+- `npm run audit:write-validation` reads `config/route-manifest.json` and fails
+  when any unique write route (method + path) has no `validateRequest` in its
+  chain. It runs in the Repository Audits job of `ci.yml`, which runs on every
+  pull request and is part of the required `Check / Build / Lint / Test`
+  status. `--list` prints any offending route; `config/write-validation-tiers.json`
+  only groups the report by risk area.
+- `config/route-manifest.json` is checked against the live app by
+  `tests/route-manifest.test.ts`, so a new route cannot be hidden from the
+  audit. After adding or changing a route, run the two manifest tests with
+  `UPDATE_ROUTE_MANIFEST=1` and `UPDATE_ROUTE_ACCESS_MANIFEST=1`.
 - `tests/write-route-validation.test.ts` checks the live route stack: params
-  and body schemas are declared where required, and validation runs after the
-  guards.
+  and body schemas are declared where required, validation runs after the
+  guards, and it is never the terminal handler.
 - A schema parsed inside the handler does not count. It is invisible to the
   audit and to the strictness check.
-- The backlog is ordered by risk in the ratchet file's tiers: vouchers and
-  posting, stock movements, POS, payroll, settings/admin/auth, the rest of
-  the factory routes, then other modules.

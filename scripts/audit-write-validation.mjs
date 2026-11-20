@@ -2,8 +2,8 @@
 /**
  * audit-write-validation.mjs
  *
- * Lists every write route (POST/PUT/PATCH/DELETE) whose input is not checked
- * against a Zod schema, and holds that number to a ratchet that can only fall.
+ * Fails when any write route (POST/PUT/PATCH/DELETE) does not check its input
+ * against a Zod schema. Every write route must; there is no baseline.
  *
  * A route counts as validated when its handler chain in
  * config/route-manifest.json contains `validateRequest`, the middleware from
@@ -24,7 +24,6 @@
  *   npm run audit:write-validation -- --list    every unvalidated route
  *   npm run audit:write-validation -- --tier 1  routes in one tier
  *   node scripts/audit-write-validation.mjs --json
- *   UPDATE_WRITE_VALIDATION_BASELINE=1 npm run audit:write-validation
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -32,7 +31,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(projectRoot, "config/route-manifest.json");
-const configPath = path.join(projectRoot, "config/write-validation-ratchet.json");
+const configPath = path.join(projectRoot, "config/write-validation-tiers.json");
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 export const VALIDATOR_NAME = "validateRequest";
@@ -51,7 +50,7 @@ export function tierFor(routePath, tiers) {
 }
 
 /**
- * @param {{ manifest?: { routes: string[] }, config?: { maxUnvalidated: number, tiers: Array<{ name: string, prefixes: string[] }> } }} [input]
+ * @param {{ manifest?: { routes: string[] }, config?: { tiers: Array<{ name: string, prefixes: string[] }> } }} [input]
  */
 export function auditWriteValidation(input = {}) {
   const manifest = input.manifest ?? JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -82,7 +81,6 @@ export function auditWriteValidation(input = {}) {
     totalWriteRoutes: routes.size,
     validated: routes.size - unvalidated,
     unvalidated,
-    maxUnvalidated: config.maxUnvalidated,
     tiers: tiers.map((tier) => ({ ...tier, unvalidated: tier.unvalidated.sort() })),
   };
 }
@@ -96,7 +94,7 @@ function main() {
   } else {
     console.log(
       `Write-route input validation: ${result.validated}/${result.totalWriteRoutes} validated, ` +
-        `${result.unvalidated} without a schema (ratchet ${result.maxUnvalidated}).`
+        `${result.unvalidated} without a schema.`
     );
     const tierArg = args.indexOf("--tier");
     const onlyTier = tierArg >= 0 ? args[tierArg + 1] : null;
@@ -107,33 +105,12 @@ function main() {
     }
   }
 
-  if (process.env.UPDATE_WRITE_VALIDATION_BASELINE === "1") {
-    if (result.unvalidated > result.maxUnvalidated) {
-      console.error(
-        `Refusing to raise the ratchet from ${result.maxUnvalidated} to ${result.unvalidated}. ` +
-          `Add validateRequest to the new write routes instead.`
-      );
-      process.exit(1);
-    }
-    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    config.maxUnvalidated = result.unvalidated;
-    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-    console.log(`Ratchet set to ${result.unvalidated}.`);
-    return;
-  }
-
-  if (result.unvalidated > result.maxUnvalidated) {
+  if (result.unvalidated > 0) {
     console.error(
-      `\n${result.unvalidated - result.maxUnvalidated} write route(s) added without validateRequest. ` +
-        `Mount validateRequest({ body, params, query }) from server/lib/validateRequest.ts on them. ` +
-        `Run with --list to see every unvalidated route.`
-    );
-    process.exit(1);
-  }
-  if (result.unvalidated < result.maxUnvalidated) {
-    console.error(
-      `\nThe count fell from ${result.maxUnvalidated} to ${result.unvalidated}. Lock the gain in: ` +
-        `UPDATE_WRITE_VALIDATION_BASELINE=1 npm run audit:write-validation`
+      `\n${result.unvalidated} write route(s) without validateRequest. Every POST, PUT, PATCH and ` +
+        `DELETE route must mount validateRequest({ body, params, query }) from ` +
+        `server/lib/validateRequest.ts after its guards; see docs/write-route-validation.md. ` +
+        `Run with --list to see them.`
     );
     process.exit(1);
   }
