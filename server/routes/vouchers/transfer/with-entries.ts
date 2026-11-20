@@ -33,6 +33,7 @@ import { moveSalesVoucherInventoryLocation } from "./salesLocationInventoryEvide
 import { syncContainerChargeVoucherEditTx } from "../../../services/containers/offload-lifecycle/charge-voucher-sync";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { MoneyDecimal, sumMoney, toMoney, type MoneyInput } from "../../../lib/money";
+import { assertPostingLedgerLeavesTx } from "../../../services/accounting/postableLedgerAccountPolicy";
 import {
   assertValidReplacementEntries,
   linkCustomerLedgerTargets,
@@ -250,6 +251,11 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         }
 
         const targets = await linkCustomerLedgerTargets(tx, existingVoucher.companyId, replacementTargets);
+        await assertPostingLedgerLeavesTx(
+          tx,
+          existingVoucher.companyId,
+          targets.flatMap((target) => target.ledgerAccountId == null ? [] : [target.ledgerAccountId])
+        );
         await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
 
         const editVoucherCurrency: string = String(existingVoucher.currency || "USD");
