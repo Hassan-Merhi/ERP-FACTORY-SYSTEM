@@ -1,5 +1,6 @@
 // Extracted from ./queryClient.ts to keep that module under the source-size cap.
 import { offlineError } from "./offline/offlineError";
+import { assertPreparedCompanyMutationStillCurrent } from "./companyCacheScope";
 import { getErrorDetails } from "@shared/errorUtils";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { coldStartReadOnlyActive } from "./offline/coldStartState";
@@ -52,6 +53,7 @@ export async function apiRequest(
     clearTimeout(prepared.timeoutId);
 
     if (!_isRetry && (await isCsrfTokenMismatch(res))) {
+      assertPreparedCompanyMutationStillCurrent(prepared.init.headers);
       resetCsrfToken();
       return apiRequest(method, url, data, true);
     }
