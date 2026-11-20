@@ -58,6 +58,8 @@ export const applicationEnglishTranslations = {
   "mobileFilters.search": "Search",
   "mobileFilters.clearSearch": "Clear search",
   "company.loadingSelector": "Loading company selector",
+  "company.verifyingSession": "Verifying company",
+  "company.switching": "Switching company",
   "company.current": "Current company",
   "company.openSwitcher": "Open company switcher",
   "user.menu": "Account menu",

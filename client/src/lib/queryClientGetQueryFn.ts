@@ -6,6 +6,7 @@ import { getErrorDetails } from "@shared/errorUtils";
 import { QueryCache, QueryClient, QueryFunction } from "@tanstack/react-query";
 import { staleTimeForQueryKey } from "./queryPolicies";
 import { isAbortError } from "./abortError";
+import { assertCompanyReadSnapshot, captureCompanyReadSnapshot, isCompanyOwnedApiRead } from "./companyCacheScope";
 import {
   AUTH_PATHS,
   _CAPACITOR_API_BASE,
@@ -165,6 +166,8 @@ export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryF
     // ledger request: restricted Factory pages may legitimately have no Accounts
     // access, and the global rewrite caused avoidable 403s.
     const requestUrl = url;
+    const readScope = isCompanyOwnedApiRead(requestUrl.split("?")[0]) ? captureCompanyReadSnapshot() : null;
+    if (readScope) assertCompanyReadSnapshot(readScope);
 
     // Apply a 5-minute hard timeout so queries never hang indefinitely.
     // We race the caller's own signal (query cancellation) against our timeout.
@@ -195,7 +198,11 @@ export const getQueryFn: <T>(options: { on401: UnauthorizedBehavior }) => QueryF
       }
 
       await throwIfResNotOk(res);
-      return await res.json();
+      const body = await res.json();
+      // A body can finish parsing after its request has been cancelled or the
+      // selected company changed. Never commit that body to a Query cache.
+      if (readScope) assertCompanyReadSnapshot(readScope);
+      return body;
     } catch (error) {
       clearTimeout(timeoutId);
       if (timedOut && getErrorDetails(error).name === "AbortError") {

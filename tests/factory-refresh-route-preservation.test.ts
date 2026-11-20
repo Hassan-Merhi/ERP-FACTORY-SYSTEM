@@ -9,10 +9,10 @@ describe("Factory refresh route preservation", () => {
     // Authentication is resolved by App.tsx before this shell mounts. This shell
     // must still block on company loading before it resolves any route decision,
     // so a hard refresh on a Factory URL never redirects mid-restoration.
-    expect(app).toContain("const { selectedCompany, isLoading: companyLoading } = useCompany();");
-    expect(app).toContain("if (companyLoading || !selectedCompany) return <AppLoadingState />;");
+    expect(app).toContain("const { selectedCompany, isLoading: companyLoading, isCheckingCompanySession } = useCompany();");
+    expect(app).toContain("if (!selectedCompany || (companyLoading && !isCheckingCompanySession)) return <AppLoadingState />;");
 
-    const companyGuard = app.indexOf("companyLoading || !selectedCompany");
+    const companyGuard = app.indexOf("companyLoading && !isCheckingCompanySession");
     const routeResolution = app.indexOf("resolveAuthenticatedAppRoute({");
     expect(companyGuard).toBeGreaterThan(-1);
     expect(routeResolution).toBeGreaterThan(companyGuard);

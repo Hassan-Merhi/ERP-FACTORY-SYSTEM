@@ -63,6 +63,12 @@ export function resolveSecondaryRequirement(req: Request, path: string): Factory
     return requirement("factory/production-report");
   }
 
+  // Saved loading-agent names are owned by Invoicing > Invoices.
+  // Without an explicit owner the fail-closed Factory middleware denies this API.
+  if (hasPrefix(path, "/loading-agents")) {
+    return requirement("factory/invoicing", ["hide_invoicing_invoices_tab"]);
+  }
+
   // Invoicing and loading families.
   if (
     hasPrefix(path, "/customer-proformas") ||

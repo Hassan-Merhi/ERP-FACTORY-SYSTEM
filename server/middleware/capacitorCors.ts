@@ -16,7 +16,8 @@ const CAPACITOR_ORIGINS = new Set([
   "http://localhost",
 ]);
 
-const DEFAULT_ALLOWED_HEADERS = "Content-Type,Authorization,X-CSRF-Token,X-Client-Date,X-Requested-With";
+const DEFAULT_ALLOWED_HEADERS =
+  "Content-Type,Authorization,X-CSRF-Token,X-Client-Date,X-Requested-With,X-Expected-Company-Id,X-Expected-Company-Revision";
 
 export const capacitorCors: RequestHandler = (req, res, next) => {
   const origin = req.headers.origin as string | undefined;

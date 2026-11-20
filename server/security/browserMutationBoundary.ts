@@ -2,6 +2,12 @@ import type { Request, RequestHandler, Response } from "express";
 
 import { logger } from "../lib/logger";
 import { isTrustedOriginHost } from "./originHostPolicy";
+import {
+  EXPECTED_COMPANY_ID_HEADER,
+  EXPECTED_COMPANY_REVISION_HEADER,
+  isCompanyScopedMutation,
+  verifyExpectedCompanyMutation,
+} from "./companyMutationScope";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const MUTATION_EXEMPT_PATHS = new Set([
@@ -84,6 +90,79 @@ export const browserMutationFailClosedBoundary: RequestHandler = (req, res, next
   if (SAFE_METHODS.has(method)) return next();
   if (!req.path.startsWith("/api")) return next();
   if (MUTATION_EXEMPT_PATHS.has(req.path)) return next();
+
+  // The session middleware may have loaded this request before a sibling
+  // tab's company-switch POST finished saving. Refresh the persisted session
+  // before admitting a stamped business write, or a stale in-memory snapshot
+  // would defeat the revision comparison.
+  const hasScopeHeader =
+    req.headers[EXPECTED_COMPANY_ID_HEADER] !== undefined ||
+    req.headers[EXPECTED_COMPANY_REVISION_HEADER] !== undefined;
+  if (
+    req.session?.userId &&
+    hasScopeHeader &&
+    isCompanyScopedMutation(method, req.path) &&
+    typeof req.session.reload === "function"
+  ) {
+    req.session.reload((error) => {
+      if (error) {
+        logger.warn("Cannot revalidate the active company session before a mutation", {
+          module: "security",
+          action: "companyMutationSessionReloadFailure",
+          path: req.path,
+          method,
+          userId: req.session?.userId ?? null,
+        });
+        rejectBrowserMutation(
+          res,
+          503,
+          "COMPANY_SESSION_UNVERIFIED",
+          "The active company could not be verified. Retry after the session is available."
+        );
+        return;
+      }
+      if (!req.session?.userId) {
+        rejectBrowserMutation(res, 401, "SESSION_EXPIRED", "The authenticated session is no longer available.");
+        return;
+      }
+      applyBrowserMutationBoundary(req, res, next, method);
+    });
+    return;
+  }
+  return applyBrowserMutationBoundary(req, res, next, method);
+};
+
+function applyBrowserMutationBoundary(
+  req: Parameters<RequestHandler>[0],
+  res: Parameters<RequestHandler>[1],
+  next: Parameters<RequestHandler>[2],
+  method: string
+) {
+  // Compare the company's session revision before the route performs any
+  // state changes. This check applies to any client that declares the expected
+  // session, including native/Capacitor clients without an Origin header.
+  if (req.session?.userId) {
+    const companyScope = verifyExpectedCompanyMutation(req);
+    if (!companyScope.allowed) {
+      logger.warn("Company-scoped mutation rejected: the browser session has moved", {
+        module: "security",
+        action: "companyMutationSessionConflict",
+        code: companyScope.code,
+        method,
+        path: req.path,
+        userId: req.session.userId,
+        companyId: req.session.currentCompanyId ?? null,
+      });
+      return rejectBrowserMutation(
+        res,
+        409,
+        companyScope.code,
+        companyScope.code === "COMPANY_SCOPE_INVALID"
+          ? "The request company scope is invalid."
+          : "The active company changed. Review the draft and retry under the correct company."
+      );
+    }
+  }
 
   const sourceDecision = browserSourceAllowed(req);
   if (!sourceDecision.browserRequest) return next();

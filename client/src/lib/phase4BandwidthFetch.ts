@@ -1,3 +1,4 @@
+import { companyReadCacheIdentity, assertCompanyReadSnapshot, captureCompanyReadSnapshot } from "./companyCacheScope";
 import {
   resolveFetchUrl as resolveUrl,
   fetchRequestMethod as requestMethod,
@@ -114,6 +115,8 @@ async function handleDailyList(
   url: URL,
   init: RequestInit | undefined
 ): Promise<Response> {
+  const readSnapshot = captureCompanyReadSnapshot();
+  assertCompanyReadSnapshot(readSnapshot);
   const key = dailyKey(url);
   const cached = dailyCache.get(key);
   const needsReconcile = !cached || Date.now() - cached.reconciledAt >= DAILY_RECONCILE_MS;
@@ -121,6 +124,7 @@ async function handleDailyList(
   if (needsReconcile) {
     const full = await fetchAllPages(originalFetch, url, init);
     if (!full.response.ok) return full.response;
+    assertCompanyReadSnapshot(readSnapshot);
     const rows = mergeRows([], full.rows);
     dailyCache.set(key, { rows, reconciledAt: Date.now() });
     return jsonResponseFrom(full.response, rows);
@@ -129,6 +133,7 @@ async function handleDailyList(
   const maxId = cached.rows.reduce((max, row) => Math.max(max, Number(row.id) || 0), 0);
   const delta = await fetchAllPages(originalFetch, url, init, maxId || undefined);
   if (!delta.response.ok) return delta.response;
+  assertCompanyReadSnapshot(readSnapshot);
   const rows = mergeRows(cached.rows, delta.rows);
   dailyCache.set(key, { rows, reconciledAt: cached.reconciledAt });
   return jsonResponseFrom(delta.response, rows);
@@ -143,17 +148,20 @@ async function handleProformaSummary(
   url: URL,
   init: RequestInit | undefined
 ): Promise<Response> {
-  const key = url.toString();
+  const readSnapshot = captureCompanyReadSnapshot();
+  assertCompanyReadSnapshot(readSnapshot);
+  const key = `${companyReadCacheIdentity()}|${url.toString()}`;
   const cached = proformaSummaryCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.response.clone();
 
   const raw = await originalFetch(url.toString(), withBypassHeaders(url, init));
   if (!raw.ok) return raw;
+  assertCompanyReadSnapshot(readSnapshot);
   proformaSummaryCache.set(key, { response: raw.clone(), expiresAt: Date.now() + PROFORMA_CACHE_MS });
   return raw;
 }
 
-function updateDailyCacheFromWrite(pathname: string, method: string, response: Response): void {
+function updateDailyCacheFromWrite(pathname: string, method: string, response: Response, writeScope: string): void {
   if (!response.ok) return;
 
   if (method === "DELETE") {
@@ -161,7 +169,7 @@ function updateDailyCacheFromWrite(pathname: string, method: string, response: R
     if (!match) return;
     const id = Number(match[1]);
     for (const [key, entry] of dailyCache) {
-      if (!key.startsWith("/api/factory/daily-bale-scans?")) continue;
+      if (!key.startsWith(`${writeScope}|/api/factory/daily-bale-scans?`)) continue;
       dailyCache.set(key, { ...entry, rows: entry.rows.filter((row) => Number(row.id) !== id) });
     }
     return;
@@ -172,9 +180,10 @@ function updateDailyCacheFromWrite(pathname: string, method: string, response: R
       .clone()
       .json()
       .then((row: DailyScanRow | null) => {
+        if (writeScope !== companyReadCacheIdentity()) return;
         if (!row?.scan_date || !row?.id) return;
         for (const [key, entry] of dailyCache) {
-          if (!key.startsWith("/api/factory/daily-bale-scans?")) continue;
+          if (!key.startsWith(`${writeScope}|/api/factory/daily-bale-scans?`)) continue;
           if (!key.includes(`date=${encodeURIComponent(String(row.scan_date))}`)) continue;
           dailyCache.set(key, { ...entry, rows: mergeRows(entry.rows, [row]) });
         }
@@ -200,9 +209,13 @@ export function installPhase4BandwidthFetch(): void {
     const method = requestMethod(input, init);
 
     if (method !== "GET") {
+      const writeScope = companyReadCacheIdentity();
       const response = await originalFetch(input, init);
+      // A write started under Company A must not update Company B's local
+      // materialized lists after an asynchronous server response.
+      if (writeScope !== companyReadCacheIdentity()) return response;
       if (PROFORMA_WRITE_PATH.test(url.pathname)) clearProformaCaches();
-      updateDailyCacheFromWrite(url.pathname, method, response);
+      updateDailyCacheFromWrite(url.pathname, method, response, writeScope);
       return response;
     }
 

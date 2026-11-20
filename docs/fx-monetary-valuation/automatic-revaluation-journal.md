@@ -19,8 +19,10 @@ After `POST /api/exchange-rates` commits the rate, the server calls
 1. It reads the same valuation the reports show (`getMonetaryFxValuation`), at
    the company business date and the rate effective on that date.
 2. For each **cash/bank account, customer and loan** that holds a foreign
-   currency: `adjustment = native balance at the current rate − historical USD
-   book value`, rounded to cents.
+   currency: `adjustment = round(current USD translation, 2) − round(posted
+   USD ledger closing, 2)`. The six-decimal historical USD book basis remains
+   a diagnostic value, not the amount to post. This avoids stray one-cent
+   unrealized FX rows after recognition.
 3. It posts **one balanced Journal**, dated the business date: one line per
    adjusted account, and the net against the system account
    **FX Revaluation Gain/Loss** (`FX-REVALUATION`).
@@ -69,10 +71,15 @@ The first journal books the **whole difference accumulated so far**, as the
 reports currently show it. A revaluation already entered by hand as an ordinary
 USD journal line on a CFA/ZMW account is seen by the valuation as a separate
 USD holding, not as a revaluation, so it does **not** reduce that difference.
-Review (and where appropriate delete) such manual revaluation journals, and
-compare the Multi-Currency Accounting page's differences with what you expect,
-before saving the next rate. The same applies to Mali's legacy `FX-REVAL-*`
-vouchers (decision B1 in `docs/accounting-audit-2026-10.md`).
+Before the next rate save, review legacy manual FX revaluation vouchers and
+compare the Multi-Currency Accounting differences. Automatic FX now **skips**
+posting if a live, unreversed manual FX journal has a recognized FX counter-line
+and ordinary native-USD movement on a monetary target; it reports the voucher
+number rather than posting a second loss. Use an audited reversal, correct the
+FX account to Indirect Expense when necessary, and let a subsequent rate save
+post the proper base-only adjustment. Never silently delete/retag source entries.
+The same review caution applies to Mali's legacy `FX-REVAL-*` vouchers
+(decision B1 in `docs/accounting-audit-2026-10.md`).
 
 ## Deployment
 
