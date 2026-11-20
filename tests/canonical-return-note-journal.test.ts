@@ -87,6 +87,75 @@ describe("canonical journal for return notes", () => {
     expect(Number(rows[0].location_id)).toBe(ctx.locationId);
   }, 60000);
 
+  it("posts the exact $0.01 variance so a credit note commits with balanced entries", async () => {
+    const res = await agent.post("/api/credit-notes").send({
+      noteType: "Credit Note",
+      voucherDate: new Date().toISOString().split("T")[0],
+      cashAccountType: "ledger",
+      cashAccountId: ctx.cashAccountId,
+      description: "one-cent credit-note create regression",
+      items: [{
+        stockItemId: ctx.stockItemIds[0],
+        locationId: ctx.locationId,
+        quantity: "1",
+        refundRate: "100.00",
+        inventoryCost: "99.99",
+      }],
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    const { rows } = await pool.query(
+      `SELECT ROUND(COALESCE(SUM(debit_amount), 0), 2)::text AS debits,
+              ROUND(COALESCE(SUM(credit_amount), 0), 2)::text AS credits,
+              ROUND(COALESCE(SUM(debit_amount) FILTER
+                (WHERE narration = 'Variance between refund and inventory cost'), 0), 2)::text AS variance_debit
+         FROM voucher_entries WHERE voucher_id = $1`,
+      [res.body.voucherId]
+    );
+    expect(Number(rows[0].debits)).toBe(100);
+    expect(Number(rows[0].credits)).toBe(100);
+    expect(Number(rows[0].variance_debit)).toBe(0.01);
+  }, 60000);
+
+  it("also posts the exact $0.01 variance when editing a credit note", async () => {
+    const voucherDate = new Date().toISOString().split("T")[0];
+    const base = {
+      voucherDate,
+      cashAccountType: "ledger",
+      cashAccountId: ctx.cashAccountId,
+      description: "one-cent credit-note edit regression",
+    };
+    const item = {
+      stockItemId: ctx.stockItemIds[0],
+      locationId: ctx.locationId,
+      quantity: "1",
+      refundRate: "100.00",
+      inventoryCost: "100.00",
+    };
+    const created = await agent.post("/api/credit-notes").send({
+      ...base,
+      noteType: "Credit Note",
+      items: [item],
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(200);
+    const voucherId = created.body.voucherId;
+    const edited = await agent.patch(`/api/credit-notes/${voucherId}`).send({
+      ...base,
+      items: [{ ...item, inventoryCost: "99.99" }],
+    });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+    const { rows } = await pool.query(
+      `SELECT ROUND(COALESCE(SUM(debit_amount), 0), 2)::text AS debits,
+              ROUND(COALESCE(SUM(credit_amount), 0), 2)::text AS credits,
+              ROUND(COALESCE(SUM(debit_amount) FILTER
+                (WHERE narration = 'Variance between refund and inventory cost'), 0), 2)::text AS variance_debit
+         FROM voucher_entries WHERE voucher_id = $1`,
+      [voucherId]
+    );
+    expect(Number(rows[0].debits)).toBe(100);
+    expect(Number(rows[0].credits)).toBe(100);
+    expect(Number(rows[0].variance_debit)).toBe(0.01);
+  }, 60000);
+
   it("records an issue when a debit note sends goods back to a supplier", async () => {
     const res = await agent.post("/api/credit-notes").send({
       noteType: "Debit Note",
