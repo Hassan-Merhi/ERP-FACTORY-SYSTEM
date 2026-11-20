@@ -39,6 +39,30 @@ export function deliveryDeviceId(pcDeviceId, userId, companyId) {
 }
 
 /** What the cloud receives for an entry: the person's input, or the finished envelope of an edit or delete. */
+const ATTACHMENT_KIND = "attachment.file.v1";
+
+/**
+ * Sends the bytes of a file uploaded offline, read from the PC's stored copy.
+ * Returns "sent", or the code to refuse the entry with when the file is gone
+ * or no longer matches its record.
+ */
+async function sendFileBytes(local, cloud, deviceId, envelope) {
+  const found = await local.query("SELECT file_data FROM stored_files WHERE id = $1", [envelope.localFileId]);
+  if (!found.rows.length || typeof found.rows[0].file_data !== "string") return "PC_SYNC_FILE_MISSING";
+  const bytes = Buffer.from(found.rows[0].file_data, "base64");
+  if (bytes.length !== envelope.fileSize || createHash("sha256").update(bytes).digest("hex") !== envelope.sha256) {
+    return "PC_SYNC_FILE_CHANGED";
+  }
+  const res = await cloud.postBytes("/api/offline/pc-sync/files", bytes, {
+    "x-pc-sync-device-id": deviceId,
+    "x-file-sha256": envelope.sha256,
+  });
+  if (res.status === 200) return "sent";
+  if (res.status === 401) throw new PcSyncAgentError("PC_SYNC_LOGIN_EXPIRED", { status: 401 });
+  if (res.status === 413 || res.status === 422) return res.body?.code ?? "OFFLINE_PC_SYNC_FILE_INVALID";
+  throw new PcSyncAgentError(res.body?.code || "PC_SYNC_DELIVERY_FAILED", { status: res.status });
+}
+
 function entryBody(op) {
   return op.envelope ? { envelope: op.envelope } : { input: op.input };
 }
@@ -97,8 +121,18 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
       }
       company = op.company_id;
     }
+    const deviceId = deliveryDeviceId(state.device_id, op.user_id, op.company_id);
+    // A file uploaded offline: its bytes go first, then its record.
+    if (op.envelope?.kind === ATTACHMENT_KIND) {
+      const sent = await sendFileBytes(local, cloud, deviceId, op.envelope);
+      if (sent !== "sent") {
+        await mark(local, op.id, "refused", { code: sent });
+        result.refused += 1;
+        continue;
+      }
+    }
     const res = await cloud.post("/api/offline/pc-sync/operations", {
-      deviceId: deliveryDeviceId(state.device_id, op.user_id, op.company_id),
+      deviceId,
       operationId: op.operation_id,
       kind: op.kind,
       localRef: op.local_ref,

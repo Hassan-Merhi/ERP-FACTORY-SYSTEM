@@ -234,7 +234,7 @@ describe("PC offline payment edits and deletes: in the cloud", () => {
     const forged = await agent.post("/api/offline/pc-sync/operations").send(sent);
     expect(forged.status).toBe(422);
     const browser = await agent.post("/api/offline/browser-sync/operations").send(sent);
-    expect(browser.status).toBe(400); // the route's request schema has no envelope field
+    expect(browser.status).toBe(422);
     expect(await total(payment.cloud)).toBe(10);
   });
 });

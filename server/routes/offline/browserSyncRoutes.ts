@@ -46,6 +46,9 @@ export const operationSchema = z
   })
   .strict();
 
+// The browser and PC sync agents treat 422 OFFLINE_BROWSER_REQUEST_INVALID as a
+// refused entry; keep that contract for bodies validateRequest refuses.
+export const OFFLINE_INVALID = { status: 422, code: "OFFLINE_BROWSER_REQUEST_INVALID" } as const;
 const receiptsSchema = z
   .object({ deviceId: z.string().uuid(), operationIds: z.array(z.string().uuid()).max(500) })
   .strict();
@@ -91,7 +94,7 @@ export function registerBrowserSyncRoutes(app: Express): void {
   app.post(
     "/api/offline/browser-sync/operations",
     requireAuth,
-    validateRequest(operationInput),
+    validateRequest(operationInput, OFFLINE_INVALID),
     async (req: Request, res: Response) => {
       const actor = await guard(req, res);
       if (!actor) return;
@@ -114,7 +117,7 @@ export function registerBrowserSyncRoutes(app: Express): void {
   app.post(
     "/api/offline/browser-sync/operations/discard",
     requireAuth,
-    validateRequest(operationInput),
+    validateRequest(operationInput, OFFLINE_INVALID),
     async (req: Request, res: Response) => {
       const actor = await guard(req, res);
       if (!actor) return;
@@ -131,7 +134,7 @@ export function registerBrowserSyncRoutes(app: Express): void {
   app.post(
     "/api/offline/browser-sync/receipts",
     requireAuth,
-    validateRequest(receiptsInput),
+    validateRequest(receiptsInput, OFFLINE_INVALID),
     async (req: Request, res: Response) => {
       const actor = await guard(req, res);
       if (!actor) return;

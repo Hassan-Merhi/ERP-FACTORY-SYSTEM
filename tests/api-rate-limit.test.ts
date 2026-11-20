@@ -3,7 +3,13 @@ import type { NextFunction, Request, Response } from "express";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const ENV_KEYS = ["API_RATE_LIMIT_MAX", "API_RATE_LIMIT_ANON_MAX", "API_RATE_LIMIT_WINDOW_MS"] as const;
+const ENV_KEYS = [
+  "API_RATE_LIMIT_MAX",
+  "API_RATE_LIMIT_WRITE_MAX",
+  "API_RATE_LIMIT_ACCESS_MAX",
+  "API_RATE_LIMIT_ANON_MAX",
+  "API_RATE_LIMIT_WINDOW_MS",
+] as const;
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
 async function loadLimiter(env: Record<string, string>) {
@@ -37,6 +43,9 @@ function buildApp(apiRateLimit: (req: Request, res: Response, next: NextFunction
   app.use(fakeSession(userId));
   app.use(apiRateLimit);
   app.get("/api/ping", (_req, res) => res.status(200).json({ ok: true }));
+  app.post("/api/vouchers/payment-receipt", (_req, res) => res.status(200).json({ ok: true }));
+  app.get("/api/my-erp-pages", (_req, res) => res.status(200).json({ pageKeys: [] }));
+  app.get("/api/factory/my-access", (_req, res) => res.status(200).json({ pageKeys: [] }));
   app.options("/api/ping", (_req, res) => res.sendStatus(204));
   app.get("/api/health/ready", (_req, res) => res.status(200).json({ ok: true }));
   app.get("/api/build-info", (_req, res) => res.status(200).json({ ok: true }));
@@ -86,6 +95,45 @@ describe("global api rate limit", () => {
     await request(appA).get("/api/ping").set("X-Forwarded-For", "198.51.100.9").expect(429);
 
     await request(appB).get("/api/ping").set("X-Forwarded-For", "198.51.100.9").expect(200);
+  });
+
+  it("keeps voucher writes and verified shell access available when background reads hit their limit", async () => {
+    const { apiRateLimit } = await loadLimiter({
+      API_RATE_LIMIT_MAX: "2",
+      API_RATE_LIMIT_WRITE_MAX: "2",
+      API_RATE_LIMIT_ACCESS_MAX: "2",
+      API_RATE_LIMIT_ANON_MAX: "100",
+      API_RATE_LIMIT_WINDOW_MS: "60000",
+    });
+    const agent = request(buildApp(apiRateLimit, "finance-user"));
+
+    // Busy sidebar/report polling must not lock a cashier out of voucher posting.
+    await agent.get("/api/ping").expect(200);
+    await agent.get("/api/ping").expect(200);
+    await agent.get("/api/ping").expect(429);
+
+    // Verified page grants have their own finite budget, separate from reports.
+    await agent.get("/api/my-erp-pages").expect(200);
+    await agent.get("/api/factory/my-access").expect(200);
+    await agent.get("/api/my-erp-pages").expect(429);
+
+    // Voucher writes remain available even if reads and access checks are capped.
+    await agent.post("/api/vouchers/payment-receipt").expect(200);
+    await agent.post("/api/vouchers/payment-receipt").expect(200);
+    await agent.post("/api/vouchers/payment-receipt").expect(429);
+  });
+
+  it("does not exempt anonymous callers from the shared API flood budget", async () => {
+    const { apiRateLimit } = await loadLimiter({
+      API_RATE_LIMIT_MAX: "10",
+      API_RATE_LIMIT_WRITE_MAX: "10",
+      API_RATE_LIMIT_ACCESS_MAX: "10",
+      API_RATE_LIMIT_ANON_MAX: "1",
+      API_RATE_LIMIT_WINDOW_MS: "60000",
+    });
+    const agent = request(buildApp(apiRateLimit));
+    await agent.get("/api/my-erp-pages").expect(200);
+    await agent.post("/api/vouchers/payment-receipt").expect(429);
   });
 
   it("never limits health probes, bootstrap endpoints, preflights, or non-API traffic", async () => {

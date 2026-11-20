@@ -67,12 +67,10 @@ function errorResponse(res: Response, error: unknown) {
     });
   }
   logger.error("Factory dispatch financial posting failed", { error });
-  return res
-    .status(500)
-    .json({
-      code: "TRIP_POSTING_ERROR",
-      message: "Unable to post Factory dispatch trip; no partial journal was saved",
-    });
+  return res.status(500).json({
+    code: "TRIP_POSTING_ERROR",
+    message: "Unable to post Factory dispatch trip; no partial journal was saved",
+  });
 }
 function body(req: Request): Record<string, unknown> {
   if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {

@@ -452,6 +452,7 @@
     "docs/fx-monetary-valuation/phase-2-implementation.md": "reference",
     "docs/fx-monetary-valuation/phase-3-rate-save-refresh.md": "reference",
     "docs/fx-monetary-valuation/phase-5-historical-cache-audit.md": "reference",
+    "docs/fx-monetary-valuation/automatic-revaluation-journal.md": "reference",
     "docs/fx-monetary-valuation/phase-6-reconciliation-release-gate.md": "reference",
     "docs/fx-monetary-valuation/phase-7-verification-and-fixes.md": "reference",
     "docs/global-force-refresh-all-users-2026-10-28.md": "reference",

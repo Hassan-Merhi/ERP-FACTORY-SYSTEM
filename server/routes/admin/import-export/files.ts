@@ -15,6 +15,7 @@ import { storedFiles, fileFolders } from "@shared/schema";
 import { eq, and, desc, asc } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { isPhase9LanPrimary } from "../../../edge/phase9PosOutbox";
+import { pcLocalEntryMode } from "../../../offline/pcLocal/pcCapture";
 import {
   capturePhase9AttachmentTx,
   capturePhase9AttachmentUpdateTx,
@@ -182,8 +183,8 @@ export function registerFileRoutes(app: Express) {
         if (!req.file) return res.status(400).json({ message: "No file uploaded" });
         const { description, folderId } = req.body;
         const file = req.file;
-        // Owner policy: offline uploads on the factory LAN server are capped at 10 MB.
-        const lanCapture = isPhase9LanPrimary();
+        // Owner policy: offline uploads on the factory LAN server (or a PC in entry mode) are capped at 10 MB.
+        const lanCapture = isPhase9LanPrimary() || pcLocalEntryMode();
         if (lanCapture && file.size > PHASE9_ATTACHMENT_MAX_BYTES) {
           return res.status(413).json({
             code: "EDGE_ATTACHMENT_TOO_LARGE",
@@ -243,8 +244,8 @@ export function registerFileRoutes(app: Express) {
       if (displayName !== undefined) updates.displayName = displayName || null;
       if (folderId !== undefined) updates.folderId = folderId === null ? null : parseInt(folderId);
       if (Object.keys(updates).length === 0) return res.status(400).json({ message: "Nothing to update" });
-      // Factory LAN server (plan batch 4): the rename / move and its record for the cloud commit together.
-      const lanCapture = isPhase9LanPrimary();
+      // Factory LAN server or a PC in entry mode (plan batch 4): the rename / move and its record for the cloud commit together.
+      const lanCapture = isPhase9LanPrimary() || pcLocalEntryMode();
       const updated = await db.transaction(async (tx) => {
         const [before] = lanCapture
           ? await tx

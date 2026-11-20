@@ -22,8 +22,6 @@ import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db, type DbTransaction } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
-import { z } from "zod";
-import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
@@ -44,6 +42,8 @@ import {
   softDeleteInterCompanyCounterpartTx,
   type DeleteVoucherInput,
 } from "./deleteSoftDeleteInterCompanyCounterpartTx";
+import { z } from "zod";
+import { emptyBody, emptyQuery, stringParam, validateRequest, type RequestSchemas } from "../../lib/validateRequest";
 export {
   softDeleteInterCompanyCounterpartTx,
   type DeleteVoucherInput,
@@ -162,7 +162,6 @@ export async function deleteVoucherTx(tx: DbTransaction, input: DeleteVoucherInp
   });
 }
 
-// The id is read with parseInt, so the path segment stays a string here.
 const deleteVoucherInput = {
   params: z.strictObject({ id: stringParam }),
   query: emptyQuery,
@@ -203,11 +202,13 @@ export function registerVoucherDeleteRoutes(app: Express) {
 
         // Wrap balance sync and deletion in a transaction
         const lanCapture = isPhase9LanPrimary();
-        // A PC's offline copy records Payment / Receipt deletes for the cloud and
-        // refuses every other delete (it could not be replayed).
+        // A PC's offline copy records Payment / Receipt deletes and POS sale
+        // cancellations for the cloud, and refuses every other delete (it could
+        // not be replayed).
         const pcEntry = pcLocalEntryMode();
         const isPaymentVoucher = voucher.voucherType === "Payment" || voucher.voucherType === "Receipt";
-        if (pcEntry && !isPaymentVoucher) {
+        const isSale = voucher.voucherType === "Sales";
+        if (pcEntry && !isPaymentVoucher && !isSale) {
           return res.status(423).json({ code: "OFFLINE_PC_LOCAL_DELETE_NOT_SUPPORTED" });
         }
         // Plan batch 4: Payment / Receipt deletes are recorded too (their drill gates them on the LAN).
@@ -232,10 +233,10 @@ export function registerVoucherDeleteRoutes(app: Express) {
           });
           // Factory LAN server during an outage: record the cancellation for
           // replay on the sale's stream, in this transaction.
-          if (lanCapture && voucher.voucherType === "Sales") {
+          if ((lanCapture || pcEntry) && isSale) {
             await capturePosSaleCancelOfflineTx(tx, { companyId, voucher, req });
           }
-          if (pcEntry) assertPcLocalCaptured(Boolean(offlinePayment && paymentBefore));
+          if (pcEntry) assertPcLocalCaptured(isSale || Boolean(offlinePayment && paymentBefore));
           if ((lanCapture || pcEntry) && offlinePayment && paymentBefore) {
             await capturePhase9PaymentDeleteTx(tx, {
               ...paymentFollowUpActor(req),

@@ -44,6 +44,12 @@ A failed request gets a 400:
 }
 ```
 
+Routes whose clients follow an established refusal contract can keep it:
+`validateRequest(schemas, { status: 422, code: "OFFLINE_BROWSER_REQUEST_INVALID" })`
+answers with that status and code, with the same `errors` list. The offline
+sync routes use this, because the browser and PC sync agents act on their 422
+codes.
+
 ## How it is enforced
 
 - `npm run audit:write-validation` reads `config/route-manifest.json` and lists

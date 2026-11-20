@@ -125,7 +125,7 @@ describe("PC offline transfer changes: in the cloud", () => {
     });
     const sent = body(EDIT_KIND, { envelope }, localEditId, operationId);
     const browser = await agent.post("/api/offline/browser-sync/operations").send(sent);
-    expect(browser.status).toBe(400); // the route's request schema has no envelope field
+    expect(browser.status).toBe(422);
 
     const first = await agent.post("/api/offline/pc-sync/operations").send(sent);
     expect(first.status, JSON.stringify(first.body)).toBe(200);

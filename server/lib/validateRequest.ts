@@ -48,7 +48,8 @@ export interface RequestValidationIssue {
 
 /** The body of every 400 this middleware sends. */
 export interface RequestValidationErrorBody {
-  code: "REQUEST_VALIDATION_FAILED";
+  /** "REQUEST_VALIDATION_FAILED", or the route's own code (see ValidateRequestOptions). */
+  code: string;
   message: string;
   errors: RequestValidationIssue[];
 }
@@ -155,7 +156,21 @@ export function alignKeyOrder(parsed: unknown, raw: unknown): unknown {
  * replaced by the parsed body, and all parsed parts are readable through
  * `validatedInput(req, schemas)`.
  */
-export function validateRequest<S extends RequestSchemas>(schemas: S): RequestHandler {
+/**
+ * For routes whose clients follow an established refusal contract (the offline
+ * sync protocols answer an invalid request with 422 and a route-specific code,
+ * and their agents act on that code). The response keeps the same shape, with
+ * the per-field `errors`; only the status and `code` change.
+ */
+export interface ValidateRequestOptions {
+  status?: 400 | 422;
+  code?: string;
+}
+
+export function validateRequest<S extends RequestSchemas>(
+  schemas: S,
+  options: ValidateRequestOptions = {}
+): RequestHandler {
   if (!LOCATIONS.some((location) => schemas[location])) {
     throw new Error("validateRequest: declare at least one of body, params or query.");
   }
@@ -184,11 +199,11 @@ export function validateRequest<S extends RequestSchemas>(schemas: S): RequestHa
     if (errors.length > 0) {
       // A fixed, translated message; the per-field detail is in `errors`.
       const body: RequestValidationErrorBody = {
-        code: "REQUEST_VALIDATION_FAILED",
+        code: options.code ?? "REQUEST_VALIDATION_FAILED",
         message: "Invalid request data",
         errors,
       };
-      res.status(400).json(body);
+      res.status(options.status ?? 400).json(body);
       return;
     }
 

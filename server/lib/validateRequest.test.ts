@@ -97,6 +97,19 @@ describe("validateRequest", () => {
     expect(JSON.stringify(res.body.body)).toBe('{"lines":[{"sku":"A"}],"amount":2,"name":"Bale"}');
   });
 
+  it("answers with a route's own status and code when asked, keeping the field errors", async () => {
+    const app = express();
+    app.use(express.json());
+    const schemas = { body: z.strictObject({ n: z.number() }) };
+    app.post("/x", validateRequest(schemas, { status: 422, code: "OFFLINE_BROWSER_REQUEST_INVALID" }), (_req, res) => {
+      res.json({ ok: true });
+    });
+    const res = await request(app).post("/x").send({ n: "1" });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("OFFLINE_BROWSER_REQUEST_INVALID");
+    expect(res.body.errors[0]).toMatchObject({ location: "body", path: "n" });
+  });
+
   it("is named validateRequest so the route manifest records it", () => {
     expect(validateRequest({ params: idParams }).name).toBe("validateRequest");
   });

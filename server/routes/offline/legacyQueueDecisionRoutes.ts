@@ -31,7 +31,7 @@ export function registerLegacyQueueDecisionRoutes(app: Express): void {
   app.post(
     "/api/offline/legacy-queue/decisions",
     requireAuth,
-    validateRequest(decisionInput),
+    validateRequest(decisionInput, { status: 400, code: "LEGACY_QUEUE_DECISION_INVALID" }),
     async (req: Request, res: Response) => {
       const parsed = decisionSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ code: "LEGACY_QUEUE_DECISION_INVALID" });

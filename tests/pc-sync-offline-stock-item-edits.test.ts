@@ -143,7 +143,7 @@ describe("PC offline stock item edits and deletes: in the cloud", () => {
     const envelope = phase9StockItemDeleteEnvelope({ ...actor(operationId), stockItemId: item.id, code: item.code });
     const sent = body(DELETE_KIND, envelope, item.id, operationId);
     const browser = await agent.post("/api/offline/browser-sync/operations").send(sent);
-    expect(browser.status).toBe(400); // the route's request schema has no envelope field
+    expect(browser.status).toBe(422);
     expect((await itemRow(item.id))?.deleted_at).toBeNull();
 
     const res = await agent.post("/api/offline/pc-sync/operations").send(sent);

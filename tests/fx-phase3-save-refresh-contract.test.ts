@@ -23,7 +23,7 @@ describe("Phase 3 rate-change propagation", () => {
   it("invalidates only after the server confirms its audited rate transaction", () => {
     const saved = exchangeRoutes.indexOf("const rate = await saveCompanyExchangeRate(");
     const invalidated = exchangeRoutes.indexOf("invalidateCompanyFxRateCaches(companyId);");
-    const answered = exchangeRoutes.indexOf("res.json(rate);");
+    const answered = exchangeRoutes.indexOf("res.json({ ...rate, fxRevaluation });");
     expect(saved).toBeGreaterThan(0);
     expect(invalidated).toBeGreaterThan(saved);
     expect(answered).toBeGreaterThan(invalidated);

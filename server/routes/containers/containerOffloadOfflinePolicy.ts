@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { DbTransaction } from "../../db";
 import { isPhase9LanPrimary } from "../../edge/phase9PosOutbox";
+import { pcLocalEntryMode } from "../../offline/pcLocal/pcCapture";
 import { capturePhase9ReceivingTx, phase9ReceivingLineDigestTx } from "../../edge/phase9ReceivingOutbox";
 import type { Phase9ReceivingOffloadInputs } from "../../edge/phase9ReceivingEnvelope.mjs";
 import { toMoney } from "../../lib/money";
@@ -43,7 +44,7 @@ export function offlineReceivingInputs(input: ContainerOffloadLifecycleInput): P
 }
 
 /**
- * On the LAN primary, the hook that records the committed offload (a first
+ * On the LAN primary (or a PC in entry mode), the hook that records the committed offload (a first
  * offload or an edit, with all its charges) inside the offload transaction;
  * elsewhere undefined. Owner policy (2026-11-02): offloads, edits, duties and
  * charges may all be recorded offline and are replayed in the cloud as entered.
@@ -52,7 +53,7 @@ export function offlineReceivingCapture(
   actor: { userId: string; username: string },
   input: ContainerOffloadLifecycleInput
 ): ((tx: DbTransaction, result: ContainerOffloadLifecycleResult) => Promise<void>) | undefined {
-  if (!isPhase9LanPrimary()) return undefined;
+  if (!isPhase9LanPrimary() && !pcLocalEntryMode()) return undefined;
   return async (tx, result) => {
     const offload = result.offload;
     await capturePhase9ReceivingTx(tx, {

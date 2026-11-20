@@ -3,7 +3,9 @@
  *
  * Live paths that could commit an unbalanced active voucher, and the automatic
  * FX revaluation that posted wrong journals:
- *   - POST /api/exchange-rates only saves the rate (no FX-REVAL journal);
+ *   - POST /api/exchange-rates saves the rate; the legacy "FX-REVAL-*" journal
+ *     that treated every cash account as CFA stays gone, and the exact
+ *     revaluation that replaced it only touches real foreign-currency balances;
  *   - PATCH /api/voucher-entries/:id re-validates the voucher's stored lines;
  *   - PATCH /api/vouchers/:id/optional refuses to activate unbalanced lines;
  *   - POST /api/vouchers/:id/finalize is Admin/Owner only, validated and audited;
@@ -16,6 +18,7 @@ import { and, eq, notLike } from "drizzle-orm";
 
 import * as schema from "../shared/schema";
 import { db, pool } from "../server/db";
+import { postErpVoucherTx } from "../server/services/accounting/erpVoucherPosting";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "w9ledger";
@@ -119,7 +122,7 @@ afterAll(async () => {
   closeTestServer();
 }, 30000);
 
-describe("POST /api/exchange-rates only saves the rate", () => {
+describe("POST /api/exchange-rates and FX revaluation", () => {
   it("posts no FX-REVAL journal when a rate changes with a cash balance on the books", async () => {
     // Before wave 9 this setup (a previous rate, a cash balance, a changed rate)
     // auto-posted an "FX-REVAL-*" Journal treating the cash account as CFA.
@@ -152,6 +155,67 @@ describe("POST /api/exchange-rates only saves the rate", () => {
     );
     expect(reval.rows[0].n).toBe(0);
   }, 30000);
+
+  it("revalues a CFA cash balance once per rate change and never moves its native amount", async () => {
+    const [cfaCash] = await db
+      .insert(schema.ledgerAccounts)
+      .values({
+        companyId: ctx.companyId,
+        code: `${TEST_PREFIX}-CFA-CASH`,
+        name: `${TEST_PREFIX} CFA cash`,
+        accountType: "Cash",
+      })
+      .returning();
+    // 6,400,000 CFA received at the day's 640 rate: 10,000.00 USD on the books.
+    await db.transaction((tx) =>
+      postErpVoucherTx(tx, {
+        companyId: ctx.companyId,
+        voucherType: "Journal",
+        voucherDate: today,
+        currency: "CFA",
+        exchangeRate: "640",
+        source: { type: "w9-fx-revaluation-fixture", id: `${TEST_PREFIX}-cfa-cash` },
+        lines: [
+          { ledgerAccountId: cfaCash.id, debit: "1", transaction: { currency: "CFA", amount: "6400000", rate: "640" } },
+          {
+            ledgerAccountId: ctx.salesAccountId,
+            credit: "1",
+            transaction: { currency: "CFA", amount: "6400000", rate: "640" },
+          },
+        ],
+      })
+    );
+    const cashBook = async () =>
+      (
+        await pool.query<{ usd: string; cfa: string }>(
+          `SELECT SUM(ve.debit_amount - ve.credit_amount)::numeric(20,2)::text AS usd,
+                  SUM(ve.transaction_debit_amount - ve.transaction_credit_amount)::numeric(20,2)::text AS cfa
+             FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+            WHERE ve.ledger_account_id = $1 AND v.deleted_at IS NULL AND v.optional = false`,
+          [cfaCash.id]
+        )
+      ).rows[0];
+    expect(await cashBook()).toEqual({ usd: "10000.00", cfa: "6400000.00" });
+
+    const save = (rate: string) =>
+      admin.post("/api/exchange-rates").send({ fromCurrency: "USD", toCurrency: "CFA", rate, effectiveDate: today });
+    const changed = await save("800");
+    expect(changed.status, changed.text).toBe(200);
+    expect(changed.body.fxRevaluation).toMatchObject({ status: "posted", netGainUsd: "-2000.00" });
+    expect(changed.body.fxRevaluation.lines).toEqual([
+      expect.objectContaining({ accountId: cfaCash.id, currency: "CFA", adjustmentUsd: "-2000.00" }),
+    ]);
+    // 6,400,000 CFA at 800 is 8,000.00 USD; the CFA amount itself is untouched.
+    expect(await cashBook()).toEqual({ usd: "8000.00", cfa: "6400000.00" });
+
+    const resaved = await save("800");
+    expect(resaved.body.fxRevaluation).toMatchObject({ status: "nothing_to_post", lines: [] });
+    expect(await cashBook()).toEqual({ usd: "8000.00", cfa: "6400000.00" });
+
+    const restored = await save("640");
+    expect(restored.body.fxRevaluation).toMatchObject({ status: "posted", netGainUsd: "2000.00" });
+    expect(await cashBook()).toEqual({ usd: "10000.00", cfa: "6400000.00" });
+  }, 60000);
 });
 
 describe("PATCH /api/voucher-entries/:id (live currency-aware handler)", () => {

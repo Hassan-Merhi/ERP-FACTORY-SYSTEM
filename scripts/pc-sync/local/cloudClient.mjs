@@ -15,7 +15,7 @@ export function createCloudClient(baseUrl, { fetch: doFetch = fetch, cookie = ""
   }
   let sessionCookie = cookie;
 
-  async function call(method, path, { query, body } = {}) {
+  async function call(method, path, { query, body, bytes, headers: extra } = {}) {
     if (!path.startsWith("/api/")) throw new PcSyncAgentError("PC_SYNC_CLOUD_PATH_INVALID");
     const url = new URL(path, origin);
     for (const [name, value] of Object.entries(query ?? {})) {
@@ -29,9 +29,11 @@ export function createCloudClient(baseUrl, { fetch: doFetch = fetch, cookie = ""
       headers: {
         accept: "application/json",
         ...(body ? { "content-type": "application/json" } : {}),
+        ...(bytes ? { "content-type": "application/octet-stream" } : {}),
+        ...(extra ?? {}),
         ...(sessionCookie ? { cookie: sessionCookie } : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: bytes ?? (body ? JSON.stringify(body) : undefined),
     });
     const setCookies = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
     if (setCookies.length) sessionCookie = setCookies.map((c) => c.split(";")[0]).join("; ");
@@ -47,6 +49,8 @@ export function createCloudClient(baseUrl, { fetch: doFetch = fetch, cookie = ""
   return {
     get: (path, query) => call("GET", path, { query }),
     post: (path, body) => call("POST", path, { body: body ?? {} }),
+    /** Sends raw bytes (a file) with the given headers. */
+    postBytes: (path, bytes, headers) => call("POST", path, { bytes, headers }),
     /** Signs in; returns the user id. */
     async login(username, password) {
       const res = await call("POST", "/api/auth/login", { body: { username, password } });

@@ -25,6 +25,9 @@ import { hashEvidence } from "../../edge/edgeSyncStageProtocol.mjs";
 import { phase9OverridableConflicts, validatePhase9Event } from "../../edge/phase9EventProtocol.mjs";
 import { PHASE9_PAYMENT_DELETE_KIND, PHASE9_PAYMENT_EDIT_KIND } from "../../edge/phase9PaymentEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_EDIT_KIND } from "../../edge/phase9StockItemEditEnvelope.mjs";
+import { PHASE9_POS_SALE_CANCEL_KIND, PHASE9_POS_SALE_EDIT_KIND } from "../../edge/phase9PosSaleEnvelope.mjs";
+import { PHASE9_RECEIVING_KIND } from "../../edge/phase9ReceivingEnvelope.mjs";
+import { PHASE9_ATTACHMENT_KIND, PHASE9_ATTACHMENT_UPDATE_KIND } from "../../edge/phase9AttachmentEnvelope.mjs";
 import { PHASE9_STOCK_ITEM_DELETE_KIND } from "../../edge/phase9StockItemLifecycleEnvelope.mjs";
 import {
   PHASE9_STOCK_TRANSFER_EDIT_KIND,
@@ -115,6 +118,12 @@ function refusalFrom(error: unknown): BrowserOperationRefusal {
 }
 
 /** Build and validate the evidence envelope; refusals are the browser's input being wrong. */
+/** Handler refusals that no retry can fix (the entry is refused, not retried). */
+const PERMANENT_APPLY_REFUSALS: ReadonlySet<string> = new Set([
+  "PHASE9_ATTACHMENT_FILE_NOT_STAGED",
+  "PHASE9_ATTACHMENT_FILE_SIZE_MISMATCH",
+]);
+
 /** Kinds a PC may deliver as a finished envelope, and their stream. */
 export const PC_ENVELOPE_KINDS: Readonly<Record<string, string>> = Object.freeze({
   [PHASE9_PAYMENT_EDIT_KIND]: "payments",
@@ -125,6 +134,11 @@ export const PC_ENVELOPE_KINDS: Readonly<Record<string, string>> = Object.freeze
   [PHASE9_STOCK_TRANSFER_FINALIZE_KIND]: "stock",
   [PHASE9_STOCK_TRANSFER_REVISION_KIND]: "stock",
   [PHASE9_STOCK_TRANSFER_REVISION_REVIEW_KIND]: "stock",
+  [PHASE9_RECEIVING_KIND]: "receiving",
+  [PHASE9_POS_SALE_EDIT_KIND]: "pos",
+  [PHASE9_POS_SALE_CANCEL_KIND]: "pos",
+  [PHASE9_ATTACHMENT_KIND]: "attachments",
+  [PHASE9_ATTACHMENT_UPDATE_KIND]: "attachments",
 });
 
 function prepareEnvelopeOperation(actor: BrowserActor, request: BrowserOperationRequest): PreparedOperation {
@@ -432,6 +446,11 @@ export async function applyBrowserOperation(
       };
     }
     if (error instanceof Phase9StockItemNotYetSynced) return { status: "waiting", code: error.message };
+    // A PC sends a file's bytes before its record, so these cannot succeed on a
+    // retry: refuse the entry instead of answering "try again" forever.
+    if (error instanceof Error && PERMANENT_APPLY_REFUSALS.has(error.message)) {
+      return { status: "invalid", code: error.message };
+    }
     throw error;
   }
 }
