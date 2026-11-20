@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { bankAccounts, ledgerAccounts } from "@shared/schema";
 import { db, type DbTransaction } from "../../db";
 import { getRetailAccountingSettings } from "./retailAccountingSettingsService";
+import { ledgerPostingLeafCondition } from "../accounting/postableLedgerAccountPolicy";
 
 /** Only money-holding accounts can receive POS receipts or pay refunds. */
 export interface RetailMoneyAccountSelection {
@@ -22,6 +23,7 @@ export async function listRetailPaymentAccounts(companyId: number) {
       eq(ledgerAccounts.active, true),
       isNull(ledgerAccounts.deletedAt),
       inArray(ledgerAccounts.accountType, ["Cash", "Bank"]),
+      ledgerPostingLeafCondition(companyId),
     )).orderBy(ledgerAccounts.name),
     db.select({
       id: bankAccounts.id, code: bankAccounts.code, name: bankAccounts.name,
