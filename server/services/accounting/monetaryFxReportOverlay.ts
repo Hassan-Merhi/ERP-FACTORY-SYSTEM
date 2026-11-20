@@ -123,9 +123,35 @@ export function applyVerifiedMonetaryFxOverlay(
       continue;
     }
     if (options.showFxAsRows) {
-      // Delta is versus the *visible* posted USD book row, which may differ
-      // by a few cents from the 6dp base history after voucher rounding.
-      const visibleDifference = money(translated.minus(signedOld));
+      // Net Position's source cash row can be built from six-decimal base
+      // amounts, while the ledger balance engine uses posted debit/credit
+      // cents. After an actual FX revaluation, the translated balance can
+      // ALREADY equal posted ledger cents, even though the source book row
+      // differs by 1 cent. That difference is not another unrealized FX gain.
+      // In this narrowly reconciled case move the cent to its actual cash
+      // account instead of inventing a synthetic FX Gain/Loss row.
+      const postedBook = new Decimal(val.bookClosingUsd);
+      const translatedCents = translated.toDecimalPlaces(2);
+      const postedCents = postedBook.toDecimalPlaces(2);
+      let displayedBook = signedOld;
+      if (translatedCents.eq(postedCents) && !signedOld.eq(postedCents) &&
+          postedCents.abs().gt(0) &&
+          (postedCents.isPositive() === signedOld.isPositive())) {
+        const newValue = money(postedCents.abs());
+        const oldValue = oldRow.value;
+        const displayDelta = new Decimal(newValue).minus(oldValue);
+        oldRow.value = newValue;
+        totals[oldSide] = totals[oldSide].plus(displayDelta);
+        moveBreakdown(oldSide, oldRow.category, displayDelta);
+        if (val.accountKind !== "customer") {
+          if (oldSide === "forUs") ledgerForUsDelta = ledgerForUsDelta.plus(displayDelta);
+          else ledgerOnUsDelta = ledgerOnUsDelta.plus(displayDelta);
+        }
+        displayedBook = postedCents;
+      }
+      // Remaining FX is only the translation difference after posted-book
+      // reconciliation, never the six-decimal-vs-two-decimal book variance.
+      const visibleDifference = money(translated.minus(displayedBook));
       if (Math.abs(visibleDifference) >= 0.005) {
         const gain = visibleDifference > 0;
         const bucket = gain ? fxAccountRows.gain : fxAccountRows.loss;
