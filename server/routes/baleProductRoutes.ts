@@ -387,7 +387,7 @@ export function registerBaleProductRoutes(app: Express) {
           const code = (row.code || row.Code || row.product_code || articleCode) as string;
           const description = (row.description || row.Description || "") as string;
           const weightPerBaleKg = row.weightPerBaleKg || row.weight_per_bale_kg || row.weight || undefined;
-          const active = row.active === undefined ? true : Boolean(row.active);
+          const active = parseActiveCell(row.active);
 
           const [existing] = await tx
             .select()
@@ -402,7 +402,7 @@ export function registerBaleProductRoutes(app: Express) {
                 description: description || existing.description,
                 weightPerBaleKg: weightPerBaleKg ? String(weightPerBaleKg) : existing.weightPerBaleKg,
                 categoryId: categoryId ?? existing.categoryId,
-                active,
+                active: active ?? existing.active,
                 updatedAt: sql`now()`,
               })
               .where(eq(baleProducts.id, existing.id));
@@ -416,7 +416,7 @@ export function registerBaleProductRoutes(app: Express) {
               description,
               weightPerBaleKg: weightPerBaleKg ? String(weightPerBaleKg) : undefined,
               categoryId,
-              active,
+              active: active ?? true,
             });
             created++;
           }
@@ -429,4 +429,19 @@ export function registerBaleProductRoutes(app: Express) {
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });
+}
+
+const INACTIVE_CELL_VALUES = new Set(["false", "no", "n", "0", "inactive"]);
+
+/**
+ * An imported "active" cell: blank means "not given" (undefined) so the existing
+ * or default value stands; only an explicit false-like value deactivates.
+ */
+function parseActiveCell(value: unknown): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const text = String(value).trim().toLowerCase();
+  if (!text) return undefined;
+  return !INACTIVE_CELL_VALUES.has(text);
 }

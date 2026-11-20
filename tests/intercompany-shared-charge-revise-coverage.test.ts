@@ -16,6 +16,9 @@ import {
   type ReviseSharedChargeInput,
 } from "../server/services/intercompany/sharedChargeSync";
 import { withGrantedInvoiceScope } from "../server/services/intercompany/sharedChargeSyncHelpers";
+import { applyCostDeltasTx } from "../server/services/intercompany/tradeSyncApplyCostDeltasTx";
+import { IntercompanyEditError } from "../server/services/intercompany/tradeSyncLoadTradeTx";
+import { MoneyDecimal } from "../server/lib/money";
 import { runWithCompanyRequestRuntimeContext } from "../server/services/security/companyRequestRuntimeContext";
 
 const world = <T>(work: (w: IntercompanyTradeWorld) => Promise<T>) =>
@@ -227,22 +230,62 @@ describe("reviseSharedCharge refusals", () => {
 });
 
 describe("charge evidence on containers imported without confirmed charges", () => {
-  // Known defect (pinned): applyCostDeltasTx marks the import row charges_confirmed
-  // without supplying the evidence reference the CHECK constraint requires, so a
-  // shared invoice on such a container fails inside PostgreSQL and writes nothing.
-  it("fails the confirmation with the evidence constraint and leaves no invoice", () =>
+  it("confirms the invoice and records its evidence on the import row", () =>
     world(async (w) => {
       const a = await w.trade("A");
-      const error = await confirmSharedCharge(confirmInput(w, [a.tradeId]), w.identity()).then(
-        () => null,
-        (e: { cause?: { constraint?: string } }) => e
+      const result = await confirmSharedCharge(confirmInput(w, [a.tradeId]), w.identity());
+      expect(result.allocations).toHaveLength(1);
+      const rows = await w.q(
+        `SELECT charges_confirmed, charge_evidence_reference FROM intercompany_import_batch_containers WHERE trade_id = $1`,
+        [a.tradeId]
       );
-      expect(error?.cause?.constraint).toBe("intercompany_import_confirmed_charge_evidence");
-      const invoices = await w.q(`SELECT id FROM intercompany_shared_charge_invoices WHERE external_invoice_key = $1`, [
-        `INV-${w.tag}`,
-      ]);
-      expect(invoices).toEqual([]);
+      expect(rows).toEqual([{ charges_confirmed: true, charge_evidence_reference: "Carrier invoice 77" }]);
     }));
+
+  it("keeps the import's own charge evidence when it already has one", () =>
+    world(async (w) => {
+      const a = await w.trade("A", "OTW", undefined, "PO workbook");
+      await confirmSharedCharge(confirmInput(w, [a.tradeId]), w.identity());
+      const rows = await w.q(
+        `SELECT charge_evidence_reference FROM intercompany_import_batch_containers WHERE trade_id = $1`,
+        [a.tradeId]
+      );
+      expect(rows[0].charge_evidence_reference).toBe("PO workbook");
+    }));
+
+  it("refuses a charge change with no evidence at all before writing anything", async () => {
+    const data = {
+      trade: { id: -1 },
+      policy: {},
+      source: [],
+      destination: {
+        po: {
+          itemsTotal: "100.00",
+          freight: "0",
+          surcharge: "0",
+          fumigation: "0",
+          documentCharges: "0",
+          discount: "0",
+          otherCharges: "0",
+        },
+      },
+      imported: { chargeEvidenceReference: null },
+    } as unknown as Parameters<typeof applyCostDeltasTx>[1];
+    const tx = {} as Parameters<typeof applyCostDeltasTx>[0];
+    const error = await applyCostDeltasTx(tx, data, {
+      revisionId: 1,
+      postingDate: "2026-06-10",
+      reason: "x",
+      actorUserId: "u",
+      chargeEvidenceReference: "  ",
+      poDeltas: [{ poId: 1, goods: new MoneyDecimal(0), charge: new MoneyDecimal(5), chargeField: "freight" }],
+    }).then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(error).toBeInstanceOf(IntercompanyEditError);
+    expect(error).toMatchObject({ code: "IC_CHARGE_EVIDENCE_REQUIRED", status: 422 });
+  });
 });
 
 describe("reviseSharedCharge reallocation", () => {

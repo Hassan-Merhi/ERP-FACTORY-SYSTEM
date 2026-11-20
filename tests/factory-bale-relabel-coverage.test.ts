@@ -84,8 +84,8 @@ describe("bale relabel validation", () => {
       const res = await w.agent.post(VALIDATE).send({ rows: [{ currentRef: "FOREIGN-1" }] });
       expect(res.body.results[0]).toMatchObject({ valid: false, error: "Not found in inventory" });
       const apply = await w.agent.post(APPLY).send({ rows: [{ currentRef: "FOREIGN-1" }] });
-      expect(apply.status).toBe(500);
-      expect(apply.body.message).toContain("Bales not found: FOREIGN-1");
+      expect(apply.status).toBe(404);
+      expect(apply.body).toEqual({ message: "Bales not found: FOREIGN-1", code: "BALE_RELABEL_NOT_FOUND" });
       const [foreign] = await w.q(`SELECT reference_number FROM factory_bales WHERE company_id = $1`, [other]);
       expect(foreign.reference_number).toBe("FOREIGN-1");
     });
@@ -103,7 +103,8 @@ describe("bale relabel apply", () => {
       const missing = await w.agent.post(APPLY).send({
         rows: ["OLD-0001", "M1", "M2", "M3", "M4", "M5", "M6"].map((currentRef) => ({ currentRef })),
       });
-      expect(missing.status).toBe(500);
+      expect(missing.status).toBe(404);
+      expect(missing.body.code).toBe("BALE_RELABEL_NOT_FOUND");
       expect(missing.body.message).toBe("Bales not found: M1, M2, M3, M4, M5 +1 more");
       expect(await refs(w)).toEqual([{ reference_number: "OLD-0001" }]);
       expect(await auditSessions(w)).toEqual([]);
@@ -148,8 +149,15 @@ describe("bale relabel apply", () => {
       });
 
       const relabelAgain = await w.agent.post(APPLY).send({ rows: [{ currentRef: "OLD-0001" }] });
-      expect(relabelAgain.status).toBe(500);
-      expect(relabelAgain.body.message).toContain("Bales not found: OLD-0001");
+      expect(relabelAgain.status).toBe(409);
+      expect(relabelAgain.body).toEqual({
+        message: "Bales already relabelled: OLD-0001",
+        code: "BALE_RELABEL_ALREADY_RELABELLED",
+      });
+      // A batch mixing a replaced reference with an unknown one is reported as not found.
+      const mixed = await w.agent.post(APPLY).send({ rows: [{ currentRef: "OLD-0001" }, { currentRef: "NOPE-1" }] });
+      expect(mixed.status).toBe(404);
+      expect(mixed.body.message).toBe("Bales not found: NOPE-1");
 
       const second = await w.agent.post(APPLY).send({ rows: [{ currentRef: "REF300001" }] });
       expect(second.body.items[0].newRef).toBe("REF300002");
@@ -177,17 +185,19 @@ describe("bale relabel apply", () => {
     });
   });
 
-  it("records a duplicated upload row twice although only one bale is relabelled (current behaviour)", async () => {
+  it("refuses a reference repeated in one upload, as validate does, and changes nothing", async () => {
     await withFactoryWorld(async (w) => {
       await bale(w, "OLD-0001");
-      const res = await w.agent.post(APPLY).send({ rows: [{ currentRef: "OLD-0001" }, { currentRef: "OLD-0001" }] });
-      expect(res.status).toBe(200);
-      expect(res.body.items.map((i: { newRef: string }) => i.newRef)).toEqual(["REF300000", "REF300001"]);
-      expect(await refs(w)).toEqual([{ reference_number: "REF300000" }]);
-      const items = await w.q(`SELECT new_reference_code FROM bale_recode_items WHERE session_id = $1`, [
-        res.body.sessionId,
-      ]);
-      expect(items).toHaveLength(2);
+      await bale(w, "OLD-0002");
+      const res = await w.agent.post(APPLY).send({
+        rows: [{ currentRef: "OLD-0001" }, { currentRef: "OLD-0002" }, { currentRef: " OLD-0001 " }],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ message: "Duplicate in upload: OLD-0001", code: "BALE_RELABEL_DUPLICATE_REF" });
+      expect(await refs(w)).toEqual([{ reference_number: "OLD-0001" }, { reference_number: "OLD-0002" }]);
+      expect(await auditSessions(w)).toEqual([]);
+      const seq = await w.q(`SELECT next_number FROM factory_bale_sequences WHERE company_id = $1`, [w.companyId]);
+      expect(seq).toEqual([]);
     });
   });
 

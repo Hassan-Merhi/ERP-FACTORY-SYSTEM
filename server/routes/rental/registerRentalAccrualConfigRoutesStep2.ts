@@ -10,7 +10,7 @@ import { logger } from "../../lib/logger";
 import { ensureMonthlyForCompany, getCompanyId, postRentAccrualForCompany, type RentalModule } from "./shared";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import {
   ledgerAccounts,
   propertyContracts,
@@ -417,7 +417,7 @@ export function registerRentalAccrualConfigRoutesStep2(
         { unpaidAccruedRows: allUnpaidAccruedRows }
       );
 
-      const voucherIdsToDelete = [
+      const candidateVoucherIds = [
         ...new Set(
           allUnpaidAccruedRows
             .map((r) => r.accrualVoucherId)
@@ -425,7 +425,34 @@ export function registerRentalAccrualConfigRoutesStep2(
         ),
       ];
 
-      logger.info(`[re-accrue] vouchersToDelete=${JSON.stringify(voucherIdsToDelete)}`);
+      // One accrual voucher can cover several months. Retire it only when every
+      // ledger row that references it is one of these unpaid rows; a voucher still
+      // referenced by a paid month (or by any row outside this reset) is kept, and
+      // its unpaid months stay accrued by it.
+      const sharedVoucherRows =
+        candidateVoucherIds.length > 0
+          ? await db
+              .selectDistinct({ accrualVoucherId: propertyMonthlyLedger.accrualVoucherId })
+              .from(propertyMonthlyLedger)
+              .where(
+                and(
+                  inArray(propertyMonthlyLedger.accrualVoucherId, candidateVoucherIds),
+                  notInArray(
+                    propertyMonthlyLedger.id,
+                    allUnpaidAccruedRows.map((r) => r.id)
+                  )
+                )
+              )
+          : [];
+      const keptVoucherIds = new Set(sharedVoucherRows.map((r) => r.accrualVoucherId));
+      const voucherIdsToDelete = candidateVoucherIds.filter((id) => !keptVoucherIds.has(id));
+      const rowIdsToReset = allUnpaidAccruedRows
+        .filter((r) => r.accrualVoucherId != null && voucherIdsToDelete.includes(r.accrualVoucherId))
+        .map((r) => r.id);
+
+      logger.info(
+        `[re-accrue] vouchersToDelete=${JSON.stringify(voucherIdsToDelete)} kept=${JSON.stringify([...keptVoucherIds])}`
+      );
 
       let reset = 0;
       if (voucherIdsToDelete.length > 0) {
@@ -442,12 +469,7 @@ export function registerRentalAccrualConfigRoutesStep2(
           await tx
             .update(propertyMonthlyLedger)
             .set({ accrualVoucherId: null })
-            .where(
-              inArray(
-                propertyMonthlyLedger.id,
-                allUnpaidAccruedRows.map((r) => r.id)
-              )
-            );
+            .where(inArray(propertyMonthlyLedger.id, rowIdsToReset));
         });
         reset = voucherIdsToDelete.length;
       }

@@ -17,6 +17,8 @@ export async function applyCostDeltasTx(
     postingDate: string;
     reason: string;
     actorUserId: string;
+    /** Invoice evidence recorded on the import row when a charge change confirms its charges. */
+    chargeEvidenceReference?: string | null;
     poDeltas: {
       poId: number;
       goods: Decimal;
@@ -27,13 +29,21 @@ export async function applyCostDeltasTx(
 ) {
   const p = data.policy,
     original = new Map(data.source.map((g) => [g.po.id, g.po]));
-  const netted = await isNettedIntercompanyTradeTx(tx, data.trade.id);
   const goodsDelta = sumMoney(input.poDeltas.map((x) => x.goods));
   const chargesDelta = sumMoney(input.poDeltas.map((x) => x.charge));
   const totalDelta = goodsDelta.plus(chargesDelta);
   const before = fullPoCost(data.destination.po);
   const after = before.plus(totalDelta);
   if (!after.gt(0)) rejectEdit("Confirmed landed cost must stay positive");
+  // Confirmed charges must carry evidence (CHECK intercompany_import_confirmed_charge_evidence):
+  // keep the import's own evidence, otherwise record the invoice evidence of this revision.
+  const chargeEvidence = chargesDelta.isZero()
+    ? null
+    : (validEvidence(data.imported.chargeEvidenceReference) ?? validEvidence(input.chargeEvidenceReference));
+  if (!chargesDelta.isZero() && !chargeEvidence) {
+    rejectEdit("Confirmed charges need an invoice evidence reference", "IC_CHARGE_EVIDENCE_REQUIRED", 422);
+  }
+  const netted = await isNettedIntercompanyTradeTx(tx, data.trade.id);
   const vouchers: number[] = [];
   for (const change of input.poDeltas) {
     if (change.goods.isZero() && change.charge.isZero()) continue;
@@ -175,9 +185,14 @@ export async function applyCostDeltasTx(
       .update(intercompanyImportBatchContainers)
       .set({
         confirmedLandedCost: after.toFixed(2),
-        ...(!chargesDelta.isZero() ? { chargesConfirmed: true } : {}),
+        ...(!chargesDelta.isZero() ? { chargesConfirmed: true, chargeEvidenceReference: chargeEvidence } : {}),
       })
       .where(eq(intercompanyImportBatchContainers.id, data.imported.id));
   }
   return { amountAfter: after.toFixed(2), vouchers };
+}
+
+function validEvidence(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length >= 3 ? trimmed : null;
 }

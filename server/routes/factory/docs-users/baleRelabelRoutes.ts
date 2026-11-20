@@ -17,6 +17,20 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 
+/** A refused apply: rolled back and answered with this status and code. */
+class BaleRelabelRefusal extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+const listRefs = (refs: string[]) =>
+  `${refs.slice(0, 5).join(", ")}${refs.length > 5 ? ` +${refs.length - 5} more` : ""}`;
+
 export function registerFactoryBaleRelabelRoutes(app: Express) {
   // ─────────────────────────────────────────────────────
   // BALE RELABELING  (validate → apply → audit history)
@@ -100,10 +114,18 @@ export function registerFactoryBaleRelabelRoutes(app: Express) {
 
       const validRows = rows.filter((r) => String(r.currentRef || "").trim());
       if (validRows.length === 0) return res.status(400).json({ message: "No valid rows to apply" });
+      const refCodes: string[] = validRows.map((r) => String(r.currentRef).trim());
+
+      // Same rule as validate: a reference may appear only once per upload.
+      const dupes = [...new Set(refCodes.filter((ref, i) => refCodes.indexOf(ref) !== i))];
+      if (dupes.length > 0) {
+        return res
+          .status(400)
+          .json({ message: `Duplicate in upload: ${listRefs(dupes)}`, code: "BALE_RELABEL_DUPLICATE_REF" });
+      }
 
       const result = await db.transaction(async (tx) => {
         // 1. Fetch bales to recode
-        const refCodes = validRows.map((r) => String(r.currentRef).trim());
         const baleRows = await tx
           .select({
             id: factoryBales.id,
@@ -119,8 +141,23 @@ export function registerFactoryBaleRelabelRoutes(app: Express) {
         const baleMap = new Map(baleRows.map((b) => [b.referenceNumber, b]));
         const notFound = refCodes.filter((r) => !baleMap.has(r));
         if (notFound.length > 0) {
-          throw new Error(
-            `Bales not found: ${notFound.slice(0, 5).join(", ")}${notFound.length > 5 ? ` +${notFound.length - 5} more` : ""}`
+          // A reference that an earlier relabel of this company replaced is a conflict, not a missing bale.
+          const relabelled = await tx
+            .selectDistinct({ ref: baleRecodeItems.oldReferenceCode })
+            .from(baleRecodeItems)
+            .innerJoin(baleRecodeSessions, eq(baleRecodeSessions.id, baleRecodeItems.sessionId))
+            .where(
+              and(eq(baleRecodeSessions.companyId, companyId), inArray(baleRecodeItems.oldReferenceCode, notFound))
+            );
+          const relabelledRefs = new Set(relabelled.map((r) => r.ref));
+          const missing = notFound.filter((r) => !relabelledRefs.has(r));
+          if (missing.length > 0) {
+            throw new BaleRelabelRefusal(404, "BALE_RELABEL_NOT_FOUND", `Bales not found: ${listRefs(missing)}`);
+          }
+          throw new BaleRelabelRefusal(
+            409,
+            "BALE_RELABEL_ALREADY_RELABELLED",
+            `Bales already relabelled: ${listRefs(notFound)}`
           );
         }
 
@@ -220,6 +257,9 @@ export function registerFactoryBaleRelabelRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (error instanceof BaleRelabelRefusal) {
+        return res.status(error.status).json({ message: error.message, code: error.code });
+      }
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

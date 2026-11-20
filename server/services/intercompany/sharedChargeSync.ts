@@ -178,6 +178,7 @@ export async function reviseSharedCharge(input: ReviseSharedChargeInput, identit
             postingDate: input.postingDate,
             actorUserId: identity.actorUserId,
             reason: input.reason,
+            chargeEvidenceReference: invoice.evidenceReference,
             poDeltas,
           });
           const releasedCredit = await releaseEditOverallocationTx(tx, {

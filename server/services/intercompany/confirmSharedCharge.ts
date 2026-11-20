@@ -142,6 +142,7 @@ export async function confirmSharedCharge(input: ConfirmSharedChargeInput, ident
             postingDate: input.postingDate,
             actorUserId: identity.actorUserId,
             reason: input.reason,
+            chargeEvidenceReference: input.evidenceReference,
             poDeltas: pos.map((p) => ({
               poId: p.poId,
               goods: new MoneyDecimal(0),

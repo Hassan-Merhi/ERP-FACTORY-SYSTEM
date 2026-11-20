@@ -6,7 +6,8 @@
  * Pinned: no shop contract is a no-op; unpaid accruals are retired and
  * re-posted; a payment made before its accrual gets exactly one phantom
  * correction (never a second one); AP-debiting payments and AP-CLEAR journals
- * are left alone; a deleted accrual link is refused for review.
+ * are left alone; a combined accrual voucher still referenced by a paid month
+ * is never retired; a deleted accrual link is refused for review.
  */
 import { describe, expect, it } from "vitest";
 
@@ -181,11 +182,9 @@ describe("rental re-accrue", () => {
     });
   });
 
-  // Known defect (documented, not fixed here): one accrual voucher covers every
-  // month of a run, but the unpaid-month reset retires that whole voucher while
-  // paid months still reference it. The paid months lose their accrual and the
-  // next re-accrue refuses with a dangling-link 409.
-  it("retires a combined accrual voucher that paid months still reference", async () => {
+  // One accrual voucher covers every month of a run. While a paid month still
+  // references it, the unpaid-month reset must not retire it.
+  it("keeps a combined accrual voucher that a paid month references, and re-accrues again", async () => {
     await withFactoryWorld(async (w) => {
       const contract = await shopContract(w);
       const { ap } = await rentAccounts(w);
@@ -197,20 +196,31 @@ describe("rental re-accrue", () => {
       );
       const accrued = (await rows(w, contract.contractId)).filter((r) => r.accrual_voucher_id != null);
       expect(accrued.length).toBeGreaterThanOrEqual(2);
+      const voucherId = accrued[0].accrual_voucher_id;
+      // Paid and unpaid months share the one combined voucher.
+      expect(new Set(accrued.map((r) => r.accrual_voucher_id))).toEqual(new Set([voucherId]));
       await pay(w, contract, accrued[0], ap, cash, `${w.tag}-P1`);
+      const vouchersBefore = await w.q(`SELECT id FROM vouchers WHERE company_id = $1 ORDER BY id`, [w.companyId]);
 
-      const reset = await w.agent.post(URL).send({});
-      expect(reset.status).toBe(200);
-      expect(reset.body.reset).toBe(1);
-      const [paid] = await w.q(
-        `SELECT v.deleted_at FROM property_monthly_ledger ml JOIN vouchers v ON v.id = ml.accrual_voucher_id WHERE ml.id = $1`,
-        [accrued[0].id]
+      const first = await w.agent.post(URL).send({});
+      expect(first.status, JSON.stringify(first.body)).toBe(200);
+      expect(first.body).toMatchObject({ reset: 0, accrued: 0 });
+      const [voucher] = await w.q(`SELECT deleted_at FROM vouchers WHERE id = $1`, [voucherId]);
+      expect(voucher.deleted_at).toBeNull();
+      // Paid and unpaid months both keep their accrual; nothing is posted twice.
+      const after = await rows(w, contract.contractId);
+      for (const row of accrued) {
+        expect(after.find((r) => r.id === row.id)?.accrual_voucher_id).toBe(voucherId);
+      }
+      expect(await w.q(`SELECT id FROM vouchers WHERE company_id = $1 ORDER BY id`, [w.companyId])).toEqual(
+        vouchersBefore
       );
-      expect(paid.deleted_at).not.toBeNull();
 
-      const blocked = await w.agent.post(URL).send({});
-      expect(blocked.status).toBe(409);
-      expect(blocked.body.code).toBe("RENTAL_DANGLING_ACCRUAL_REQUIRES_REVIEW");
+      const second = await w.agent.post(URL).send({});
+      expect(second.status, JSON.stringify(second.body)).toBe(200);
+      expect(second.body).toMatchObject({ reset: 0, accrued: 0 });
+      const [still] = await w.q(`SELECT deleted_at FROM vouchers WHERE id = $1`, [voucherId]);
+      expect(still.deleted_at).toBeNull();
     });
   });
 

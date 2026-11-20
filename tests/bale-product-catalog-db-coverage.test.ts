@@ -202,9 +202,42 @@ describe("bale product Excel import", () => {
       expect(res.body).toEqual({ success: true, created: 2, updated: 1, categoriesCreated: 1, count: 3 });
       expect(await products(w)).toEqual([
         { article_code: "ART-NEW", code: "NEW-CODE", name: "Brand new", kg: "45", active: false, category: "Fresh" },
-        // A blank cell in a present "active" column reads as inactive.
-        { article_code: "ART-TWO", code: "ART-TWO", name: "Second", kg: "30", active: false, category: "Fresh" },
+        // A blank cell in a present "active" column keeps the default (active).
+        { article_code: "ART-TWO", code: "ART-TWO", name: "Second", kg: "30", active: true, category: "Fresh" },
         { article_code: "HMD03000", code: "OLD", name: "Updated name", kg: "40", active: true, category: "Existing" },
+      ]);
+    });
+  });
+
+  it("keeps an existing product's active flag on a blank cell and deactivates only on false-like values", async () => {
+    await withFactoryWorld(async (w) => {
+      await w.q(
+        `INSERT INTO bale_products (company_id, code, article_code, name, active)
+         VALUES ($1, 'A1', 'ART-A1', 'Was inactive', false), ($1, 'A2', 'ART-A2', 'Was active', true),
+                ($1, 'A3', 'ART-A3', 'Says no', true), ($1, 'A4', 'ART-A4', 'Says yes', false)`,
+        [w.companyId]
+      );
+      const file = await xlsx([
+        { articleCode: "ART-A1", name: "Was inactive", active: "  " },
+        { articleCode: "ART-A2", name: "Was active", active: null },
+        { articleCode: "ART-A3", name: "Says no", active: "No" },
+        { articleCode: "ART-A4", name: "Says yes", active: "yes" },
+        { articleCode: "ART-A5", name: "New false", active: "FALSE" },
+        { articleCode: "ART-A6", name: "New bool", active: false },
+        { articleCode: "ART-A7", name: "New blank", active: "" },
+      ]);
+      const res = await w.agent.post("/api/bale-products/import-excel").attach("file", file, "products.xlsx");
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ created: 3, updated: 4 });
+      const active = (await products(w)).map((p) => [p.article_code, p.active]);
+      expect(active).toEqual([
+        ["ART-A1", false],
+        ["ART-A2", true],
+        ["ART-A3", false],
+        ["ART-A4", true],
+        ["ART-A5", false],
+        ["ART-A6", false],
+        ["ART-A7", true],
       ]);
     });
   });
