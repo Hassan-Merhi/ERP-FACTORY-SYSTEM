@@ -3,7 +3,8 @@
  * and the new stored formats; upsertStatusSheet sums the DIFF / WEIGHT
  * columns of the PRODUCTION, STOCK IN and IO sheets, inserts STATUS first
  * (shifting the other sheets) or updates it in place while keeping edited
- * BEFORE values. Runs inside one rolled-back transaction.
+ * BEFORE values. Sheet names and BEFORE labels match by whole word, so "IO"
+ * never reads "PRODUCTION". Runs inside one rolled-back transaction.
  */
 import type { PoolClient } from "pg";
 import { describe, expect, it } from "vitest";
@@ -90,13 +91,13 @@ describe("upsertStatusSheet", () => {
       const [row] = await status(client, companyId);
       expect(row.order_index).toBe(0);
       expect(row.columns).toEqual(["BEFORE", "DIFF", "AFTER"]);
-      // Pinned: findSheet matches by substring, so "IO" finds "Production 2026"
-      // (prodUCTIOn) before the real IO sheet and its WEIGHT total (12) is lost.
+      // Sheet names match by whole word: "IO" reads the IO sheet, not
+      // "Production 2026" (prodUCTIOn).
       expect(row.rows.map((r: { cells: number[] }) => r.cells)).toEqual([
         [-183221, -800, -184021],
         [-46020, -50, -46070],
-        [-69011, 0, -69011],
-        [-298252, -850, -299102],
+        [-69011, 12, -68999],
+        [-298252, -838, -299090],
       ]);
       const shifted = await client.query(`SELECT order_index FROM factory_sheets WHERE id = $1`, [other]);
       expect(shifted.rows[0].order_index).toBe(1);
@@ -127,9 +128,42 @@ describe("upsertStatusSheet", () => {
       const [row] = await status(client, companyId);
       expect(row.id).toBe(id);
       expect(row.order_index).toBe(0);
-      // Pinned: the IO BEFORE lookup also matches by substring and takes the
-      // "PRODUCTION ..." row's edited BEFORE (-1000) instead of its default.
-      expect(row.rows.map((r: { cells: number[] }) => r.cells[0])).toEqual([-1000, -46020, -1000, -48020]);
+      // The IO BEFORE lookup no longer takes the "PRODUCTION ..." row's edited
+      // value; IO has no row of its own, so it keeps its default.
+      expect(row.rows.map((r: { cells: number[] }) => r.cells[0])).toEqual([-1000, -46020, -69011, -116031]);
+    });
+  });
+
+  it("reads IO and PRODUCTION sheets and BEFORE rows separately in either order", async () => {
+    await withRolledBackPool(async (client) => {
+      const companyId = await company(client);
+      const id = (
+        await client.query<{ id: number }>(
+          `INSERT INTO factory_sheets (company_id, name) VALUES ($1, 'STATUS') RETURNING id`,
+          [companyId]
+        )
+      ).rows[0].id;
+      const statusSheet = (rows: { label: string; cells: number[] }[]) => ({
+        id,
+        name: "STATUS",
+        columns: ["BEFORE", "DIFF", "AFTER"],
+        rows,
+      });
+      const io = { name: "io", columns: ["WEIGHT"], rows: [{ label: "w", cells: [7] }] };
+      const production = { name: "PRODUCTION", columns: ["DIFF"], rows: [{ label: "p", cells: [30] }] };
+      const ioRow = { label: "IO", cells: [-500, 0, 0] };
+      const productionRow = { label: "PRODUCTION اجراء اعمال", cells: [-2000, 0, 0] };
+      const expected = [
+        [-2000, -30, -2030],
+        [-46020, 0, -46020],
+        [-500, 7, -493],
+        [-48520, -23, -48543],
+      ];
+
+      await upsertStatusSheet(companyId, [statusSheet([ioRow, productionRow]), io, production]);
+      expect((await status(client, companyId))[0].rows.map((r: { cells: number[] }) => r.cells)).toEqual(expected);
+      await upsertStatusSheet(companyId, [statusSheet([productionRow, ioRow]), production, io]);
+      expect((await status(client, companyId))[0].rows.map((r: { cells: number[] }) => r.cells)).toEqual(expected);
     });
   });
 

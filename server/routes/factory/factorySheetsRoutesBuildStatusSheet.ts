@@ -53,9 +53,28 @@ function toNumber(v: CellVal): number {
   return 0;
 }
 
+const normalizeName = (value: string) => value.trim().toLowerCase();
+
+/**
+ * True when `wanted` appears in `candidate` as whole words (case-insensitive,
+ * trimmed), e.g. "PRODUCTION" in "PRODUCTION 2026" or "PRODUCTION اجراء اعمال".
+ * A plain substring test would also find "io" inside "productIOn".
+ */
+function containsWholeWords(candidate: string, wanted: string): boolean {
+  const c = normalizeName(candidate);
+  const w = normalizeName(wanted);
+  if (!w) return false;
+  for (let at = c.indexOf(w); at !== -1; at = c.indexOf(w, at + 1)) {
+    const before = c.slice(0, at);
+    const after = c.slice(at + w.length);
+    if (!/[\p{L}\p{N}]$/u.test(before) && !/^[\p{L}\p{N}]/u.test(after)) return true;
+  }
+  return false;
+}
+
 function findSheet(sheets: SSheet[], name: string): SSheet | undefined {
-  const n = name.trim().toLowerCase();
-  return sheets.find((s) => s.name.trim().toLowerCase().includes(n));
+  const n = normalizeName(name);
+  return sheets.find((s) => normalizeName(s.name) === n) ?? sheets.find((s) => containsWholeWords(s.name, name));
 }
 
 function findColumnIndex(sheet: SSheet, names: string[]): number {
@@ -80,7 +99,9 @@ function buildStatusSheet(sheets: SSheet[], existingStatus?: SSheet): { columns:
     if (!existingStatus) return defaultVal;
     const beforeIdx = findColumnIndex(existingStatus, ["BEFORE"]);
     if (beforeIdx === -1) return defaultVal;
-    const row = existingStatus.rows.find((r) => r.label.trim().toLowerCase().includes(labelFragment.toLowerCase()));
+    const row =
+      existingStatus.rows.find((r) => normalizeName(r.label) === normalizeName(labelFragment)) ??
+      existingStatus.rows.find((r) => containsWholeWords(r.label, labelFragment));
     if (!row) return defaultVal;
     const v = toNumber(getCellRawValue(row.cells[beforeIdx]));
     return v !== 0 ? v : defaultVal;

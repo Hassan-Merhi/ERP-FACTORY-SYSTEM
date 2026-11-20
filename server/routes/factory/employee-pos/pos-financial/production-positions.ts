@@ -23,17 +23,28 @@ const actor = (req: import("express").Request) =>
   String(req.session?.userId ?? req.session?.username ?? "unknown").slice(0, 100);
 const companyIdFor = (req: import("express").Request) => req.session?.factoryCompanyId || req.session?.currentCompanyId;
 
-const createSchema = z.object({
+// Fields shared by create and update, without defaults: zod 4's .partial()
+// still applies .default() values, so an update built from a defaulted schema
+// would reset omitted fields (bonus off, active on, every member removed).
+const positionFields = z.object({
   name: z.string().trim().min(1).max(160),
   targetBales: z.coerce.number().int().min(0).max(100000),
   bonusPerExtraBale: z.coerce.number().min(0).max(1000000),
-  bonusEnabled: z.boolean().default(false),
-  active: z.boolean().default(true),
-  workerIds: z.array(z.coerce.number().int().positive()).default([]),
+  bonusEnabled: z.boolean(),
+  active: z.boolean(),
+  workerIds: z.array(z.coerce.number().int().positive()),
   effectiveFrom: z.string().regex(DATE_RE).optional(),
 });
 
-const updateSchema = createSchema.partial().refine((v) => Object.keys(v).length > 0, "No changes supplied");
+const createSchema = positionFields.extend({
+  bonusEnabled: positionFields.shape.bonusEnabled.default(false),
+  active: positionFields.shape.active.default(true),
+  workerIds: positionFields.shape.workerIds.default([]),
+});
+
+const updateSchema = positionFields
+  .partial()
+  .refine((v) => Object.values(v).some((value) => value !== undefined), "No changes supplied");
 
 async function validateWorkers(companyId: number, ids: number[]) {
   const unique = [...new Set(ids)];

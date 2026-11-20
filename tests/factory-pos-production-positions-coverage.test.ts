@@ -65,17 +65,55 @@ describe("production position refusals", () => {
     });
   });
 
-  it("pins a partial patch resetting omitted defaulted fields (bonus off, members cleared)", async () => {
+  it("refuses an empty patch without changing anything", async () => {
     await withFactoryWorld(async (w) => {
       const anna = await worker(w, "Anna");
       const created = await create(w, { bonusEnabled: true, workerIds: [anna], effectiveFrom: "2026-01-01" });
-      expect(created.body).toMatchObject({ bonusEnabled: true, workerIds: [anna] });
-      // updateSchema = createSchema.partial(): under zod 4 the .default()s still
-      // fire, so {} is not "No changes supplied" and a rename resets
-      // bonusEnabled/workerIds as if the client had sent them.
-      const empty = await w.agent.patch(`${URL}/${created.body.id}`).send({ effectiveFrom: "2026-01-01" });
-      expect(empty.status).toBe(200);
-      expect(empty.body).toMatchObject({ bonusEnabled: false, active: true, workerIds: [] });
+      const empty = await w.agent.patch(`${URL}/${created.body.id}`).send({});
+      expect(empty.status).toBe(400);
+      expect(empty.body.message).toContain("No changes supplied");
+      const history = await w.agent.get(`${URL}/${created.body.id}/history`);
+      expect(history.body.rules).toHaveLength(1);
+      expect(history.body.memberships.map((m: { workerId: number }) => m.workerId)).toEqual([anna]);
+    });
+  });
+});
+
+describe("production position partial updates", () => {
+  it("keeps bonus, active and members on a rename-only patch", async () => {
+    await withFactoryWorld(async (w) => {
+      const anna = await worker(w, "Anna");
+      const created = await create(w, { bonusEnabled: true, workerIds: [anna], effectiveFrom: "2026-01-01" });
+      expect(created.body).toMatchObject({ bonusEnabled: true, active: true, workerIds: [anna] });
+      const renamed = await w.agent
+        .patch(`${URL}/${created.body.id}`)
+        .send({ name: `${w.tag} Renamed`, effectiveFrom: "2026-01-05" });
+      expect(renamed.status).toBe(200);
+      expect(renamed.body).toMatchObject({
+        name: `${w.tag} Renamed`,
+        bonusEnabled: true,
+        active: true,
+        workerIds: [anna],
+        ruleEffectiveFrom: "2026-01-01",
+      });
+    });
+  });
+
+  it("still applies explicit bonus, active and member values", async () => {
+    await withFactoryWorld(async (w) => {
+      const anna = await worker(w, "Anna");
+      const ben = await worker(w, "Ben");
+      const created = await create(w, { bonusEnabled: true, workerIds: [anna], effectiveFrom: "2026-01-01" });
+      const id = created.body.id;
+      let res = await w.agent
+        .patch(`${URL}/${id}`)
+        .send({ bonusEnabled: false, workerIds: [ben], effectiveFrom: "2026-01-01" });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ bonusEnabled: false, active: true, workerIds: [ben] });
+      res = await w.agent.patch(`${URL}/${id}`).send({ workerIds: [], effectiveFrom: "2026-01-02" });
+      expect(res.body).toMatchObject({ bonusEnabled: false, workerIds: [] });
+      res = await w.agent.patch(`${URL}/${id}`).send({ active: false, effectiveFrom: "2026-01-03" });
+      expect(res.body).toMatchObject({ active: false, workerIds: [] });
     });
   });
 });
