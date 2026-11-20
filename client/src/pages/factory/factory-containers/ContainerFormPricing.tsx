@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./ContainerFormBody.tsx
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -207,23 +208,14 @@ export function ContainerFormPricing({
         <Label>
           ERP Commission Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
         </Label>
-        <Select
-          value={formData.commissionAccountId || "__none__"}
-          onValueChange={(val) => setFormData((f) => ({ ...f, commissionAccountId: val === "__none__" ? "" : val }))}
-        >
-          <SelectTrigger data-testid="select-commission-account">
-            <SelectValue placeholder="None (leave empty)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">None</SelectItem>
-            {ledgerAccounts.map((acc) => (
-              <SelectItem key={acc.id} value={String(acc.id)}>
-                {acc.name}
-                {acc.code ? ` (${acc.code})` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <UnifiedAccountPicker
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={formData.commissionAccountId || ""}
+ onChange={(val) => setFormData((f) => ({ ...f, commissionAccountId: val }))}
+ placeholder={"None (leave empty)"}
+ testId={"select-commission-account"}
+ allowClear
+ />
         <p className="text-xs text-muted-foreground mt-1">
           Commission flows into the broker's balance automatically via the "Broker / Commission To" field above.
         </p>
