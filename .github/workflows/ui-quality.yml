@@ -126,6 +126,20 @@ jobs:
 
           cat artifacts/i18n-audit/report.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Phase 5 account-selector audit and regression fixtures
+        if: always() && needs.changes.outputs.i18n == 'true'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tests/account-selector-audit.node.test.mjs
+          base_sha="${PR_BASE_SHA}"
+          if [[ -z "$base_sha" ]]; then
+            base_sha="$(git merge-base origin/main HEAD)"
+          fi
+          node scripts/audit-account-selector-new-code.mjs --base "$base_sha"
+
       - name: Upload classified audit report
         if: always() && needs.changes.outputs.i18n == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
