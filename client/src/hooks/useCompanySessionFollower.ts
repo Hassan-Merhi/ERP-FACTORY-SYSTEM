@@ -106,7 +106,9 @@ export function useCompanySessionFollower({
     };
 
     const onChange = (signal: CompanySessionSignal) => {
-      externalChangeObservedRef.current = true;
+      // Initial pageshow/focus is not an external switch; preserve the saved
+      // startup company until a real selection notification arrives.
+      if (signal === "selection") externalChangeObservedRef.current = true;
       // During first activation the entire app is already hidden. Its startup
       // path reconciles the server, so do not introduce a permanent second gate.
       if (!selectedCompanyRef.current) return;
