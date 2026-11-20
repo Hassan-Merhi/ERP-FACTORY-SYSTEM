@@ -183,9 +183,12 @@ export async function getManualFxCorrectionPreflight(
       row.bank_account_id !== null ||
       row.customer_id !== null;
     if (!originalUsd || row.rate_convention !== "IDENTITY" || !monetary) return false;
-    const key = row.customer_id !== null ? `customer:${row.customer_id}` :
-      row.ledger_account_id !== null ? `ledger:${row.ledger_account_id}` :
-        `bank:${row.bank_account_id}`;
+    const key =
+      row.customer_id !== null
+        ? `customer:${row.customer_id}`
+        : row.ledger_account_id !== null
+          ? `ledger:${row.ledger_account_id}`
+          : `bank:${row.bank_account_id}`;
     const signedUsd = new Decimal(row.debit_amount).minus(row.credit_amount);
     manualByTarget.set(key, (manualByTarget.get(key) ?? new Decimal(0)).plus(signedUsd));
     return true;
@@ -232,8 +235,8 @@ export async function getManualFxCorrectionPreflight(
   }
   // A balanced voucher totals zero across all accounts. Its FX counter-line
   // is the amount of the original loss, not the sum of the entire journal.
-  unresolved += [...manualByTarget.keys()].filter((key) =>
-    !candidates.some((candidate) => candidate.accountKey === key)
+  unresolved += [...manualByTarget.keys()].filter(
+    (key) => !candidates.some((candidate) => candidate.accountKey === key)
   ).length;
   const netAdjustment = candidates.reduce((sum, row) => sum.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0));
   const cashMovement = monetaryMovements.reduce(
