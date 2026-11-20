@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db";
-import { resultRows } from "../lib/queryResult";
+import { isAutomaticFxRevaluationVoucherTx } from "../services/accounting/automaticFxVoucherGuard";
 import {
   assertNotIntercompanyTransferLeg,
   sendIntercompanyTransferLegRefusal,
@@ -51,14 +51,7 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
       // A base-only FX revaluation is system-owned even when its voucher
       // header currency is USD. Neither amount nor narration edits may
       // accidentally re-normalize the currency or erase its audit evidence.
-      const fxSource = resultRows<{ id: number }>(await db.execute(sql`
-        SELECT id FROM accounting_posting_requests
-         WHERE company_id = ${row.voucher.companyId}
-           AND voucher_id = ${row.voucher.id}
-           AND source_type = 'fx-unrealized-revaluation'
-         LIMIT 1
-      `))[0];
-      if (fxSource) {
+      if (await isAutomaticFxRevaluationVoucherTx(db, row.voucher.companyId, row.voucher.id)) {
         return res.status(409).json({
           code: "FX_REVALUATION_VOUCHER_IMMUTABLE",
           message: "Automatic FX revaluation entries require the audited FX correction workflow.",
