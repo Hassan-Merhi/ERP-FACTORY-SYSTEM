@@ -14,7 +14,7 @@ import { getMonetaryFxValuation } from "./monetaryFxValuationService";
 import { postedFxRevaluationAdjustmentUsd } from "./fxRevaluationAmount";
 import { findLegacyManualFxConflicts } from "./legacyManualFxGuard";
 
-interface VoucherHeader {
+interface VoucherHeader extends Record<string, unknown> {
   id: number;
   voucher_number: string;
   voucher_date: string;
@@ -25,7 +25,7 @@ interface VoucherHeader {
   reversal_of_voucher_id: number | null;
 }
 
-interface VoucherLine {
+interface VoucherLine extends Record<string, unknown> {
   id: number;
   ledger_account_id: number | null;
   bank_account_id: number | null;
