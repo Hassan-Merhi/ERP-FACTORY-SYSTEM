@@ -1,26 +1,16 @@
 /**
- * Correction policy for posted vouchers (accounting audit phase 22 A,
- * PE9/G4/G10; owner decision):
- *   - a posted voucher may be edited in place only in an OPEN period, and the
- *     edit writes an explicit application audit row with the full before/after
- *     snapshot in the edit's transaction (the phase 21 database trigger records
- *     the row images as well);
- *   - in a CLOSED period it is corrected by reversal and re-post only: an edit
- *     there is refused with 409 VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD, which
- *     names POST /api/vouchers/:id/reverse;
- *   - posted → optional is refused in a closed period and is an audited edit in
- *     an open one (it is an edit like any other).
+ * Posted voucher correction policy (phase 22 A; PE9/G4/G10):
+ * - Edit a posted voucher in place only in an OPEN period, writing the full
+ *   before/after application audit row in the edit transaction. The phase 21
+ *   database trigger also records row images.
+ * - CLOSED periods reject edits with 409 VOUCHER_CLOSED_PERIOD_REVERSE_INSTEAD;
+ *   use POST /api/vouchers/:id/reverse to reverse and re-post instead.
+ * - Posted-to-optional is an audited edit, and refused in CLOSED periods.
  *
- * Writers use three helpers, inside their own transaction:
- *   const ctx = await assertVoucherEditableTx(tx, voucherId, { companyId, newVoucherDate });
- *   ... change the voucher ...
- *   await recordVoucherEditAuditTx(tx, { voucherId, before: ctx.before, actor, reason });
- * and reverseVoucherTx to reverse instead.
- *
- * "Closed" is the books lock the database closed-period guard enforces
- * (closedPeriodGuard.ts): the latest CLOSED fiscal_period_closures end date of
- * the company. The trigger stays the backstop; these helpers refuse first with
- * a code the UI can act on.
+ * Writers call assertVoucherEditableTx, change the voucher and call
+ * recordVoucherEditAuditTx in the same transaction, or use reverseVoucherTx.
+ * The latest CLOSED fiscal_period_closures end date defines the books lock;
+ * closedPeriodGuard.ts stays the database backstop.
  */
 import Decimal from "decimal.js";
 import { and, eq, sql } from "drizzle-orm";
