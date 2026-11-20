@@ -134,7 +134,7 @@ export function PostOffloadDialogDialogSectionContent({
                     </SelectContent>
                   </Select>
                   <UnifiedAccountPicker
-                    options={ledgerAccounts.map((a) => ({ value: String(a.id), name: a.name }))}
+                    options={ledgerAccounts.filter((a) => a.isPostingLeaf !== false).map((a) => ({ value: String(a.id), name: String(a.name ?? "") }))}
                     value={charge.ledgerAccountId || ""}
                     onChange={(v) => setNewCharges((prev) => prev.map((c) => (c.id === charge.id ? { ...c, ledgerAccountId: v, supplierId: "" } : c)))}
                     placeholder={"Select account (optional)"}
