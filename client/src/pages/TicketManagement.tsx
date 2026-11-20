@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import TicketConversation from "@/pages/tickets/TicketConversation";
 import TicketNotificationSettings from "@/pages/tickets/TicketNotificationSettings";
 import TicketAdminDashboard from "@/pages/tickets/TicketAdminDashboard";
@@ -159,12 +159,12 @@ export default function TicketManagement({ sourceMode = "erp" }: { sourceMode?: 
       ) : (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_12rem]">
-            <Input
+            <SearchField
               aria-label="Search tickets"
               placeholder="Search ticket number or title"
               value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
+              onValueChange={(value) => {
+                setQ(value);
                 setPage(1);
               }}
             />
