@@ -138,7 +138,8 @@ describe("company selection across browser tabs", () => {
     });
 
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2), { timeout: 5000 });
-    expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(2);
+    // One failed probe, then a successful probe and an in-queue confirmation.
+    expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(3);
     expect(harness.apiRequest).not.toHaveBeenCalled();
   });
 
