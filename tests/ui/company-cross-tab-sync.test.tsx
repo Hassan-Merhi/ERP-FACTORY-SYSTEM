@@ -329,14 +329,24 @@ describe("company selection across browser tabs", () => {
     const { result } = await renderOnCompanyOne();
     let resolveSession!: (value: { companyId: number }) => void;
     harness.fetchSessionCompany.mockImplementationOnce(
-      () => new Promise<{ companyId: number }>((resolve) => { resolveSession = resolve; })
+      () =>
+        new Promise<{ companyId: number }>((resolve) => {
+          resolveSession = resolve;
+        })
     );
 
-    await act(async () => { otherTabSwitchedTo(2); });
+    await act(async () => {
+      otherTabSwitchedTo(2);
+    });
     expect(result.current.isCheckingCompanySession).toBe(true);
     expect(result.current.selectedCompany?.id).toBe(1);
+    // The session check starts on the next timer tick; answer it only once it has.
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+    expect(result.current.isCheckingCompanySession).toBe(true);
 
-    await act(async () => { resolveSession({ companyId: 2 }); });
+    await act(async () => {
+      resolveSession({ companyId: 2 });
+    });
     await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
     expect(result.current.isCheckingCompanySession).toBe(false);
   });
