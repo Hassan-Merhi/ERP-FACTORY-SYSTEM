@@ -79,19 +79,40 @@ async function session(page) {
   check(response.status === 200, "Cannot read authoritative session", response);
   return response.body;
 }
+async function clickVisibleCompanySelector(page) {
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('[data-testid="button-company-selector"]')].some((element) => {
+      const style = getComputedStyle(element);
+      return element.getClientRects().length > 0 &&
+        style.visibility !== "hidden" &&
+        style.display !== "none";
+    }),
+    { timeout: timeoutMs, polling: 100 }
+  );
+  const handles = await page.$('[data-testid="button-company-selector"]');
+  for (const handle of handles) {
+    const rect = await handle.boundingBox();
+    if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+    await handle.click();
+    return;
+  }
+  throw new Error("No visible company selector is available.");
+}
+
 async function waitForCompany(page, id) {
   const name = companyNames.get(id);
   check(Boolean(name), "Unknown fixture company", id);
   await page.waitForFunction(
-    (companyName) => document.querySelector('[data-testid="button-company-selector"]')?.getAttribute("title") === companyName,
+    (companyName) => [...document.querySelectorAll('[data-testid="button-company-selector"]')].some(
+      (element) => element.getClientRects().length > 0 && element.getAttribute("title") === companyName
+    ),
     { timeout: timeoutMs, polling: 100 },
     name
   );
 }
 async function chooseCompany(page, id) {
   await page.bringToFront();
-  await page.waitForSelector('[data-testid="button-company-selector"]', { visible: true, timeout: timeoutMs });
-  await page.click('[data-testid="button-company-selector"]');
+  await clickVisibleCompanySelector(page);
   const option = `[data-testid="company-option-${id}"]`;
   await page.waitForSelector(option, { visible: true, timeout: timeoutMs });
   await page.click(option);
@@ -117,7 +138,12 @@ async function login(page) {
   // An authenticated user can land on a generic root redirect. Use the known
   // ERP route exercised by the existing realtime browser fixture.
   await page.goto(`${baseUrl}/inventory?tab=by-location`, { waitUntil: "domcontentloaded", timeout: timeoutMs });
-  await page.waitForSelector('[data-testid="button-company-selector"]', { visible: true, timeout: timeoutMs });
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('[data-testid="button-company-selector"]')].some(
+      (element) => element.getClientRects().length > 0
+    ),
+    { timeout: timeoutMs, polling: 100 }
+  );
 }
 
 async function scopedWrite(page, companyId, companyRevision) {
