@@ -96,7 +96,11 @@ export const SearchField = React.forwardRef<HTMLInputElement, SearchFieldProps>(
           }}
           placeholder={placeholder}
           aria-label={ariaLabel ?? placeholder}
-          className={cn("min-h-11 w-full ps-9 sm:min-h-9 [&::-webkit-search-cancel-button]:hidden", showClear && "pe-11 sm:pe-9", className)}
+          className={cn(
+            "min-h-11 w-full ps-9 sm:min-h-9 [&::-webkit-search-cancel-button]:hidden",
+            showClear && "pe-11 sm:pe-9",
+            className
+          )}
         />
         {showClear && value.length > 0 ? (
           <Button
