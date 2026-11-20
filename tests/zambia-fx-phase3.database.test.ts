@@ -5,7 +5,7 @@
  * It deliberately creates a fake company; it NEVER connects to the user's
  * production Render database. No test uses company ID 19 or real voucher IDs.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import { db, pool } from "../server/db";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
@@ -121,8 +121,8 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
   beforeAll(async () => {
     const company = await pool.query<{ id: number }>(
       `INSERT INTO companies (code, name, company_type, base_currency, display_currency)
-       VALUES ($1, $1, 'erp', 'USD', 'ZMW') RETURNING id`,
-      [unique]
+       VALUES ($1, $2, 'erp', 'USD', 'ZMW') RETURNING id`,
+      [unique, unique]
     );
     companyId = company.rows[0].id;
     await pool.query(`INSERT INTO company_settings (company_id, timezone) VALUES ($1, 'Africa/Lusaka')`, [companyId]);
@@ -153,13 +153,23 @@ databaseDescribe("Phase 3 Zambia manual FX correction (disposable database)", ()
       { ledgerId: lusaka, debit: "0", credit: "34.03" },
       { ledgerId: fxAccount, debit: "45.63", credit: "0" },
     ]);
+  }, 120_000);
+
+  // The shared afterEach in voucherRequestIdentityTestBridge clears posting
+  // identities between test cases; the manual journal's identity is what every
+  // case here reads, so it is restored before each one.
+  beforeEach(async () => {
+    await pool.query("DELETE FROM accounting_posting_requests WHERE company_id=$1 AND idempotency_key=$2", [
+      companyId,
+      `${unique}:manual-fx`,
+    ]);
     await pool.query(
       `INSERT INTO accounting_posting_requests
        (company_id, idempotency_key, source_type, source_id, request_fingerprint, voucher_id)
        VALUES ($1, $2, 'manual-journal', $3, $4, $5)`,
       [companyId, `${unique}:manual-fx`, `${unique}:manual-fx`, "a".repeat(64), manualVoucherId]
     );
-  }, 120_000);
+  });
 
   afterAll(async () => {
     if (!companyId) return;
