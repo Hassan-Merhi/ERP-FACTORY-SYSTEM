@@ -72,7 +72,7 @@ export function FactoryContainerCreateCardSection({
             Freight Account <span className="text-muted-foreground text-xs font-normal">(optional)</span>
           </Label>
           <UnifiedAccountPicker
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
  value={formData.freightAccountId || ""}
  onChange={(val) => setFormData({ ...formData, freightAccountId: val })}
  placeholder={"Auto (Freight)"}
@@ -149,7 +149,7 @@ export function FactoryContainerCreateCardSection({
                   </Select>
                   <UnifiedAccountPicker
  key={`acc-${idx}`}
- options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: String(account.name ?? "") }))}
  value={line.ledgerAccountId || ""}
  onChange={(val) => updateOtherChargeLine(idx, "ledgerAccountId", val)}
  placeholder={"No account"}
