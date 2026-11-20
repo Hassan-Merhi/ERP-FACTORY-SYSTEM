@@ -23,44 +23,6 @@ import { checkFactoryWorkerContractAccess, getFactoryCompanyId, writeDaybookEntr
 import { removeFactoryWorkerFromCategories } from "../../lib/factoryWorkerCategoryMembership";
 import { sumMoney } from "../../lib/money";
 
-/**
- * Persist absence for the closed inactive interval. Use calendar dates (not local
- * Date increments) and upsert so a previously defaulted Present cannot survive
- * an inactive interval. The interval ends *before* the reactivation date.
- */
-async function recordInactiveDays(
-  db: Database,
-  companyId: number,
-  workerId: number,
-  startDate: string,
-  endExclusive: string
-) {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(endExclusive)) return;
-  const start = Date.parse(`${startDate}T00:00:00Z`);
-  const end = Date.parse(`${endExclusive}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return;
-  const batch: { companyId: number; workerId: number; attendanceDate: string; status: string; notes: string }[] = [];
-  for (let day = start; day < end; day += 86_400_000) {
-    batch.push({
-      companyId,
-      workerId,
-      attendanceDate: new Date(day).toISOString().slice(0, 10),
-      status: "Absent",
-      notes: "Auto-absent (inactive)",
-    });
-    if (batch.length === 500 || day + 86_400_000 >= end) {
-      await db
-        .insert(factoryAttendance)
-        .values(batch)
-        .onConflictDoUpdate({
-          target: [factoryAttendance.workerId, factoryAttendance.attendanceDate],
-          set: { status: "Absent", notes: "Auto-absent (inactive)", updatedAt: new Date() },
-        });
-      batch.length = 0;
-    }
-  }
-}
-
 export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   // GET /api/factory/workers/:id - Get single worker with computed stats
   app.get("/api/factory/workers/:id", requireAuth, async (req: Request, res: Response) => {
@@ -268,15 +230,6 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
 
       if (!updated) return res.status(404).json({ message: "Worker not found" });
 
-      if (becomingInactive) {
-        const tomorrow = new Date(Date.parse(`${todayForStatus}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-        await recordInactiveDays(db, companyId, updated.id, todayForStatus, tomorrow);
-      }
-      if (becomingActive) {
-        const inactiveStart =
-          previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || todayForStatus;
-        await recordInactiveDays(db, companyId, updated.id, inactiveStart, todayForStatus);
-      }
       if (!updated.active) {
         await removeFactoryWorkerFromCategories(db, companyId, updated.id);
       }
@@ -324,10 +277,6 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
 
       if (!updated) return res.status(404).json({ message: "Worker not found" });
 
-      if (previousWorker.active) {
-        const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-        await recordInactiveDays(db, companyId, updated.id, today, tomorrow);
-      }
       await removeFactoryWorkerFromCategories(db, companyId, updated.id);
 
       await writeDaybookEntry(db, {
@@ -370,12 +319,6 @@ export function registerFactoryWorkerCrudRoutes(app: Express, requireAuth: Reque
         .returning();
 
       if (!updated) return res.status(404).json({ message: "Worker not found" });
-
-      if (!previousWorker.active) {
-        const inactiveStart =
-          previousWorker.contractEndDate || previousWorker.updatedAt?.toISOString().slice(0, 10) || today;
-        await recordInactiveDays(db, companyId, updated.id, inactiveStart, today);
-      }
 
       await writeDaybookEntry(db, {
         companyId,

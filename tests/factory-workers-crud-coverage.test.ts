@@ -7,9 +7,9 @@
  * absent; status changes keep the contract end date consistent; only Admin or
  * Owner may end a contract.
  *
- * Known defect pinned below: recordInactiveDays (crud.ts:38) tests the dates
- * with /^\\d{4}-.../, which in a regex literal means a literal backslash, so
- * it always returns early and no "Auto-absent (inactive)" rows are written.
+ * Worker auto-absent days stay off (owner decision): deactivating, ending a
+ * contract or reactivating never writes attendance, so recorded attendance in
+ * the inactive interval is kept exactly as entered.
  */
 import { describe, expect, it } from "vitest";
 
@@ -33,8 +33,23 @@ const row = async (w: FactoryWorld, id: number) =>
     )
   )[0];
 
-const inactiveAbsences = (w: FactoryWorld, id: number) =>
-  w.q(`SELECT 1 FROM factory_attendance WHERE worker_id = $1 AND notes = 'Auto-absent (inactive)'`, [id]);
+const attendance = (w: FactoryWorld, id: number) =>
+  w.q(
+    `SELECT attendance_date::text AS d, status, notes FROM factory_attendance WHERE worker_id = $1 ORDER BY attendance_date`,
+    [id]
+  );
+
+/** Real attendance recorded on and after the day the worker goes inactive. */
+async function recordedAttendance(w: FactoryWorld, id: number, days: string[]) {
+  for (const day of days) {
+    await w.q(
+      `INSERT INTO factory_attendance (company_id, worker_id, attendance_date, status, notes)
+       VALUES ($1, $2, $3, 'Present', 'entered')`,
+      [w.companyId, id, day]
+    );
+  }
+  return attendance(w, id);
+}
 
 const otherCompany = (w: FactoryWorld) =>
   w.one(
@@ -150,13 +165,14 @@ describe("factory worker update", () => {
   it("stamps the end date when deactivating, keeps it while inactive, and clears it on reactivation", async () => {
     await withFactoryWorld(async (w) => {
       const id = await worker(w);
+      const recorded = await recordedAttendance(w, id, ["2026-06-10", "2026-06-12"]);
       const off = await w.agent
         .patch(`/api/factory/workers/${id}`)
         .set("X-Client-Date", "2026-06-10")
         .send({ fullName: "Crud Worker", active: false, baseSalary: "", transportAllowance: "" });
       expect(off.status).toBe(200);
       expect(await row(w, id)).toMatchObject({ active: false, end_date: "2026-06-10" });
-      expect(await inactiveAbsences(w, id)).toEqual([]);
+      expect(await attendance(w, id)).toEqual(recorded);
 
       const rename = await w.agent.patch(`/api/factory/workers/${id}`).send({
         companyId: w.companyId,
@@ -172,7 +188,7 @@ describe("factory worker update", () => {
       const on = await w.agent.patch(`/api/factory/workers/${id}`).send({ active: true });
       expect(on.status).toBe(200);
       expect(await row(w, id)).toMatchObject({ active: true, end_date: null });
-      expect(await inactiveAbsences(w, id)).toEqual([]);
+      expect(await attendance(w, id)).toEqual(recorded);
     });
   });
 });
@@ -196,12 +212,14 @@ describe("factory worker contract end and reactivation", () => {
         expect((await w.agent.post(`/api/factory/workers/2000000000/${action}`).send({})).status).toBe(404);
       }
       const id = await worker(w, { code: "HMD001" });
+      const recorded = await recordedAttendance(w, id, ["2026-07-01", "2026-07-03"]);
       const ended = await w.agent
         .post(`/api/factory/workers/${id}/end-contract`)
         .set("X-Client-Date", "2026-07-01")
         .send({});
       expect(ended.status).toBe(200);
       expect(await row(w, id)).toMatchObject({ active: false, end_date: "2026-07-01" });
+      expect(await attendance(w, id)).toEqual(recorded);
       const again = await w.agent.post(`/api/factory/workers/${id}/end-contract`).send({});
       expect(again.status).toBe(200);
 
@@ -211,8 +229,8 @@ describe("factory worker contract end and reactivation", () => {
         .send({});
       expect(back.status).toBe(200);
       expect(await row(w, id)).toMatchObject({ active: true, end_date: null });
-      // Pinned defect: the inactive interval is never written (see header).
-      expect(await inactiveAbsences(w, id)).toEqual([]);
+      // No auto-absent backfill for the inactive interval (see header).
+      expect(await attendance(w, id)).toEqual(recorded);
       const twice = await w.agent.post(`/api/factory/workers/${id}/reactivate`).send({});
       expect(twice.status).toBe(200);
       const daybook = await w.q(`SELECT tx_type FROM factory_daybook_entries WHERE reference_id = $1 ORDER BY id`, [
