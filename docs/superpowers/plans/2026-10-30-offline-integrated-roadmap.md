@@ -240,8 +240,10 @@ plan are in the plan document and the
   re-checked in the cloud for a PC's own records.
 - Journal vouchers on a PC: a new cloud handler posts them through the same
   journal service as the live route (now shared), once.
-- Next: invoices and purchases (each needs its own cloud handler); then Phases
-  C to E.
+- Accounting Sales vouchers on a PC (protected central path: USD, active),
+  posted through the central generic voucher service the live route now
+  shares.
+- Next: purchases; then Phases C to E.
 
 ## Resume checklist (next session)
 

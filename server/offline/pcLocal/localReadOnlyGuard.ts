@@ -272,6 +272,11 @@ export function makePcLocalReadOnlyGuard(
         : (PC_LOCAL_ENTRY_ROUTES.get(route) ??
           (PC_LOCAL_EVIDENCE_ROUTES.some((pattern) => pattern.test(route)) ? null : undefined));
     if (kind === undefined) return refuse(res, "OFFLINE_PC_LOCAL_READ_ONLY");
+    // A route that also serves requests the cloud cannot replay (e.g. only Sales
+    // vouchers of /api/vouchers/with-entries): refuse the others here.
+    if (kind && BROWSER_OPERATION_KINDS[kind]?.pcAccepts?.(req.body) === false) {
+      return refuse(res, "OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED");
+    }
     captureEntry(req, res, next, kind, connect).catch((error: unknown) => {
       logger.error("[pc-local] could not record an offline entry", { error: String(error) });
       if (!res.headersSent) res.status(503).json({ code: "OFFLINE_PC_LOCAL_CAPTURE_FAILED" });
