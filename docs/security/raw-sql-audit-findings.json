@@ -1,9 +1,9 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 5493,
+    "scannedFiles": 5500,
     "perRoot": {
-      "server": 3165,
+      "server": 3172,
       "shared": 182,
       "scripts": 287,
       "migrations": 109,
