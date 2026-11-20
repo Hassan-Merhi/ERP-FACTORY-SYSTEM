@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { RetailPaymentDraft } from "./retailPosTypes";
 
 export interface RetailPaymentAccounts {
@@ -31,37 +32,56 @@ export function paymentFromAccount(
   throw new Error("Select a valid payment account");
 }
 
-export function RetailPaymentAccountOptions({
-  accounts, allowCredit = false, customerName,
+/**
+ * Retail tender account chooser. Cash/bank ledger and bank account identifiers
+ * are namespaced to avoid collisions. Customer credit is an explicit tender
+ * method, not a posting account; the caller retains credit eligibility rules.
+ */
+export function RetailPaymentAccountPicker({
+  accounts,
+  value,
+  onValueChange,
+  allowCredit = false,
+  customerName,
+  id,
+  testId,
+  className,
+  ariaLabel,
 }: {
   accounts: RetailPaymentAccounts | undefined;
+  value: string;
+  onValueChange: (value: string) => void;
   allowCredit?: boolean;
   customerName?: string | null;
+  id?: string;
+  testId?: string;
+  className?: string;
+  ariaLabel?: string;
 }) {
+  const options = [
+    ...(accounts?.ledgers ?? []).map((account) => ({
+      value: `ledger:${account.id}`,
+      name: account.name,
+    })),
+    ...(accounts?.banks ?? []).map((account) => ({
+      value: `bank:${account.id}`,
+      name: account.name,
+    })),
+    ...(allowCredit
+      ? [{ value: "credit", name: customerName ? `Customer credit · ${customerName}` : "Customer credit" }]
+      : []),
+  ];
   return (
-    <>
-      <option value="">Select account</option>
-      {accounts?.ledgers.length ? (
-        <optgroup label="Cash / bank ledgers">
-          {accounts.ledgers.map((entry) => (
-            <option key={`ledger:${entry.id}`} value={`ledger:${entry.id}`}>
-              {entry.code} · {entry.name}
-            </option>
-          ))}
-        </optgroup>
-      ) : null}
-      {accounts?.banks.length ? (
-        <optgroup label="Bank accounts">
-          {accounts.banks.map((entry) => (
-            <option key={`bank:${entry.id}`} value={`bank:${entry.id}`}>
-              {entry.code} · {entry.name}
-            </option>
-          ))}
-        </optgroup>
-      ) : null}
-      {allowCredit ? (
-        <option value="credit">{customerName ? `Customer credit · ${customerName}` : "Customer credit (selected customer's ledger)"}</option>
-      ) : null}
-    </>
+    <UnifiedAccountPicker
+      id={id}
+      testId={testId}
+      options={options}
+      value={value}
+      onChange={onValueChange}
+      placeholder="Select account"
+      ariaLabel={ariaLabel ?? "Payment account"}
+      className={className}
+      allowClear
+    />
   );
 }
