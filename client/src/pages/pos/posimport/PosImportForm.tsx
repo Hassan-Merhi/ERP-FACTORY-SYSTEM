@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * Upload card for the POS Import page: credit-sale toggle, file picker, sale
  * date, optional currency selector, location + cash-account/customer targets
@@ -136,20 +137,14 @@ export function PosImportForm({ model }: { model: PosImportModel }) {
           ) : (
             <div className="space-y-2">
               <Label htmlFor="cashAccount">Cash Account</Label>
-              <Select value={model.selectedCashAccount} onValueChange={model.setSelectedCashAccount}>
-                <SelectTrigger id="cashAccount" data-testid="select-cash-account">
-                  <SelectValue placeholder="Select cash account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {model.ledgerAccounts
-                    .filter((account) => account.accountType === "Cash")
-                    .map((account) => (
-                      <SelectItem key={account.id} value={account.id.toString()}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <UnifiedAccountPicker
+                    options={model.ledgerAccounts.filter((account) => account.accountType === "Cash").map((account) => ({ value: String(account.id), name: account.name }))}
+                    value={model.selectedCashAccount}
+                    onChange={model.setSelectedCashAccount}
+                    placeholder={"Select cash account"}
+                    id={"cashAccount"}
+                    testId={"select-cash-account"}
+                    />
             </div>
           )}
         </div>
