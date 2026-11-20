@@ -90,6 +90,8 @@ function registerCompanyAccessRoutesPart2(app: Express) {
       req.session.canDeleteRecords = userRole.canDeleteRecords;
       req.session.currentCompanyName = companyRow?.name ?? null;
       req.session.companyRevision = randomUUID();
+      // Orders this selection against requests that loaded the session earlier.
+      req.session.companySelectedAt = Date.now();
 
       try {
         await saveSession(req);

@@ -4,7 +4,7 @@
  * sees the same state.
  */
 import { act, renderHook } from "@testing-library/react";
-import { reducer, toast, useToast } from "@/hooks/use-toast";
+import { clearAllToasts, reducer, toast, useToast } from "@/hooks/use-toast";
 
 type State = Parameters<typeof reducer>[0];
 const t = (id: string, extra: Record<string, unknown> = {}) => ({ id, title: `Toast ${id}`, ...extra });
@@ -114,5 +114,18 @@ describe("toast() and useToast()", () => {
     });
 
     expect(result.current.toasts).toHaveLength(before);
+  });
+
+  it("clears every notice at once when the workspace changes company", () => {
+    const { result } = renderHook(() => useToast());
+    act(() => {
+      toast({ title: "Previous company notice" });
+    });
+    expect(result.current.toasts).toHaveLength(1);
+
+    // No close animation or delay: the old company's details must not linger.
+    act(() => clearAllToasts());
+
+    expect(result.current.toasts).toEqual([]);
   });
 });
