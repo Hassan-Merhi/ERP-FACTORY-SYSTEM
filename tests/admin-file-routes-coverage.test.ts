@@ -152,12 +152,10 @@ describe("factory LAN capture", () => {
   it("refuses an oversized LAN upload and captures a normal one in the outbox", () =>
     withFactoryWorld(async (w) => {
       edge.config = { mode: "lan", primary: true, siteId: "00000000-0000-4000-8000-000000000001" };
-      const big = await w.agent
-        .post("/api/files/upload")
-        .attach("file", Buffer.alloc(10 * 1024 * 1024 + 1), {
-          filename: "big.bin",
-          contentType: "application/octet-stream",
-        });
+      const big = await w.agent.post("/api/files/upload").attach("file", Buffer.alloc(10 * 1024 * 1024 + 1), {
+        filename: "big.bin",
+        contentType: "application/octet-stream",
+      });
       expect([big.status, big.body.code]).toEqual([413, "EDGE_ATTACHMENT_TOO_LARGE"]);
       const ok = await w.agent
         .post("/api/files/upload")
