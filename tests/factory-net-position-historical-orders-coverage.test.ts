@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import type { FactoryNetPositionAsOf } from "../shared/factoryNetPositionAsOf";
 import { getHistoricalOrders } from "../server/services/factory/netPositionHistoricalOrders";
+import { FACTORY_ROW_HISTORY_VERSION } from "../server/services/audit/factoryRowHistory";
 import { withRolledBackPool } from "./helpers/routedPoolClient";
 
 const today = new Date().toISOString().slice(0, 10);
@@ -76,6 +77,14 @@ async function world(client: PoolClient) {
 describe("getHistoricalOrders from recorded row history", () => {
   it("buckets recorded orders by status and warns about statuses it cannot place", async () => {
     await withRolledBackPool(async (client) => {
+      // A DB another suite left without baselines must not hide the recorded path;
+      // the surrounding transaction is rolled back, so nothing persists.
+      await client.query(
+        `INSERT INTO factory_row_history_baselines (table_name, version, baseline_at, snapshot_rows)
+         VALUES ('customer_orders', $1, '2026-01-01', 0)
+         ON CONFLICT ON CONSTRAINT factory_row_history_baselines_pkey DO NOTHING`,
+        [FACTORY_ROW_HISTORY_VERSION]
+      );
       const w = await world(client);
       const loading = await w.order("LOADING", { orderDate: today });
       const verified = await w.order("VERIFIED", { orderDate: today });
