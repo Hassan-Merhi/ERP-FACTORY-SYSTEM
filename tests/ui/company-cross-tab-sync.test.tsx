@@ -162,7 +162,8 @@ describe("company selection across browser tabs", () => {
     await act(async () => {
       otherTabSwitchedTo(99);
     });
-    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(2));
+    // One same-company probe plus the initial and in-queue probes for 99.
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(3));
 
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(harness.apiRequest).not.toHaveBeenCalled();
