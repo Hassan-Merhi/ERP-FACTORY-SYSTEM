@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 // Extracted from ./FactoryInvoiceCreateSection.tsx
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -153,20 +154,14 @@ export function FactoryInvoiceCreateSectionCard({
           />
         )}
 
-        <Select value={chargeLedgerAccountId} onValueChange={setChargeLedgerAccountId}>
-          <SelectTrigger data-testid="select-charge-ledger-account">
-            <SelectValue
-              placeholder={chargeType !== "FREIGHT" ? "Select account (required)..." : "Select account (optional)..."}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {ledgerAccounts.map((acc) => (
-              <SelectItem key={acc.id} value={String(acc.id)}>
-                {acc.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <UnifiedAccountPicker
+ options={ledgerAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+ value={chargeLedgerAccountId}
+ onChange={setChargeLedgerAccountId}
+ placeholder={chargeType !== "FREIGHT" ? "Select account (required)..." : "Select account (optional)..."}
+ testId={"select-charge-ledger-account"}
+ allowClear
+ />
         {chargeType !== "FREIGHT" && !chargeLedgerAccountId && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
             A ledger account is required so the charge posts to accounting.
