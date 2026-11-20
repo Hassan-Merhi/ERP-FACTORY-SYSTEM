@@ -270,6 +270,27 @@ describe("hotspot guard — shared requests", () => {
     await expect(later.json()).resolves.toEqual([{ fresh: true }]);
   });
 
+  it("sends a fresh request for a caller that arrives while an abandoned one is still winding down", async () => {
+    const underlying: Underlying = vi.fn((_input, init) => {
+      if (underlying.mock.calls.length > 1) return Promise.resolve(json([{ fresh: true }]));
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+    const guarded = await installGuard(underlying);
+    const a = new AbortController();
+
+    const first = guarded("/api/containers", { signal: a.signal });
+    await flush();
+    a.abort();
+    // Same tick: the abandoned request is still registered, so it is not shared.
+    const late = guarded("/api/containers");
+
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    await expect((await late).json()).resolves.toEqual([{ fresh: true }]);
+    expect(underlying).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects at once for a caller whose signal is already aborted", async () => {
     const network = pending();
     const underlying: Underlying = vi.fn(() => network.promise);

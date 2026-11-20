@@ -350,6 +350,30 @@ describe("company selection across browser tabs", () => {
     expect(result.current.isCheckingCompanySession).toBe(false);
   });
 
+  it("adopts the server's company when another tab switches while this one is starting", async () => {
+    let resolveSession!: (value: { companyId: number }) => void;
+    harness.fetchSessionCompany.mockImplementationOnce(
+      () =>
+        new Promise<{ companyId: number }>((resolve) => {
+          resolveSession = resolve;
+        })
+    );
+    const { result } = renderHook(() => useCompany(), { wrapper });
+    await waitFor(() => expect(harness.fetchSessionCompany).toHaveBeenCalledTimes(1));
+
+    // The saved startup choice is company 1, but another tab moves the session to 2.
+    await act(async () => {
+      otherTabSwitchedTo(2);
+    });
+    await act(async () => {
+      resolveSession({ companyId: 2 });
+    });
+
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    // The old tab never writes its stale startup company back to the session.
+    expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
   it("does not reveal an unassigned session company", async () => {
     const { result } = await renderOnCompanyOne();
 
