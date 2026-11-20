@@ -87,7 +87,7 @@ export function ContainerErpSellDialog({ m, v }: { m: ContainerDetailErpViewMode
                 <FormItem>
                   <FormLabel>Commission Account (Optional)</FormLabel>
                   <UnifiedAccountPicker
-                    value={field.value}
+                    value={field.value ?? ""}
                     onChange={field.onChange}
                     options={m.incomeAccounts.map((account) => ({
                       value: String(account.id),
