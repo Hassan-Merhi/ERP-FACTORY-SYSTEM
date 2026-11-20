@@ -9,6 +9,7 @@ import {
 import { createCompanySwitchQueue, type CompanySwitchQueue } from "@/lib/companySwitchQueue";
 import { publishCompanySessionCommit, type CompanySessionSignal } from "@/lib/companySessionSync";
 import { announceCompanyWorkspaceTransition } from "@/lib/companyWorkspaceEvents";
+import { activateCompanyCacheScope, beginCompanyCacheTransition, resumeCompanyCacheScope } from "@/lib/companyCacheScope";
 import { useCompanySessionFollower } from "@/hooks/useCompanySessionFollower";
 import { companyDataKey } from "@/lib/frontendDataArchitecture";
 import { stableReferenceQueryPolicy } from "@/lib/queryPolicies";
@@ -151,6 +152,7 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   companiesRef.current = companies;
 
   const commitCompanySelection = useCallback((company: Company, options: CompanyCommitOptions) => {
+    activateCompanyCacheScope(company.id);
     setAppTimezone(null);
     lastSyncedCompanyId.current = options.serverSynced ? company.id : null;
     selectedCompanyRef.current = company;
@@ -184,6 +186,8 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       }
 
       const isInitialActivation = selectedCompanyRef.current === null;
+      if (!isInitialActivation) beginCompanyCacheTransition();
+      try {
       await cancelCompanySessionQueries(queryClient);
 
       if (options.offline) {
@@ -222,6 +226,11 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       }
 
       return true;
+      } finally {
+        // A denied switch or transport error must reopen the existing
+        // company's read scope without exposing a stale in-flight response.
+        resumeCompanyCacheScope();
+      }
     },
     [commitCompanySelection]
   );
@@ -316,12 +325,16 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   }, [commitCompanySelection]);
 
   const beginExternalSessionVerification = useCallback((signal: CompanySessionSignal) => {
+    beginCompanyCacheTransition();
     if (signal === "selection") announceCompanyWorkspaceTransition();
     setExternalSessionState((current) =>
       signal === "selection" || current === "switching" ? "switching" : "checking"
     );
   }, []);
-  const finishExternalSessionVerification = useCallback(() => setExternalSessionState("idle"), []);
+  const finishExternalSessionVerification = useCallback(() => {
+    resumeCompanyCacheScope();
+    setExternalSessionState("idle");
+  }, []);
 
   useCompanySessionFollower({
     companiesRef,
