@@ -158,15 +158,18 @@ export function assessManualFxCorrection(input: {
   const counterLines = original.lines.filter(isFxCounter);
   const counter = counterLines.length === 1 ? counterLines[0] : null;
   if (!counter) blockers.push("ORIGINAL_FX_COUNTER_AMBIGUOUS");
-  const cashLines = original.lines.filter(
-    (line) =>
+  const cashLines = original.lines.filter((line) => {
+    const monetary =
+      ["cash", "bank", "loan", "loans", "customer"].includes(line.accountType?.toLowerCase() ?? "") ||
+      line.bankId !== null ||
+      line.customerId !== null;
+    return (
       !isFxCounter(line) &&
       line.currency?.trim().toUpperCase() === "USD" &&
       line.rateConvention === "IDENTITY" &&
-      ["cash", "bank", "loan", "loans", "customer"].includes(line.accountType?.toLowerCase() ?? "") ||
-      (!isFxCounter(line) && line.currency === "USD" && line.rateConvention === "IDENTITY" &&
-       (line.bankId !== null || line.customerId !== null))
-  );
+      monetary
+    );
+  });
   const originalByTarget = aggregate(cashLines, () => true);
   const originalLoss = counter ? signed(counter) : new Decimal(0);
   base.originalFxLossUsd = originalLoss.toFixed(2);
