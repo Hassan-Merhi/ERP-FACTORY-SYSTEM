@@ -86,7 +86,8 @@ export function classifyManualFxCorrectionPreflight(input: {
 }): { status: ManualFxCorrectionPreflight["status"]; blockers: string[] } {
   if (!input.found) return { status: "not_found", blockers: ["VOUCHER_NOT_FOUND"] };
   const blockers: string[] = [];
-  if (input.deleted || input.optional || input.reversalOfVoucherId !== null) blockers.push("VOUCHER_NOT_ACTIVE_OR_ORIGINAL");
+  if (input.deleted || input.optional || input.reversalOfVoucherId !== null)
+    blockers.push("VOUCHER_NOT_ACTIVE_OR_ORIGINAL");
   if (input.sourceType !== "manual-journal") blockers.push("VOUCHER_NOT_MANUAL_JOURNAL");
   if (input.fxCounterType === null) blockers.push("FX_COUNTER_ACCOUNT_MISSING");
   else if (input.fxCounterType !== "Indirect Expense") blockers.push("FX_ACCOUNT_RECLASSIFICATION_REQUIRED");
@@ -145,8 +146,9 @@ export async function getManualFxCorrectionPreflight(
          WHERE v.company_id=${companyId} AND v.id=${voucherId}
       `)
     )[0] ?? null;
-    const lines = header ? resultRows<VoucherLine>(
-      await tx.execute(sql`
+    const lines = header
+      ? resultRows<VoucherLine>(
+          await tx.execute(sql`
         SELECT e.id, e.ledger_account_id, e.bank_account_id, e.customer_id,
                a.code AS account_code, a.name AS account_name, a.account_type,
                e.debit_amount::text, e.credit_amount::text,
@@ -156,21 +158,26 @@ export async function getManualFxCorrectionPreflight(
           LEFT JOIN ledger_accounts a ON a.company_id=e.company_id AND a.id=e.ledger_account_id
          WHERE e.company_id=${companyId} AND e.voucher_id=${voucherId}
          ORDER BY e.id
-      `)
-    ) : [];
+          `)
+        )
+      : [];
     return { header, lines };
   });
   const valuation = await getMonetaryFxValuation(companyId);
   const conflicts = await findLegacyManualFxConflicts(db, companyId, valuation.businessDate);
   const fxCounter = snapshot.lines.find(
-    (row) => row.account_code === "FXREVGAI" || row.account_code === "FX-REVALUATION" ||
+    (row) =>
+      row.account_code === "FXREVGAI" ||
+      row.account_code === "FX-REVALUATION" ||
       row.account_name?.toLowerCase().trim() === "fx revaluation gain/loss"
   );
   const foreignTargetKeys = new Set<string>();
   const monetaryMovements = snapshot.lines.filter((row) => {
     const originalUsd = row.transaction_currency?.trim().toUpperCase() === "USD";
-    const monetary = ["Cash", "Bank", "Loan", "Loans", "Customer"].includes(row.account_type ?? "") ||
-      row.bank_account_id !== null || row.customer_id !== null;
+    const monetary =
+      ["Cash", "Bank", "Loan", "Loans", "Customer"].includes(row.account_type ?? "") ||
+      row.bank_account_id !== null ||
+      row.customer_id !== null;
     if (!originalUsd || row.rate_convention !== "IDENTITY" || !monetary) return false;
     if (row.ledger_account_id !== null) foreignTargetKeys.add(`ledger:${row.ledger_account_id}`);
     else if (row.bank_account_id !== null) foreignTargetKeys.add(`bank:${row.bank_account_id}`);
@@ -181,8 +188,11 @@ export async function getManualFxCorrectionPreflight(
   let unresolved = 0;
   for (const row of valuation.accounts) {
     if (!foreignTargetKeys.has(row.accountKey)) continue;
-    if (row.provisional || row.currentTranslatedUsd === null ||
-        !["cash_bank", "loan", "customer"].includes(row.eligibility)) {
+    if (
+      row.provisional ||
+      row.currentTranslatedUsd === null ||
+      !["cash_bank", "loan", "customer"].includes(row.eligibility)
+    ) {
       unresolved++;
       continue;
     }
@@ -204,21 +214,23 @@ export async function getManualFxCorrectionPreflight(
   }
   // A balanced voucher totals zero across all accounts. Its FX counter-line
   // is the amount of the original loss, not the sum of the entire journal.
-  const netAdjustment = candidates.reduce(
-    (sum, row) => sum.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0)
-  );
+  const netAdjustment = candidates.reduce((sum, row) => sum.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0));
   const cashMovement = monetaryMovements.reduce(
-    (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount), new Decimal(0)
+    (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount),
+    new Decimal(0)
   );
   const originalCounter = fxCounter
-    ? new Decimal(fxCounter.debit_amount).minus(fxCounter.credit_amount) : new Decimal(0);
+    ? new Decimal(fxCounter.debit_amount).minus(fxCounter.credit_amount)
+    : new Decimal(0);
   const wholeVoucher = snapshot.lines.reduce(
-    (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount), new Decimal(0)
+    (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount),
+    new Decimal(0)
   );
   // A legacy cash/FX journal may not be equivalent to today's outstanding
   // amount if other movements or rates have changed. Flag it for independent
   // accounting review; never silently treat it as a safe correction.
-  const amountsReconcile = wholeVoucher.abs().lt("0.005") &&
+  const amountsReconcile =
+    wholeVoucher.abs().lt("0.005") &&
     cashMovement.plus(originalCounter).abs().lt("0.005") &&
     netAdjustment.minus(cashMovement).abs().lt("0.005");
   const classified = classifyManualFxCorrectionPreflight({
@@ -243,15 +255,22 @@ export async function getManualFxCorrectionPreflight(
     voucherDate: snapshot.header?.voucher_date ?? null,
     businessDate: valuation.businessDate,
     rateEvidence: valuation.rates.map((r) => ({
-      currency: r.currency, rate: r.rate, direction: r.direction, effectiveDate: r.effectiveDate,
+      currency: r.currency,
+      rate: r.rate,
+      direction: r.direction,
+      effectiveDate: r.effectiveDate,
     })),
     status: classified.status,
     blockers: classified.blockers,
     manualFxCounterDebitUsd: originalCounter.toFixed(2),
     manualCashMovementUsd: cashMovement.toFixed(2),
-    fxCounterAccount: fxCounter?.ledger_account_id ? {
-      id: fxCounter.ledger_account_id, code: fxCounter.account_code ?? "", type: fxCounter.account_type ?? "",
-    } : null,
+    fxCounterAccount: fxCounter?.ledger_account_id
+      ? {
+          id: fxCounter.ledger_account_id,
+          code: fxCounter.account_code ?? "",
+          type: fxCounter.account_type ?? "",
+        }
+      : null,
     candidates,
     candidateNetAdjustmentUsd: netAdjustment.toFixed(2),
     readOnly: true,
