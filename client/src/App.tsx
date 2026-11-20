@@ -216,6 +216,39 @@ function DeferredAuthenticatedUtilities() {
 }
 
 /**
+ * A resumed tab must verify its shared session before displaying records.
+ * Cover the view and take keyboard focus during that brief verification,
+ * preserving draft form state if the company is still the same.
+ */
+function CompanySessionVerificationCover() {
+  const coverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    coverRef.current?.focus();
+    return () => {
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    };
+  }, []);
+
+  return (
+    <div
+      ref={coverRef}
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="Verifying company"
+      tabIndex={-1}
+      className="fixed inset-0 z-[2147483647] overflow-auto bg-background"
+      data-testid="company-session-verification-cover"
+    >
+      <AppLoadingState message="Verifying company" />
+    </div>
+  );
+}
+
+/**
  * Unmount every company-owned provider, page and portal when a company switch
  * begins, not only the active route shell. Portaled dialogs disappear with
  * their owner and all local selections are recreated for the new company.
@@ -228,24 +261,27 @@ function CompanyWorkspaceBoundary({
   user: AuthenticatedUser;
   handleLogout: () => Promise<void>;
 }) {
-  const { selectedCompany, isLoading: companyLoading } = useCompany();
+  const { selectedCompany, isLoading: companyLoading, isCheckingCompanySession } = useCompany();
 
   if (companyLoading || !selectedCompany) {
     return <AppLoadingState message="Switching company" />;
   }
 
   return (
-    <LocationProvider key={`${user.id}:${selectedCompany.id}`}>
-      <DateFormatProvider>
-        <CurrencyProvider>
-          <CursorNavProvider>
-            <LegacyQueueRecoveryPanel />
-            <AuthenticatedApp user={user} handleLogout={handleLogout} />
-            <DeferredAuthenticatedUtilities />
-          </CursorNavProvider>
-        </CurrencyProvider>
-      </DateFormatProvider>
-    </LocationProvider>
+    <>
+      <LocationProvider key={`${user.id}:${selectedCompany.id}`}>
+        <DateFormatProvider>
+          <CurrencyProvider>
+            <CursorNavProvider>
+              <LegacyQueueRecoveryPanel />
+              <AuthenticatedApp user={user} handleLogout={handleLogout} />
+              <DeferredAuthenticatedUtilities />
+            </CursorNavProvider>
+          </CurrencyProvider>
+        </DateFormatProvider>
+      </LocationProvider>
+      {isCheckingCompanySession && <CompanySessionVerificationCover />}
+    </>
   );
 }
 
