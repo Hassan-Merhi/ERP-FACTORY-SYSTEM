@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import type { usePayrollModel } from "./usePayrollModel";
 
 type PayrollModel = ReturnType<typeof usePayrollModel>;
@@ -326,24 +327,19 @@ export function BulkDialogs({
               </div>
               <div className="space-y-2">
                 <Label>Payment Account</Label>
-                <Select value={bulkWithdrawalAccountId} onValueChange={setBulkWithdrawalAccountId}>
-                  <SelectTrigger data-testid="select-withdrawal-account">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {bulkWithdrawalAccountType === "cash"
-                      ? cashAccounts?.map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id.toString()}>
-                            {acc.name}
-                          </SelectItem>
-                        ))
-                      : bankAccounts?.map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id.toString()}>
-                            {acc.accountName}
-                          </SelectItem>
-                        ))}
-                  </SelectContent>
-                </Select>
+                <UnifiedAccountPicker
+                  options={(bulkWithdrawalAccountType === "cash"
+                    ? cashAccounts ?? []
+                    : bankAccounts ?? []
+                  ).map((account) => ({
+                    value: String(account.id),
+                    name: "accountName" in account ? String(account.accountName) : account.name,
+                  }))}
+                  value={bulkWithdrawalAccountId}
+                  onChange={setBulkWithdrawalAccountId}
+                  placeholder="Select account"
+                  testId="select-withdrawal-account"
+                />
               </div>
             </div>
 
