@@ -86,7 +86,7 @@ describe("RetailPaymentPanel Split", () => {
       <Harness total={10} initial={[{ method: "cash", amount: 10, tenderedAmount: 10 }]} onChange={() => {}} />
     );
     fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
-    expect(screen.queryByText(/customer credit/i)).toBeNull();
+    expect(screen.queryByRole("option", { name: /customer credit/i })).toBeNull();
     unmount();
     render(
       <Harness
@@ -97,7 +97,7 @@ describe("RetailPaymentPanel Split", () => {
       />
     );
     fireEvent.click(screen.getByRole("combobox", { name: /payment account/i }));
-    expect(screen.getByText(/customer credit/i)).toBeTruthy();
+    expect(screen.getByRole("option", { name: /customer credit/i })).toBeTruthy();
   });
 });
 
