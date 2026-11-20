@@ -363,8 +363,8 @@ export function RetailExchangeDialog({
                     options={[{ value: "__original__", name: "Original payment accounts" }, ...(accounts?.ledgers ?? []).map((a) => ({ value: `ledger:${a.id}`, name: a.name })), ...(accounts?.banks ?? []).map((a) => ({ value: `bank:${a.id}`, name: a.name }))]}
                     value={refundAccount || "__original__"}
                     onChange={(v) => setRefundAccount(v === "__original__" ? "" : v)}
-                    placeholder={"Original payment accounts"}
-                    ariaLabel={"Exchange refund account"}
+                    placeholder="Original payment accounts"
+                    ariaLabel="Exchange refund account"
                     />
             </label>
           )}
