@@ -169,21 +169,31 @@ describe("prepaid designations", () => {
 });
 
 describe("prepaid replace with a missing duty fee", () => {
-  it("swaps without asking for confirmation and logs a NaN amount (current behaviour)", () =>
+  it("refuses with 400 before the confirmation step, swapping and logging nothing", () =>
     withFactoryWorld(async (w) => {
       const oldId = await container(w, "OLD", "100");
       const noDuty = await container(w, "NODUTY", null);
       const base = `/api/git/agent-prepaid/${w.companyId}/${enc}`;
+      const replace = (body: Record<string, unknown>) => w.agent.post(`${base}/replace`).send(body);
       await w.agent.post(`${base}/set-all`).send({ containerIds: [oldId] });
-      // NaN never compares greater than 0.01, so a container without a duty fee
-      // skips the mismatch confirmation entirely.
-      const res = await w.agent.post(`${base}/replace`).send({ oldContainerId: oldId, newContainerId: noDuty });
-      expect(res.status).toBe(200);
+
+      // Missing duty fee on the new container, with and without confirmation.
+      for (const confirmDifferentAmount of [undefined, true]) {
+        const res = await replace({ oldContainerId: oldId, newContainerId: noDuty, confirmDifferentAmount });
+        expect(res.status).toBe(400);
+        expect(res.body.message).toBe(`Container ${w.tag}NODUTY has no valid duty fee.`);
+      }
+      expect(await designations(w)).toEqual([{ container_id: oldId }]);
+
+      // Missing duty fee on the designated (old) container.
+      await w.agent.post(`${base}/set-all`).send({ containerIds: [noDuty] });
+      const res = await replace({ oldContainerId: noDuty, newContainerId: oldId, confirmDifferentAmount: true });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe(`Container ${w.tag}NODUTY has no valid duty fee.`);
       expect(await designations(w)).toEqual([{ container_id: noDuty }]);
-      const [log] = await w.q(`SELECT amount::text AS amount FROM git_prepaid_activity_log WHERE company_id = $1`, [
-        w.companyId,
-      ]);
-      expect(log.amount).toBe("NaN");
+
+      const log = await w.q(`SELECT 1 FROM git_prepaid_activity_log WHERE company_id = $1`, [w.companyId]);
+      expect(log).toEqual([]);
     }));
 });
 

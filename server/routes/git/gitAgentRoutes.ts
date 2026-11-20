@@ -252,17 +252,24 @@ export function registerGitAgentRoutes(app: Express) {
         });
       }
 
+      // Both duty fees must be real amounts: a missing one would make the
+      // mismatch check below compare NaN (never "different") and log NaN.
+      const oldAmount = parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN;
+      const newAmount = parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN;
+      if (!Number.isFinite(oldAmount)) {
+        return res.status(400).json({ message: `Container ${oldC.container_number} has no valid duty fee.` });
+      }
+      if (!Number.isFinite(newAmount)) {
+        return res.status(400).json({ message: `Container ${newC.container_number} has no valid duty fee.` });
+      }
+
       // Warn on mismatched duty amounts
-      const amountsDiffer =
-        Math.abs(
-          (parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN) -
-            (parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN)
-        ) > 0.01;
+      const amountsDiffer = Math.abs(oldAmount - newAmount) > 0.01;
       if (amountsDiffer && !confirmDifferentAmount) {
         return res.status(409).json({
           message: "Duty amounts differ between the two containers.",
-          oldAmount: parseMoneyInput(oldC.duty_fee ?? "")?.toNumber() ?? NaN,
-          newAmount: parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN,
+          oldAmount,
+          newAmount,
           requiresConfirmation: true,
         });
       }
@@ -287,7 +294,7 @@ export function registerGitAgentRoutes(app: Express) {
               (${companyId}, ${agentName}, 'replace',
                ${Number(oldContainerId)}, ${Number(newContainerId)},
                ${oldC.container_number}, ${newC.container_number},
-               ${parseMoneyInput(newC.duty_fee ?? "")?.toNumber() ?? NaN}, ${userId})`
+               ${newAmount}, ${userId})`
       );
 
       res.json({
