@@ -32,6 +32,33 @@ vi.mock("@/contracts/sessionQueryContracts", () => ({
   }),
 }));
 
+import { COMPANY_SESSION_CHANNEL, COMPANY_SESSION_STORAGE_PULSE } from "@/lib/companySessionSync";
+
+class FakeBroadcastChannel {
+  static instances = new Set<FakeBroadcastChannel>();
+  readonly listeners = new Set<(event: MessageEvent<unknown>) => void>();
+
+  constructor(readonly name: string) {
+    FakeBroadcastChannel.instances.add(this);
+  }
+
+  addEventListener(type: string, listener: (event: MessageEvent<unknown>) => void) {
+    if (type === "message") this.listeners.add(listener);
+  }
+
+  postMessage(data: unknown) {
+    for (const other of FakeBroadcastChannel.instances) {
+      if (other === this || other.name !== this.name) continue;
+      for (const listener of other.listeners) listener({ data } as MessageEvent<unknown>);
+    }
+  }
+
+  close() {
+    FakeBroadcastChannel.instances.delete(this);
+    this.listeners.clear();
+  }
+}
+
 import { queryClient } from "@/lib/queryClient";
 import { CompanyProvider, useCompany } from "@/contexts/CompanyContext";
 
@@ -61,6 +88,8 @@ async function renderOnCompanyOne() {
 
 describe("company selection across browser tabs", () => {
   beforeEach(() => {
+    FakeBroadcastChannel.instances.clear();
+    vi.stubGlobal("BroadcastChannel", FakeBroadcastChannel);
     localStorage.clear();
     localStorage.setItem("selectedCompanyId", "1");
     sessionCompanyId = 1;
@@ -72,6 +101,8 @@ describe("company selection across browser tabs", () => {
 
   afterEach(() => {
     queryClient.clear();
+    vi.unstubAllGlobals();
+    FakeBroadcastChannel.instances.clear();
   });
 
   it("adopts the session company after another tab switches, without writing the session", async () => {
@@ -129,4 +160,81 @@ describe("company selection across browser tabs", () => {
     expect(result.current.selectedCompany?.id).toBe(1);
     expect(harness.apiRequest).not.toHaveBeenCalled();
   });
+  it("reconciles a missed company event when a background tab returns to focus", async () => {
+    const { result } = await renderOnCompanyOne();
+    sessionCompanyId = 2;
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    expect(localStorage.getItem("selectedCompanyId")).toBe("2");
+    expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("follows a committed switch pulse even if the saved company ID did not change", async () => {
+    const { result } = await renderOnCompanyOne();
+    sessionCompanyId = 3;
+
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: COMPANY_SESSION_STORAGE_PULSE,
+        newValue: JSON.stringify({
+          type: "company-committed",
+          companyId: 1, // stale hint; the server has already moved to 3
+          sourceId: "other-tab",
+          nonce: "pulse-1",
+        }),
+      }));
+    });
+
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(3));
+    expect(localStorage.getItem("selectedCompanyId")).toBe("3");
+    expect(harness.apiRequest).not.toHaveBeenCalled();
+  });
+
+  it("adopts a broadcast company's authoritative session without a storage event", async () => {
+    const { result } = await renderOnCompanyOne();
+    sessionCompanyId = 2;
+    const sender = new BroadcastChannel(COMPANY_SESSION_CHANNEL);
+
+    await act(async () => {
+      sender.postMessage({
+        type: "company-committed",
+        companyId: 3, // must not be trusted: the server actually chose 2
+        sourceId: "other-tab",
+        nonce: "broadcast-1",
+      });
+    });
+
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    expect(localStorage.getItem("selectedCompanyId")).toBe("2");
+    expect(harness.apiRequest).not.toHaveBeenCalled();
+    sender.close();
+  });
+
+  it("publishes a committed local selection to other tabs", async () => {
+    const { result } = await renderOnCompanyOne();
+    const listener = new BroadcastChannel(COMPANY_SESSION_CHANNEL);
+    const messages: unknown[] = [];
+    listener.addEventListener("message", (event: MessageEvent<unknown>) => messages.push(event.data));
+
+    harness.apiRequest.mockImplementation(async (_method: string, url: string, body: { companyId: number }) => {
+      if (url === "/api/auth/set-company") sessionCompanyId = body.companyId;
+      return { ok: true };
+    });
+
+    await act(async () => {
+      expect(await result.current.selectCompany(result.current.companies[1])).toBe(true);
+    });
+
+    expect(result.current.selectedCompany?.id).toBe(2);
+    expect(messages).toEqual([
+      expect.objectContaining({ type: "company-committed", companyId: 2 }),
+    ]);
+    expect(localStorage.getItem(COMPANY_SESSION_STORAGE_PULSE)).toContain('"companyId":2');
+    listener.close();
+  });
+
 });
