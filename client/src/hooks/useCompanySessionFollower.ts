@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from "react";
 import type { Company } from "@/contexts/CompanyContext";
 import type { CompanySwitchQueue } from "@/lib/companySwitchQueue";
-import { subscribeToCompanySessionChanges } from "@/lib/companySessionSync";
+import { subscribeToCompanySessionChanges, type CompanySessionSignal } from "@/lib/companySessionSync";
 import { cancelCompanySessionQueries, removeCompanySessionQueries } from "@/lib/companyQueryScope";
 import { queryClient } from "@/lib/queryClient";
 import { fetchSessionCompany } from "@/contracts/sessionQueryContracts";
@@ -12,7 +12,7 @@ interface CompanySessionFollowerOptions {
   switchQueueRef: RefObject<CompanySwitchQueue | null>;
   externalChangeObservedRef: RefObject<boolean>;
   /** Hide the current workspace before any session probe can resolve. */
-  onTransitionStart: () => void;
+  onTransitionStart: (signal: CompanySessionSignal) => void;
   /** Reveal the workspace only after the server scope was verified. */
   onTransitionVerified: () => void;
   onAdopt: (company: Company) => void;
@@ -57,6 +57,9 @@ export function useCompanySessionFollower({
         if (!initialSession.companyId) throw new Error("Active company is unavailable.");
 
         if (initialSession.companyId !== selectedCompanyRef.current?.id) {
+          // A resume probe detected an actual change: unmount all old-company
+          // UI before admitting any newly scoped business responses.
+          onTransitionStart("selection");
           await switchQueueRef.current!.enqueue(async () => {
             if (disposed) return;
             // Another local switch may have completed while waiting in the
@@ -102,12 +105,12 @@ export function useCompanySessionFollower({
         });
     };
 
-    const onChange = () => {
+    const onChange = (signal: CompanySessionSignal) => {
       externalChangeObservedRef.current = true;
       // During first activation the entire app is already hidden. Its startup
       // path reconciles the server, so do not introduce a permanent second gate.
       if (!selectedCompanyRef.current) return;
-      onTransitionStart();
+      onTransitionStart(signal);
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = null;
       if (inProgress) {
