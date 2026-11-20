@@ -22,6 +22,7 @@ type CommonProps = {
   disabled?: boolean;
   id?: string;
   testId?: string;
+  searchTestId?: string;
   optionTestId?: (value: string) => string;
   ariaLabel?: string;
   className?: string;
@@ -132,7 +133,7 @@ export function UnifiedAccountPicker(props: UnifiedAccountPickerProps) {
             onValueChange={setQuery}
             placeholder={props.searchPlaceholder ?? "Search account name..."}
             aria-label="Search accounts..."
-            data-testid={props.testId ? `${props.testId}-search` : undefined}
+            data-testid={props.searchTestId ?? (props.testId ? `${props.testId}-search` : undefined)}
           />
           <CommandList className="max-h-64">
             {filtered.length === 0 ? (
