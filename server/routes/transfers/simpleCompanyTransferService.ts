@@ -14,25 +14,11 @@ import {
 import { TransferRouteError } from "./transferErrors";
 import { transferRepository } from "./transferRepository";
 import { parseSimpleTransferInput } from "./transferValidation";
-import { createHash } from "node:crypto";
+import { usdTransferVoucherNumber } from "./usdTransferVoucherNumber";
 
 const postingDependencies = createDatabasePostingDependencies();
 
 type TransferSide = "from" | "to";
-
-/**
- * USD voucher number for one side of a transfer. The posting engine includes
- * voucherNumber in its request fingerprint, so a retry with the same
- * clientRequestId must rebuild the same number to replay instead of being
- * refused. Derived from clientRequestId the same way as the Kwacha numbers;
- * only a request without a clientRequestId (no retry identity) falls back to
- * the legacy timestamp.
- */
-function usdTransferVoucherNumber(prefix: string, clientRequestId: string | undefined, timestamp: number): string {
-  if (!clientRequestId) return `${prefix}-${timestamp}`;
-  const digest = createHash("sha256").update(clientRequestId).digest("hex").slice(0, 24);
-  return `${prefix}-${digest}`;
-}
 
 function nullableVoucherId(value: unknown): number {
   // Number(null) is 0, an integer: a NULL voucher id must read as missing.

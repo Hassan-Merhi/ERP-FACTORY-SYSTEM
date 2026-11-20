@@ -12,6 +12,7 @@ import {
 import { TransferRouteError } from "./transferErrors";
 import { transferRepository } from "./transferRepository";
 import { parseInterCompanyTransferInput } from "./transferValidation";
+import { usdTransferVoucherNumber } from "./usdTransferVoucherNumber";
 
 const postingDependencies = createDatabasePostingDependencies();
 
@@ -111,8 +112,11 @@ export const interCompanyTransferService = {
       accounts: toAccounts,
     });
     const voucherTimestamp = Date.now();
-    const fromVoucherNumber = zmwFromVoucherNumber ?? `ICT-FROM-${voucherTimestamp}`;
-    const toVoucherNumber = zmwToVoucherNumber ?? `ICT-TO-${voucherTimestamp}`;
+    // A USD retry with the same clientRequestId rebuilds the same numbers and replays.
+    const fromVoucherNumber =
+      zmwFromVoucherNumber ?? usdTransferVoucherNumber("ICT-FROM", parsed.clientRequestId, voucherTimestamp);
+    const toVoucherNumber =
+      zmwToVoucherNumber ?? usdTransferVoucherNumber("ICT-TO", parsed.clientRequestId, voucherTimestamp);
     const description = parsed.description || `Inter-company transfer to ${toCompany.name}`;
 
     return transferRepository.transaction(async (tx) => {
