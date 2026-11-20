@@ -15,6 +15,15 @@ export function registerFactoryGroundScanRoutes(app: Express) {
       // each read so loading, sale, return, dispatch and deletion show without rescanning.
       // Keep the snapshot only for legacy label-only scans with no factory_bales row.
       const query = `
+        WITH scoped_scans AS (
+          SELECT g.*, ROW_NUMBER() OVER (
+            PARTITION BY UPPER(BTRIM(g.reference_number))
+            ORDER BY g.scanned_at DESC, g.id DESC
+          ) AS scan_rank
+          FROM factory_ground_scan_items g
+          WHERE g.company_id = $1
+            AND ${locVal === null ? "TRUE" : "g.location_id = $2"}
+        )
         SELECT g.id, g.company_id, g.location_id, g.reference_number,
                COALESCE(NULLIF(bp.article_code, ''), NULLIF(fb.article_code, ''), g.article_code) AS article_code,
                COALESCE(NULLIF(fb.product_name, ''), NULLIF(g.product_name, ''), bp.name) AS product_name,
@@ -37,7 +46,7 @@ export function registerFactoryGroundScanRoutes(app: Express) {
                g.scanned_at, g.scanned_by_user_id,
                fb.stock_entry_date::text AS date_bale_produced,
                fb.worker_name
-          FROM factory_ground_scan_items g
+          FROM scoped_scans g
           LEFT JOIN factory_bales fb
             ON fb.reference_number = g.reference_number
            AND fb.company_id = g.company_id::integer
@@ -62,9 +71,8 @@ export function registerFactoryGroundScanRoutes(app: Express) {
                ELSE 9 END
              LIMIT 1
           ) active_order ON TRUE
-         WHERE g.company_id = $1
-           AND ${locVal === null ? "g.location_id IS NULL" : "g.location_id = $2"}
-         ORDER BY g.scanned_at DESC
+         WHERE g.scan_rank = 1
+         ORDER BY g.scanned_at DESC, g.id DESC
       `;
       const result = await pool.query(query, locVal === null ? [companyId] : [companyId, locVal]);
       return res.json(result.rows);
@@ -88,7 +96,7 @@ export function registerFactoryGroundScanRoutes(app: Express) {
       const check = await pool.query(
         locVal !== null
           ? `SELECT id FROM factory_ground_scan_items WHERE company_id=$1 AND location_id=$2 AND reference_number=$3`
-          : `SELECT id FROM factory_ground_scan_items WHERE company_id=$1 AND location_id IS NULL AND reference_number=$2`,
+          : `SELECT id FROM factory_ground_scan_items WHERE company_id=$1 AND reference_number=$2`,
         locVal !== null ? [companyId, locVal, ref] : [companyId, ref]
       );
       if (check.rowCount && check.rowCount > 0) {
@@ -196,9 +204,9 @@ export function registerFactoryGroundScanRoutes(app: Express) {
           locVal,
         ]);
       } else {
-        await pool.query(`DELETE FROM factory_ground_scan_items WHERE company_id=$1 AND location_id IS NULL`, [
-          companyId,
-        ]);
+        // The "all" view aggregates every scanned location; clearing it must
+        // clear that same scope rather than only legacy unassigned scans.
+        await pool.query(`DELETE FROM factory_ground_scan_items WHERE company_id=$1`, [companyId]);
       }
       return res.json({ success: true });
     } catch (e: unknown) {
