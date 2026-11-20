@@ -88,24 +88,20 @@ export function SupplierPaymentFxDialogs({
                 return (
                   <div>
                     <Label>Pay to (account)</Label>
-                    <Select
+                    <UnifiedAccountPicker
+                      options={[
+                        { value: String(paymentDialogSupplier.id), name: paymentDialogSupplier.name },
+                        ...children.map((supplier) => ({
+                          value: String(supplier.id),
+                          name: supplier.name,
+                        })),
+                      ]}
                       value={String(paymentForm.supplierId)}
-                      onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, supplierId: parseInt(v) }))}
-                    >
-                      <SelectTrigger data-testid="select-payment-target">
-                        <SelectValue placeholder="Select account" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={String(paymentDialogSupplier.id)}>
-                          {paymentDialogSupplier.name} (broker)
-                        </SelectItem>
-                        {children.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name} (linked supplier)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onChange={(value) => setPaymentForm((prev) => ({ ...prev, supplierId: parseInt(value, 10) }))}
+                      placeholder="Select account"
+                      testId="select-payment-target"
+                      ariaLabel="Pay to supplier account"
+                    />
                   </div>
                 );
               })()}
