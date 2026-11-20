@@ -133,8 +133,8 @@ export async function exportGroundScanWorkbook({
   ws1.addRow([]);
 
   const stats = [
-    { label: "System (IN STOCK)", value: systemBales.length, color: BLUE },
-    { label: "Scanned on Ground", value: scannedBales.length, color: GREEN },
+    { label: "Available System Stock", value: systemBales.length, color: BLUE },
+    { label: "Recorded Ground Scans", value: scannedBales.length, color: GREEN },
     { label: "Missing Bales", value: missingBales.length, color: missingBales.length > 0 ? RED : GRAY },
     { label: "Extra Bales", value: extraBales.length, color: extraBales.length > 0 ? AMBER : GRAY },
   ];
@@ -243,7 +243,7 @@ export async function exportGroundScanWorkbook({
   m_titleRow.getCell(1).alignment = { vertical: "middle" };
   ws2.mergeCells("A1:F1");
 
-  ws2.addRow([`Bales recorded IN_STOCK in the system but not found during ground scan  —  ${dateStr}`]);
+  ws2.addRow([`Available stock references not found during ground scan (loaded / dispatched / sold excluded)  —  ${dateStr}`]);
   const m_sub = ws2.lastRow!;
   m_sub.height = 16;
   m_sub.getCell(1).font = { size: 9, name: "Calibri", color: { argb: GRAY } };
@@ -316,7 +316,7 @@ export async function exportGroundScanWorkbook({
     e_titleRow.getCell(1).font = { bold: true, size: 15, name: "Calibri", color: { argb: AMBER } };
     ws3.mergeCells("A1:G1");
 
-    ws3.addRow([`Bales scanned on ground that are NOT recorded as IN_STOCK in the system  —  ${dateStr}`]);
+    ws3.addRow([`Historical scans not currently in available stock (may have been loaded, shipped or sold)  —  ${dateStr}`]);
     const e_sub = ws3.lastRow!;
     e_sub.height = 16;
     e_sub.getCell(1).font = { size: 9, name: "Calibri", color: { argb: GRAY } };
