@@ -1,4 +1,5 @@
 import { installPermissionRevalidationListener } from "./permissionRevalidation";
+import { assertCompanyReadSnapshot, captureCompanyReadSnapshot, isCompanyOwnedApiRead } from "./companyCacheScope";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient } from "@tanstack/react-query";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
@@ -108,6 +109,13 @@ if (
     }
 
     const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+    // The authenticated server session, not the URL, owns company-specific
+    // responses. Reject GETs started before or during a company transition.
+    // Session/auth/health probes remain available to complete the switch.
+    const readScope = method === "GET" && pathname && isCompanyOwnedApiRead(pathname)
+      ? captureCompanyReadSnapshot()
+      : null;
+    if (readScope) assertCompanyReadSnapshot(readScope);
 
     // Once /api/auth/me has confirmed expiry, stop protected traffic at the
     // browser boundary. This catches React Query, raw fetch(), polling hooks,
@@ -234,11 +242,15 @@ if (
       if (!OFFLINE_MODE_ENABLED || !exactReadUrl || effectiveInit?.signal?.aborted) return null;
       const { readColdStartIdentityResponse, readPreparedOfflineResponse } = await import("./offline/offlineReadCache");
       // A read-only cold start (plan batch 5) also answers the identity reads from its sealed ticket.
-      return readColdStartIdentityResponse(method, exactReadUrl) ?? readPreparedOfflineResponse(method, exactReadUrl);
+      const cached = readColdStartIdentityResponse(method, exactReadUrl) ??
+        await readPreparedOfflineResponse(method, exactReadUrl);
+      if (readScope) assertCompanyReadSnapshot(readScope);
+      return cached;
     };
     let fallbackRes: Response;
     try {
       fallbackRes = await originalFetch(input, effectiveInit);
+      if (readScope) assertCompanyReadSnapshot(readScope);
     } catch (error) {
       const networkFailure =
         error instanceof TypeError || (error instanceof DOMException && error.name === "NetworkError");
@@ -257,6 +269,7 @@ if (
     }
     await applyReferenceMutation(fallbackRes);
     await handlePossibleSessionExpiry(fallbackRes, pathname, originalFetch);
+    if (readScope) assertCompanyReadSnapshot(readScope);
     return fallbackRes;
   }
 
