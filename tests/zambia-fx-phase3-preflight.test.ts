@@ -18,6 +18,7 @@ const ready = {
   unresolvedAccountCount: 0,
   baseCurrency: "USD",
   nonEmptyCandidates: true,
+  amountsReconcile: true,
 };
 
 describe("Phase 3 manual FX correction preflight policy", () => {
@@ -55,6 +56,13 @@ describe("Phase 3 manual FX correction preflight policy", () => {
     for (const candidate of cases) {
       expect(classifyManualFxCorrectionPreflight(candidate).status).toBe("blocked");
     }
+  });
+
+  it("refuses an FX correction when the voucher and current-account adjustments differ", () => {
+    expect(classifyManualFxCorrectionPreflight({ ...ready, amountsReconcile: false })).toEqual({
+      status: "blocked",
+      blockers: ["FX_CORRECTION_AMOUNT_MISMATCH"],
+    });
   });
 
   it("identifies a prior reversal without treating it as a new journal", () => {
