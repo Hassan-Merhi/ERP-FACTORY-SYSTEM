@@ -50,9 +50,10 @@ async function createVoucher(
   return withFixtureTransaction(async (client) => {
     const header = await client.query<{ id: number }>(
       `INSERT INTO vouchers
-       (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, reversal_of_voucher_id)
-       VALUES ($1, $2, 'Journal', $3, 0, 'USD', $4) RETURNING id`,
-      [companyId, `${unique}-${number}`, at, reversalOf]
+       (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, reversal_of_voucher_id, description)
+       VALUES ($1, $2, 'Journal', $3, 0, 'USD', $4, $5) RETURNING id`,
+      [companyId, `${unique}-${number}`, at, reversalOf,
+        number === "MANUAL-FX" ? "FX Revaluation — Rate 20.8 → 20.9 ZMW (FX loss)" : number]
     );
     const id = header.rows[0].id;
     for (const line of lines) {
