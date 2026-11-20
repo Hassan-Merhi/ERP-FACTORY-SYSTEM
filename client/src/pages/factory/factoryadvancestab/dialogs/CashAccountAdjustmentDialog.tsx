@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 /**
  * CashAccountAdjustmentDialog — extracted from AdvancesView.tsx during the Phase 4 split.
  *
@@ -57,21 +58,13 @@ export function CashAccountAdjustmentDialog({
             <Label>
               Cash Account <span className="text-destructive">*</span>
             </Label>
-            <Select
-              value={cashAdjForm.cashAccountId}
-              onValueChange={(v) => setCashAdjForm((p) => ({ ...p, cashAccountId: v }))}
-            >
-              <SelectTrigger data-testid="select-cadj-account">
-                <SelectValue placeholder="Select cash account" />
-              </SelectTrigger>
-              <SelectContent>
-                {(cashAccounts || []).map((a) => (
-                  <SelectItem key={a.id} value={String(a.id)}>
-                    {a.name} ({a.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+                options={(cashAccounts || []).map((account) => ({ value: String(account.id), name: account.name }))}
+                value={cashAdjForm.cashAccountId}
+                onChange={(v) => setCashAdjForm((p) => ({ ...p, cashAccountId: v }))}
+                placeholder={"Select cash account"}
+                testId={"select-cadj-account"}
+              />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
