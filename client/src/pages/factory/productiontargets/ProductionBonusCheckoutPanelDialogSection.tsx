@@ -2,7 +2,7 @@
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import {
   Dialog,
   DialogContent,
@@ -52,18 +52,12 @@ export function ProductionBonusCheckoutPanelDialogSection({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1.5 text-sm">
             {t("payFrom")}
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger>
-                <SelectValue placeholder={t("chooseAccount")} />
-              </SelectTrigger>
-              <SelectContent>
-                {cashAccounts.map((account) => (
-                  <SelectItem key={account.id} value={String(account.id)}>
-                    {account.name} ({account.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <UnifiedAccountPicker
+                options={cashAccounts.map((account) => ({ value: String(account.id), name: account.name }))}
+                value={accountId}
+                onChange={setAccountId}
+                placeholder={t("chooseAccount")}
+              />
           </label>
           <label className="space-y-1.5 text-sm">
             {t("paymentDate")}
