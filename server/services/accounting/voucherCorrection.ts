@@ -31,6 +31,7 @@ import type { DbTransaction } from "../../db";
 import { HttpError } from "../../lib/httpError";
 import { isIntercompanyPairedVoucher, INTERCOMPANY_PAIRED_VOUCHER_LOCK_MESSAGE } from "../../lib/migratedVoucherGuard";
 import { resultRows } from "../../lib/queryResult";
+import { isAutomaticFxRevaluationVoucherTx } from "./automaticFxVoucherGuard";
 import {
   readVoucherAuditState,
   writeVoucherAuditTx,
@@ -214,6 +215,19 @@ export async function assertVoucherEditableTx(
   }
   if (voucher.deletedAt) {
     throw new VoucherCorrectionError(409, "VOUCHER_DELETED", VOUCHER_CORRECTION_MESSAGES.deleted, { voucherId });
+  }
+  // System FX revaluation lines are base-only: the generic Journal editor
+  // rebuilds lines as USD/IDENTITY, silently manufacturing native USD movements.
+  // Reject ordinary edits/deletion of these engine-owned journals. Repairs must
+  // use a dedicated audited path that preserves the original currency evidence.
+  await assertTransactionCompanyScope(tx, voucher.companyId);
+  if (await isAutomaticFxRevaluationVoucherTx(tx, voucher.companyId, voucherId)) {
+    throw new VoucherCorrectionError(
+      409,
+      "FX_REVALUATION_VOUCHER_IMMUTABLE",
+      "Automatic FX revaluation vouchers cannot be edited using the general voucher editor. Use the audited FX correction workflow.",
+      { voucherId }
+    );
   }
   const closedThrough = await companyClosedThroughTx(tx, voucher.companyId);
   if (closedThrough) {

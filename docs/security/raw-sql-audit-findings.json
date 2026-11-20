@@ -1,13 +1,13 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 5524,
+    "scannedFiles": 5528,
     "perRoot": {
-      "server": 3181,
+      "server": 3182,
       "shared": 182,
-      "scripts": 287,
+      "scripts": 288,
       "migrations": 109,
-      "tests": 1762
+      "tests": 1764
     },
     "totalSites": 1243,
     "byCategory": {
@@ -5809,7 +5809,7 @@
       "findingId": "RSQL-0253",
       "id": "0afad4527a14351ed36e",
       "path": "server/routes/factory/factoryGroundScanRoutes.ts",
-      "line": 69,
+      "line": 90,
       "category": "indirect-query-text",
       "sink": "pool.query",
       "context": "registerFactoryGroundScanRoutes",

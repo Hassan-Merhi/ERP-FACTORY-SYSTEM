@@ -22,8 +22,41 @@ export function registerFactoryStockQueryRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const { locationId } = req.query;
+      // Ground Scan must compare physical scans with available stock only.
+      // Keep the legacy payload unchanged for other callers of this endpoint.
+      const groundScan = req.query.groundScan === "1";
 
       const conditions = [eq(factoryBales.companyId, companyId), eq(factoryBales.status, "IN_STOCK")];
+      if (groundScan) {
+        conditions.push(
+          isNull(factoryBales.deletedAt),
+          sql`NOT EXISTS (
+            SELECT 1 FROM customer_order_bales cob
+            JOIN customer_orders co ON co.id = cob.order_id
+            WHERE cob.bale_id = ${factoryBales.id}
+              AND co.company_id = ${companyId}
+              AND co.deleted_at IS NULL
+              AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED', 'FINALIZED', 'DISPATCHED', 'SOLD')
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM factory_settings fs
+            WHERE fs.company_id = ${companyId}
+              AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds', '[]'::jsonb)
+                @> jsonb_build_array(${factoryBales.productId})
+          )`,
+          // Container Planner leaves the bale status IN_STOCK after physical
+          // assignment. Once the container starts loading, it is no longer
+          // a loose bale to look for in Ground Scan.
+          sql`NOT EXISTS (
+            SELECT 1 FROM factory_container_plan_bales cpb
+            JOIN factory_container_plan_containers cpc ON cpc.id = cpb.plan_container_id
+            WHERE cpb.bale_id = ${factoryBales.id}
+              AND cpb.company_id = ${companyId}
+              AND cpc.company_id = ${companyId}
+              AND cpc.lifecycle_status IN ('LOADING', 'LOADED', 'SHIPPED', 'ARRIVED', 'DELIVERED')
+          )`,
+        );
+      }
 
       if (locationId) {
         conditions.push(eq(factoryBales.erpLocationId, parseInt(locationId as string)));
@@ -34,6 +67,11 @@ export function registerFactoryStockQueryRoutes(app: Express) {
         .from(factoryBales)
         .where(and(...conditions))
         .orderBy(desc(factoryBales.finalizedAt));
+
+      if (groundScan) {
+        // Rows are already filtered against all active/finalized order links.
+        return res.json(results.map((b) => ({ ...b, isInLoadingOrder: false })));
+      }
 
       // Mark bales currently scanned into an active LOADING container order
       const allIds = results.map((b) => b.id);
@@ -62,6 +100,31 @@ export function registerFactoryStockQueryRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
+      const groundScan = req.query.groundScan === "1";
+      const groundScanFilter = groundScan ? sql`
+        AND fb.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM customer_order_bales cob
+          JOIN customer_orders co ON co.id = cob.order_id
+          WHERE cob.bale_id = fb.id AND co.company_id = ${companyId}
+            AND co.deleted_at IS NULL
+            AND co.status IN ('LOADING', 'PENDING_VERIFICATION', 'VERIFIED', 'FINALIZED', 'DISPATCHED', 'SOLD')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM factory_settings fs
+          WHERE fs.company_id = ${companyId}
+            AND COALESCE(fs.extra_settings->'nonBalePriorityProductIds', '[]'::jsonb)
+              @> jsonb_build_array(fb.product_id)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM factory_container_plan_bales cpb
+          JOIN factory_container_plan_containers cpc ON cpc.id = cpb.plan_container_id
+          WHERE cpb.bale_id = fb.id
+            AND cpb.company_id = ${companyId}
+            AND cpc.company_id = ${companyId}
+            AND cpc.lifecycle_status IN ('LOADING', 'LOADED', 'SHIPPED', 'ARRIVED', 'DELIVERED')
+        )` : sql``;
+
       const rows = await db.execute(
         sql`SELECT l.id, l.name, COUNT(fb.id)::int AS count
             FROM factory_bales fb
@@ -69,6 +132,7 @@ export function registerFactoryStockQueryRoutes(app: Express) {
             WHERE fb.company_id = ${companyId}
               AND fb.status = 'IN_STOCK'
               AND fb.erp_location_id IS NOT NULL
+              ${groundScanFilter}
             GROUP BY l.id, l.name
             ORDER BY count DESC`
       );
