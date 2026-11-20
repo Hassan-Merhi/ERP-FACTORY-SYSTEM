@@ -63,6 +63,8 @@ export async function apiRequest(
     }
 
     await throwIfResNotOk(res);
+    // Body/denial handling can yield while another tab rotates the session.
+    assertCompanyMutationSnapshot(actionScope);
     return res;
   } catch (error) {
     clearTimeout(prepared.timeoutId);
