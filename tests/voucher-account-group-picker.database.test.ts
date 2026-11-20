@@ -185,6 +185,16 @@ databaseDescribe("voucher account pickers exclude group accounts (database)", ()
     });
   });
 
+  it("fails closed for missing, zero, or malformed ledger account IDs", async () => {
+    await db.transaction(async (tx) => {
+      for (const invalidId of [0, -1, Number.NaN, 1.25]) {
+        await expect(assertPostingLedgerLeavesTx(tx, companyId, [invalidId])).rejects.toMatchObject({
+          code: "POSTING_TARGET_ID_INVALID",
+        });
+      }
+    });
+  });
+
   it("paged posting pickers return only leaves and count only eligible accounts", async () => {
     const handler = paginatedHandlers.get("/api/ledger-accounts")!;
     for (const profile of ["picker", "voucher-picker"]) {
