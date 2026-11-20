@@ -134,9 +134,12 @@ export function applyVerifiedMonetaryFxOverlay(
       const translatedCents = translated.toDecimalPlaces(2);
       const postedCents = postedBook.toDecimalPlaces(2);
       let displayedBook = signedOld;
-      if (translatedCents.eq(postedCents) && !signedOld.eq(postedCents) &&
-          postedCents.abs().gt(0) &&
-          (postedCents.isPositive() === signedOld.isPositive())) {
+      if (
+        translatedCents.eq(postedCents) &&
+        !signedOld.eq(postedCents) &&
+        postedCents.abs().gt(0) &&
+        postedCents.isPositive() === signedOld.isPositive()
+      ) {
         const newValue = money(postedCents.abs());
         const oldValue = oldRow.value;
         const displayDelta = new Decimal(newValue).minus(oldValue);
