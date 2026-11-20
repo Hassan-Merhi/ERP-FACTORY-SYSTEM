@@ -92,9 +92,19 @@ async function assertAccountOwnership(companyId: number, patch: z.infer<typeof s
     const owned = await db
       .select({ id: ledgerAccounts.id })
       .from(ledgerAccounts)
-      .where(and(eq(ledgerAccounts.companyId, companyId), inArray(ledgerAccounts.id, [...new Set(ledgerIds)]), ledgerPostingLeafCondition(companyId)));
-    if (owned.length !== new Set(ledgerIds).size)
-      throw new Error("One or more Retail ledger accounts are unavailable, belong to another company, or are group headings");
+      .where(
+        and(
+          eq(ledgerAccounts.companyId, companyId),
+          inArray(ledgerAccounts.id, [...new Set(ledgerIds)]),
+          ledgerPostingLeafCondition(companyId)
+        )
+      );
+    if (owned.length !== new Set(ledgerIds).size) {
+      throw new HttpError(
+        400,
+        "One or more Retail ledger accounts are unavailable, belong to another company, or are group headings"
+      );
+    }
   }
   if (typeof patch.bankAccountId === "number") {
     const [bank] = await db
