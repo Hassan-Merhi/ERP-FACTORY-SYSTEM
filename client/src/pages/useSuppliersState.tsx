@@ -4,7 +4,8 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useDebounce } from "@/hooks/use-debounce";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { ensureCompanyForNavigation } from "@/lib/ensureCompanyForNavigation";
 import { useLocation } from "wouter";
 import {
   erpCanDenialMessage as canDenialMessage,
@@ -41,7 +42,7 @@ export function useSuppliersState() {
 
   useEscapeBack(selectedSupplier ? () => setSelectedSupplier(null) : null);
 
-  const { selectedCompany, selectCompany } = useCompany();
+  const { selectedCompany, selectCompany, companies: assignedCompanies } = useCompany();
   const isProperties = selectedCompany?.companyType === "properties";
   const tradingCopy = intercompanyTradingSetupText(useApplicationLanguageCode());
   const { formatAmount: legacyFormatAmount, formatHistoricalBaseAmount } = useCurrencyContext();
@@ -82,26 +83,32 @@ export function useSuppliersState() {
     },
   });
 
-  // Keep Properties supplier drilldowns in the Properties shell. When an
-  // authorized cross-company row is opened, use that company's shell.
+  // Stay in the current workspace when the source company is no longer
+  // assigned to this user or the central, serialized switch is refused.
   const partyPath = (companyId: number | null | undefined, path: string) => {
-    const company = companies.find((entry) => entry.id === companyId);
+    const company =
+      assignedCompanies.find((entry) => entry.id === companyId) ??
+      companies.find((entry) => entry.id === companyId);
     return (company?.companyType === "properties" || (!company && isProperties) ? "/properties" : "") + path;
   };
 
-  const handleTransactionClick = async (txn: SupplierLedgerRow) => {
-    const targetCompany = companies.find((c) => c.id === txn.companyId);
-    if (targetCompany && (!selectedCompany || selectedCompany.id !== txn.companyId)) {
-      await apiRequest("POST", "/api/auth/set-company", { companyId: txn.companyId });
-      selectCompany(targetCompany);
+  const navigateToCompanyRecord = async (companyId: number | null | undefined, path: string) => {
+    const ready = await ensureCompanyForNavigation(companyId, selectedCompany, assignedCompanies, selectCompany);
+    if (!ready) {
+      const failedSwitch = "Could not switch company";
+      toast({ title: failedSwitch, variant: "destructive" });
+      return;
     }
     setSelectedSupplier(null);
+    navigate(partyPath(companyId, path));
+  };
+
+  const handleTransactionClick = async (txn: SupplierLedgerRow) => {
     const tabName = voucherTabForType(txn.voucherType);
-    if (tabName) {
-      navigate(partyPath(txn.companyId, `/vouchers?edit=${txn.voucherId}&tab=${tabName}`));
-    } else {
-      navigate(partyPath(txn.companyId, `/voucher-detail/${txn.voucherId}`));
-    }
+    const path = tabName
+      ? `/vouchers?edit=${txn.voucherId}&tab=${tabName}`
+      : `/voucher-detail/${txn.voucherId}`;
+    await navigateToCompanyRecord(txn.companyId, path);
   };
   const {
     data: suppliers = [],
@@ -163,24 +170,12 @@ export function useSuppliersState() {
   };
 
   const handlePOClick = async (po: SupplierPurchaseOrder) => {
-    const targetCompany = companies.find((c) => c.id === po.companyId);
-    if (targetCompany && (!selectedCompany || selectedCompany.id !== po.companyId)) {
-      await apiRequest("POST", "/api/auth/set-company", { companyId: po.companyId });
-      selectCompany(targetCompany);
-    }
-    setSelectedSupplier(null);
-    navigate(partyPath(po.companyId, `/purchase-orders/${po.id}/edit`));
+    await navigateToCompanyRecord(po.companyId, `/purchase-orders/${po.id}/edit`);
   };
 
   const handleContainerClick = async (po: { companyId: number | null; containerId?: number | null }) => {
     if (!po.containerId) return;
-    const targetCompany = companies.find((c) => c.id === po.companyId);
-    if (targetCompany && (!selectedCompany || selectedCompany.id !== po.companyId)) {
-      await apiRequest("POST", "/api/auth/set-company", { companyId: po.companyId });
-      selectCompany(targetCompany);
-    }
-    setSelectedSupplier(null);
-    navigate(partyPath(po.companyId, `/containers/${po.containerId}`));
+    await navigateToCompanyRecord(po.companyId, `/containers/${po.containerId}`);
   };
 
   const handleExportToExcel = async () => {

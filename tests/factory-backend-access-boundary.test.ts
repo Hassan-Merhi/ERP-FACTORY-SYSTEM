@@ -115,6 +115,16 @@ describe("Wave 4 Factory backend access ownership", () => {
     });
   });
 
+  it("authorizes saved loading-agent reads and creates through Invoices", () => {
+    for (const method of ["GET", "POST"]) {
+      expect(resolveFactoryBackendAccessRequirement(req("/loading-agents", method))).toEqual({
+        pageKey: "factory/invoicing",
+        tabs: ["hide_invoicing_invoices_tab"],
+      });
+    }
+    expect(resolveFactoryBackendAccessRequirement(req("/loading-agents-other", "POST"))).toBeNull();
+  });
+
   it("allows Scheduled Containers CRUD through either owning visible page/tab", () => {
     const expected = [
       { pageKey: "factory/invoicing", tabs: ["hide_invoicing_invoices_tab"] },

@@ -1,5 +1,6 @@
 // Extracted from ./requestStormGuard.ts to keep that module under the source-size cap.
 import { factoryCatalogLanguageCacheVariant } from "./factoryCatalogCacheVariant";
+import { companyReadCacheIdentity } from "./companyCacheScope";
 import type { BandwidthCacheScope, BandwidthInvalidationScope } from "./bandwidthInvalidationPolicy";
 
 export type CacheRule = {
@@ -161,7 +162,7 @@ export function buildRequestKey(url: URL, headers: Headers): string {
   ]
     .map((name) => `${name}=${headers.get(name) || ""}`)
     .join("|");
-  return `${url.toString()}|${varyHeaders}|${factoryCatalogLanguageCacheVariant(url, headers)}`;
+  return `${companyReadCacheIdentity()}|${url.toString()}|${varyHeaders}|${factoryCatalogLanguageCacheVariant(url, headers)}`;
 }
 
 export function trimCache(): void {

@@ -85,6 +85,7 @@ export const userCompaniesResponseSchema = z.array(userCompanyAssignmentSchema);
 
 export const sessionCompanyResponseSchema = z.object({
   companyId: z.coerce.number().int().positive().nullable(),
+  companyRevision: z.string().min(1).max(80).nullable().optional(),
 });
 
 export type SessionCompanyResponse = z.infer<typeof sessionCompanyResponseSchema>;

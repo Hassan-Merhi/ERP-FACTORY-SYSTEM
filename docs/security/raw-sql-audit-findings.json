@@ -1,13 +1,13 @@
 {
   "generatedBy": "node scripts/verify-raw-sql-allowlist.mjs --write-register",
   "summary": {
-    "scannedFiles": 5376,
+    "scannedFiles": 5384,
     "perRoot": {
-      "server": 3050,
+      "server": 3051,
       "shared": 179,
       "scripts": 287,
       "migrations": 109,
-      "tests": 1748
+      "tests": 1755
     },
     "totalSites": 1246,
     "byCategory": {
@@ -2357,7 +2357,7 @@
       "findingId": "RSQL-0098",
       "id": "2a374fe72e0fd3449f9e",
       "path": "scripts/run-phase7-browser-e2e.mjs",
-      "line": 204,
+      "line": 213,
       "category": "assembled-sql-text",
       "sink": "string assembly",
       "context": "setLanguage",
@@ -3169,7 +3169,7 @@
       "findingId": "RSQL-0132",
       "id": "6216b1693ebbe67b4ad1",
       "path": "server/offline/pcLocal/localReadOnlyGuard.ts",
-      "line": 114,
+      "line": 120,
       "category": "indirect-query-text",
       "sink": "client.query",
       "context": "defaultConnect.query",
@@ -23642,6 +23642,30 @@
     },
     {
       "findingId": "RSQL-1102",
+      "id": "ce27fd42c8ed864a8086",
+      "path": "tests/pc-sync-offline-accounting-vouchers.test.ts",
+      "line": 166,
+      "category": "indirect-query-text",
+      "sink": "local.query",
+      "context": "connect.query",
+      "dynamicInputs": [
+        {
+          "expression": "text",
+          "source": "the constant SQL strings of server/offline/pcLocal/localReadOnlyGuard.ts, injected into the guard under test",
+          "validation": "test-only; the SQL text is the guard's literals and the values are bound"
+        }
+      ],
+      "userControlled": "no",
+      "validation": "test-only; the SQL text is the guard's literals and the values are bound",
+      "parameterization": "dynamic text reviewed (values bound separately)",
+      "risk": "low",
+      "requiredAction": "none",
+      "reviewStatus": "closed",
+      "disposition": "reviewed:test-fixture",
+      "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
+    },
+    {
+      "findingId": "RSQL-1103",
       "id": "03773b00775cb65c755d",
       "path": "tests/pc-sync-offline-edits.test.ts",
       "line": 129,
@@ -23659,7 +23683,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1103",
+      "findingId": "RSQL-1104",
       "id": "1ce033316c0ef2612c2e",
       "path": "tests/pc-sync-offline-edits.test.ts",
       "line": 130,
@@ -23677,7 +23701,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1104",
+      "findingId": "RSQL-1105",
       "id": "2661f30aa2feb335c459",
       "path": "tests/pc-sync-offline-edits.test.ts",
       "line": 131,
@@ -23695,7 +23719,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1105",
+      "findingId": "RSQL-1106",
       "id": "b6d89f6c2e7f32823e99",
       "path": "tests/pc-sync-offline-edits.test.ts",
       "line": 332,
@@ -23719,7 +23743,7 @@
       "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
     },
     {
-      "findingId": "RSQL-1106",
+      "findingId": "RSQL-1107",
       "id": "fce6bad1e56f08df3205",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 59,
@@ -23743,7 +23767,7 @@
       "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
     },
     {
-      "findingId": "RSQL-1107",
+      "findingId": "RSQL-1108",
       "id": "0b1cc895c024f0cb17d1",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 125,
@@ -23761,7 +23785,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1108",
+      "findingId": "RSQL-1109",
       "id": "e703488fc0d8aaa647ef",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 126,
@@ -23779,7 +23803,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1109",
+      "findingId": "RSQL-1110",
       "id": "0ffdbbf6223e83f271f3",
       "path": "tests/pc-sync-offline-entries.test.ts",
       "line": 129,
@@ -23797,7 +23821,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1110",
+      "findingId": "RSQL-1111",
       "id": "aabd1a89e30bd40052c4",
       "path": "tests/pc-sync-offline-file-uploads.test.ts",
       "line": 99,
@@ -23815,7 +23839,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1111",
+      "findingId": "RSQL-1112",
       "id": "a67aff43b94e4baf096f",
       "path": "tests/pc-sync-offline-file-uploads.test.ts",
       "line": 100,
@@ -23833,7 +23857,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1112",
+      "findingId": "RSQL-1113",
       "id": "57b890f5ecf8fd887176",
       "path": "tests/pc-sync-offline-file-uploads.test.ts",
       "line": 101,
@@ -23851,7 +23875,7 @@
       "reason": null
     },
     {
-      "findingId": "RSQL-1113",
+      "findingId": "RSQL-1114",
       "id": "94a389206b0ffd35a154",
       "path": "tests/pc-sync-offline-journals.test.ts",
       "line": 177,
@@ -23875,7 +23899,7 @@
       "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
     },
     {
-      "findingId": "RSQL-1114",
+      "findingId": "RSQL-1115",
       "id": "d49be7d6d8867ebb9744",
       "path": "tests/pc-sync-offline-pos-edits.test.ts",
       "line": 310,
@@ -23899,34 +23923,10 @@
       "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
     },
     {
-      "findingId": "RSQL-1115",
+      "findingId": "RSQL-1116",
       "id": "23ead3c89f848cfb9cb2",
       "path": "tests/pc-sync-offline-receiving-files.test.ts",
       "line": 228,
-      "category": "indirect-query-text",
-      "sink": "local.query",
-      "context": "connect.query",
-      "dynamicInputs": [
-        {
-          "expression": "text",
-          "source": "the constant SQL strings of server/offline/pcLocal/localReadOnlyGuard.ts, injected into the guard under test",
-          "validation": "test-only; the SQL text is the guard's literals and the values are bound"
-        }
-      ],
-      "userControlled": "no",
-      "validation": "test-only; the SQL text is the guard's literals and the values are bound",
-      "parameterization": "dynamic text reviewed (values bound separately)",
-      "risk": "low",
-      "requiredAction": "none",
-      "reviewStatus": "closed",
-      "disposition": "reviewed:test-fixture",
-      "reason": "Test adapter that runs the guard's own constant statements against the disposable PC database."
-    },
-    {
-      "findingId": "RSQL-1116",
-      "id": "b4f33ab556f640681abd",
-      "path": "tests/pc-sync-offline-sales-vouchers.test.ts",
-      "line": 137,
       "category": "indirect-query-text",
       "sink": "local.query",
       "context": "connect.query",
