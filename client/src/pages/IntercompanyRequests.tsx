@@ -77,10 +77,10 @@ export default function IntercompanyRequests() {
 
   // Load accounts for the destination company when the approve dialog opens
   const { data: destAccounts = [] } = useQuery<LedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts", approveDialogRequest?.destCompanyId],
+    queryKey: ["/api/ledger-accounts?profile=picker", approveDialogRequest?.destCompanyId],
     queryFn: async () => {
       if (!approveDialogRequest?.destCompanyId) return [];
-      const r = await fetch(`/api/ledger-accounts?companyId=${approveDialogRequest.destCompanyId}`, {
+      const r = await fetch(`/api/ledger-accounts?profile=picker&companyId=${approveDialogRequest.destCompanyId}`, {
         credentials: "include",
       });
       if (!r.ok) return [];
