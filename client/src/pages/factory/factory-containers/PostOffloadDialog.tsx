@@ -1,3 +1,4 @@
+import { UnifiedAccountPicker } from "@/components/accounts/UnifiedAccountPicker";
 import { Pencil, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -275,19 +276,12 @@ export function PostOffloadDialog(props: PostOffloadDialogProps) {
                     </div>
                     <div className="col-span-2 space-y-1">
                       <label className="text-sm font-medium">Account (optional)</label>
-                      <Select value={editLedgerId} onValueChange={setEditLedgerId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select account (optional)" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">None</SelectItem>
-                          {ledgerAccounts.map((a) => (
-                            <SelectItem key={a.id} value={String(a.id)}>
-                              {a.code ? `${a.code} - ${a.name}` : a.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <UnifiedAccountPicker
+                    options={[{ value: "__none__", name: "None" }, ...ledgerAccounts.map((a) => ({ value: String(a.id), name: a.name }))]}
+                    value={editLedgerId || "__none__"}
+                    onChange={(v) => setEditLedgerId(v === "__none__" ? "" : v)}
+                    placeholder={"Select account (optional)"}
+                    />
                     </div>
                     <div className="col-span-2 space-y-1">
                       <label className="text-sm font-medium">Date</label>
