@@ -16,6 +16,24 @@ describe("Phase 5 account-selector prevention audit", () => {
     assert.equal(issues["visible-account-metadata"], 0);
   });
 
+  it("catches flatMap-created account rows in non-searchable selectors", () => {
+    const named = scanAccountSelectorSource(`
+      <Select value={accountId}>
+        {cashAccounts.flatMap((account) =>
+          account.name ? [<SelectItem key={account.id} value={String(account.id)}>{account.name}</SelectItem>] : []
+        )}
+      </Select>`);
+    assert.equal(named["unsearchable-account-select"], 1);
+
+    const generic = scanAccountSelectorSource(`
+      <Select value={accountId}>
+        {accounts.flatMap((account) =>
+          account.name ? [<SelectItem key={account.id} value={String(account.id)}>{account.name}</SelectItem>] : []
+        )}
+      </Select>`);
+    assert.equal(generic["unsearchable-account-select"], 1);
+  });
+
   it("rejects native bank dropdowns displaying account codes", () => {
     const issues = scanAccountSelectorSource(`
       <select value={bankId}>
