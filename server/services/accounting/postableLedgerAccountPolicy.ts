@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { ledgerAccounts } from "@shared/schema";
 import type { DbTransaction } from "../../db";
 import { PostingValidationError } from "./centralPostingEngine";
@@ -42,7 +42,7 @@ export async function assertPostingLedgerLeavesTx(
       and(
         eq(ledgerAccounts.companyId, companyId),
         inArray(ledgerAccounts.id, ids),
-        sql`${ledgerAccounts.deletedAt} IS NULL`,
+        isNull(ledgerAccounts.deletedAt),
         ledgerPostingLeafCondition(companyId)
       )
     );
