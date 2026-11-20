@@ -15,6 +15,7 @@ import {
 import { eq, and } from "drizzle-orm";
 import { toMoney } from "../../../lib/money";
 import { normalizeProformaDestination } from "./destination";
+import { customerBelongsToCompany } from "./_helpers";
 
 function hasDuplicateNormalizedArticleCodes(lines: Array<{ articleCode?: unknown }>): boolean {
   const seen = new Set<string>();
@@ -55,6 +56,10 @@ export function registerFactoryCustomerProformaBulkPricingRoutesPart1(app: Expre
         return res.status(400).json({
           message: "Article code already exists in this proforma",
         });
+      }
+
+      if (!(await customerBelongsToCompany(companyId, customerId))) {
+        return res.status(404).json({ message: "Customer not found" });
       }
 
       const parsed = insertCustomerProformaSchema.parse({

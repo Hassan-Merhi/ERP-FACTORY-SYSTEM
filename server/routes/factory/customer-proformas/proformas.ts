@@ -17,13 +17,13 @@ import {
   customerProformas,
   customerProformaLines,
   customers,
-  insertCustomerProformaSchema,
   proformaStockReservations,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { getProformaCapacitySnapshot } from "../customer-orders/proformaCapacity";
 import { normalizeLoadingArticleCode } from "../customer-orders/bale-scanning/proformaScanPolicy";
 import { normalizeProformaDestination } from "./destination";
+import { registerFactoryCustomerProformaCreateRoute } from "./createProforma";
 
 /** Row shape returned by the raw `customer_proformas` queries below. */
 type ProformaRow = {
@@ -350,42 +350,8 @@ export function registerFactoryCustomerProformaCrudRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/customer-proformas", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const parsed = insertCustomerProformaSchema.parse({ ...req.body, companyId });
-      if (req.body.destination !== undefined) {
-        const destination = normalizeProformaDestination(req.body.destination);
-        if (!destination) return res.status(400).json({ message: "A valid destination is required" });
-        parsed.destination = destination;
-      }
-
-      const [duplicate] = await db
-        .select({ id: customerProformas.id })
-        .from(customerProformas)
-        .where(
-          and(
-            eq(customerProformas.companyId, companyId),
-            eq(customerProformas.customerId, parsed.customerId),
-            eq(customerProformas.name, parsed.name)
-          )
-        );
-      if (duplicate) {
-        return res.status(409).json({
-          message: `A proforma named "${parsed.name}" already exists for this customer. Please choose a different name.`,
-        });
-      }
-
-      const [proforma] = await db.insert(customerProformas).values(parsed).returning();
-      await syncProformaReservations(db, companyId, proforma.id);
-      res.json(proforma);
-    } catch (error: unknown) {
-      logger.error("Error creating customer proforma:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
+  // Single create lives in ./createProforma.ts; registered here to keep the order.
+  registerFactoryCustomerProformaCreateRoute(app);
 
   app.put("/api/factory/customer-proformas/:id", requireAuth, async (req: Request, res: Response) => {
     try {

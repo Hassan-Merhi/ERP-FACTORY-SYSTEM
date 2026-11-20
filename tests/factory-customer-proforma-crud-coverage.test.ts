@@ -46,7 +46,7 @@ async function seed(w: FactoryWorld) {
     `INSERT INTO customer_proformas (company_id, customer_id, name) VALUES ($1, $2, 'Foreign') RETURNING id`,
     [otherCompany, otherCustomer]
   );
-  return { customerId, proformaId, foreignId };
+  return { customerId, proformaId, foreignId, otherCustomer };
 }
 
 describe("reads", () => {
@@ -136,6 +136,21 @@ describe("writes", () => {
       expect(dup.status).toBe(409);
       expect((await w.agent.post(BASE).send({ name: "No customer" })).status).toBe(400);
       expect(await count()).toBe(before);
+    }));
+
+  it("refuses another company's, a deleted and an unknown customer on create and creates nothing", () =>
+    withFactoryWorld(async (w) => {
+      const { otherCustomer } = await seed(w);
+      const deleted = await w.one(
+        `INSERT INTO customers (company_id, code, legal_name, deleted_at) VALUES ($1, $2, 'Gone', now()) RETURNING id`,
+        [w.companyId, `${w.tag}D`]
+      );
+      for (const customerId of [otherCustomer, deleted, 2147483000]) {
+        const res = await w.agent.post(BASE).send({ customerId, name: "Stolen", destination: "KALEME" });
+        expect(res.status, String(customerId)).toBe(404);
+        expect(res.body.message).toBe("Customer not found");
+      }
+      expect(await w.q(`SELECT id FROM customer_proformas WHERE name = 'Stolen'`)).toEqual([]);
     }));
 
   it("creates a proforma with a normalised destination", () =>

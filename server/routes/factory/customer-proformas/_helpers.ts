@@ -3,8 +3,22 @@
  *
  * Extracted verbatim from the former single-file factoryCustomerProformaRoutes.ts.
  */
-import { pool } from "../../../db";
+import { and, eq, isNull } from "drizzle-orm";
+import { customers } from "@shared/schema";
+import { db, pool } from "../../../db";
 import { parseMoneyInput } from "../../../lib/money";
+
+/** True when the customer exists, is not deleted and belongs to the company. */
+export async function customerBelongsToCompany(companyId: number, customerId: unknown): Promise<boolean> {
+  const id = Number(customerId);
+  if (!Number.isSafeInteger(id) || id <= 0) return false;
+  const [row] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(and(eq(customers.id, id), eq(customers.companyId, companyId), isNull(customers.deletedAt)))
+    .limit(1);
+  return !!row;
+}
 
 export async function autoSavePriceToPriceList(
   companyId: number,

@@ -50,6 +50,24 @@ describe("bulk proforma create", () => {
     });
   });
 
+  it("refuses another company's, a deleted and an unknown customer and creates nothing", async () => {
+    await withFactoryWorld(async (w) => {
+      const otherCompany = await w.one(
+        `INSERT INTO companies (code, name, company_type) VALUES ($1::varchar, $1::text, 'factory') RETURNING id`,
+        [`${w.tag}O`]
+      );
+      const foreign = await customer(w, otherCompany);
+      const deleted = await customer(w);
+      await w.q(`UPDATE customers SET deleted_at = now() WHERE id = $1`, [deleted]);
+      for (const customerId of [foreign, deleted, 2147483000]) {
+        const res = await w.agent.post(`${BASE}/bulk`).send({ customerId, name: "Stolen", lines: [line("A")] });
+        expect(res.status, String(customerId)).toBe(404);
+        expect(res.body.message).toBe("Customer not found");
+      }
+      expect(await w.q(`SELECT id FROM customer_proformas WHERE name = 'Stolen'`)).toEqual([]);
+    });
+  });
+
   it("creates per-bale and per-kg lines with a normalised destination", async () => {
     await withFactoryWorld(async (w) => {
       const customerId = await customer(w);
