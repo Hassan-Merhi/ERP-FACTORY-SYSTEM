@@ -95,7 +95,8 @@ describe("PC offline Sales and Purchase vouchers: in the cloud", () => {
     expect(await salesNamed("Offline sale unbalanced")).toEqual([]);
 
     const input = sale("Offline sale unknown customer", "15.00", "15.00");
-    input.entries[0] = { customerId: 2_000_000_000, debitAmount: "15.00", creditAmount: "0" } as never;
+    // A cloud id the cloud does not have (ids from 1e9 up are a PC's own and wait for their create).
+    input.entries[0] = { customerId: 999_999_999, debitAmount: "15.00", creditAmount: "0" } as never;
     const unknown = await agent.post("/api/offline/pc-sync/operations").send(op(input));
     expect(unknown.status).toBe(409);
     expect(unknown.body).toMatchObject({ code: "PHASE9_SALES_VOUCHER_REFUSED" });
