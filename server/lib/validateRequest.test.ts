@@ -110,6 +110,22 @@ describe("validateRequest", () => {
     expect(res.body.errors[0]).toMatchObject({ location: "body", path: "n" });
   });
 
+  it("never copies prototype keys into req.body", async () => {
+    const schemas = { body: z.strictObject({ data: z.record(z.string(), z.unknown()) }) };
+    const app = express();
+    app.use(express.json());
+    app.post("/x", validateRequest(schemas), (req, res) => {
+      res.json({ keys: Object.keys(req.body.data), polluted: ({} as Record<string, unknown>).polluted ?? null });
+    });
+    const res = await request(app)
+      .post("/x")
+      .set("Content-Type", "application/json")
+      .send('{"data":{"a":1,"__proto__":{"polluted":true},"constructor":{"x":1}}}');
+    expect(res.status).toBe(200);
+    expect(res.body.keys).toEqual(["a"]);
+    expect(res.body.polluted).toBeNull();
+  });
+
   it("is named validateRequest so the route manifest records it", () => {
     expect(validateRequest({ params: idParams }).name).toBe("validateRequest");
   });

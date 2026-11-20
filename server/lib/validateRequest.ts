@@ -122,6 +122,10 @@ function formatPath(path: PropertyKey[]): string {
   return path.map((segment) => String(segment)).join(".");
 }
 
+// Keys that would reach Object.prototype through plain assignment. Strict
+// schemas never produce them; a z.record could, so they are never copied.
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -141,10 +145,12 @@ export function alignKeyOrder(parsed: unknown, raw: unknown): unknown {
   if (!isPlainObject(parsed) || !isPlainObject(raw)) return parsed;
   const aligned: Record<string, unknown> = {};
   for (const key of Object.keys(raw)) {
-    if (key in parsed) aligned[key] = alignKeyOrder(parsed[key], raw[key]);
+    if (UNSAFE_KEYS.has(key) || !Object.prototype.hasOwnProperty.call(parsed, key)) continue;
+    aligned[key] = alignKeyOrder(parsed[key], raw[key]);
   }
   for (const key of Object.keys(parsed)) {
-    if (!(key in aligned)) aligned[key] = parsed[key];
+    if (UNSAFE_KEYS.has(key) || Object.prototype.hasOwnProperty.call(aligned, key)) continue;
+    aligned[key] = parsed[key];
   }
   return aligned;
 }
