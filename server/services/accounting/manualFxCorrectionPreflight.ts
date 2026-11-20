@@ -60,7 +60,7 @@ export interface ManualFxCorrectionPreflight {
   status: "not_found" | "blocked" | "requires_review" | "ready_for_review" | "already_reversed";
   /** Machine-readable blockers, never silent accounting guesses. */
   blockers: string[];
-  manualVoucherBookUsd: string;
+  manualFxCounterDebitUsd: string;
   fxCounterAccount: { id: number; code: string; type: string } | null;
   candidates: ManualFxCorrectionCandidate[];
   candidateNetAdjustmentUsd: string;
@@ -77,7 +77,7 @@ export function classifyManualFxCorrectionPreflight(input: {
   reversalOfVoucherId: number | null;
   fxCounterType: string | null;
   monetaryMovementCount: number;
-  outstandingLegacyVoucherCount: number;
+  otherLegacyVoucherCount: number;
   unresolvedAccountCount: number;
   baseCurrency: string;
   nonEmptyCandidates: boolean;
@@ -91,13 +91,14 @@ export function classifyManualFxCorrectionPreflight(input: {
   if (input.monetaryMovementCount === 0) blockers.push("LEGACY_NATIVE_USD_LINES_MISSING");
   if (input.baseCurrency !== "USD") blockers.push("BASE_CURRENCY_NOT_USD");
   if (input.unresolvedAccountCount > 0) blockers.push("MONETARY_FX_UNRESOLVED");
-  if (input.outstandingLegacyVoucherCount > (input.reversed ? 0 : 1)) blockers.push("OTHER_MANUAL_FX_VOUCHERS");
+  if (input.otherLegacyVoucherCount > 0) blockers.push("OTHER_MANUAL_FX_VOUCHERS");
+  if (!input.nonEmptyCandidates) blockers.push("NO_FX_CORRECTION_CANDIDATES");
   if (input.reversed) return { status: "already_reversed", blockers };
   if (blockers.some((code) => code !== "FX_ACCOUNT_RECLASSIFICATION_REQUIRED")) {
     return { status: "blocked", blockers };
   }
   return {
-    status: blockers.length || !input.nonEmptyCandidates ? "requires_review" : "ready_for_review",
+    status: blockers.length ? "requires_review" : "ready_for_review",
     blockers,
   };
 }
@@ -198,9 +199,8 @@ export async function getManualFxCorrectionPreflight(
       expectedBaseOnlyAdjustmentUsd: postedFxRevaluationAdjustmentUsd(row.currentTranslatedUsd, row.bookClosingUsd),
     });
   }
-  const manuallyPostedUsd = snapshot.lines.reduce(
-    (sum, row) => sum.plus(row.debit_amount).minus(row.credit_amount), new Decimal(0)
-  );
+  // A balanced voucher totals zero across all accounts. Its FX counter-line
+  // is the amount of the original loss, not the sum of the entire journal.
   const netAdjustment = candidates.reduce(
     (sum, row) => sum.plus(row.expectedBaseOnlyAdjustmentUsd), new Decimal(0)
   );
@@ -213,7 +213,7 @@ export async function getManualFxCorrectionPreflight(
     reversalOfVoucherId: snapshot.header?.reversal_of_voucher_id ?? null,
     fxCounterType: fxCounter?.account_type ?? null,
     monetaryMovementCount: monetaryMovements.length,
-    outstandingLegacyVoucherCount: conflicts.length,
+    otherLegacyVoucherCount: conflicts.filter((v) => v.voucherId !== voucherId).length,
     unresolvedAccountCount: unresolved,
     baseCurrency: valuation.baseCurrency,
     nonEmptyCandidates: candidates.length > 0,
@@ -229,7 +229,9 @@ export async function getManualFxCorrectionPreflight(
     })),
     status: classified.status,
     blockers: classified.blockers,
-    manualVoucherBookUsd: manuallyPostedUsd.toFixed(2),
+    manualFxCounterDebitUsd: fxCounter
+      ? new Decimal(fxCounter.debit_amount).minus(fxCounter.credit_amount).toFixed(2)
+      : "0.00",
     fxCounterAccount: fxCounter?.ledger_account_id ? {
       id: fxCounter.ledger_account_id, code: fxCounter.account_code ?? "", type: fxCounter.account_type ?? "",
     } : null,
