@@ -11,21 +11,25 @@ interface CompanySessionFollowerOptions {
   selectedCompanyRef: RefObject<Company | null>;
   switchQueueRef: RefObject<CompanySwitchQueue | null>;
   externalChangeObservedRef: RefObject<boolean>;
+  /** Hide the current workspace before any session probe can resolve. */
+  onTransitionStart: () => void;
+  /** Reveal the workspace only after the server scope was verified. */
+  onTransitionVerified: () => void;
   onAdopt: (company: Company) => void;
 }
 
 /**
- * Follow the server session after another tab commits a company switch.
- *
- * Notifications are only hints; neither their payload nor localStorage can
- * authorize selection. A second session read inside the switch queue avoids
- * adopting an outdated observation while a local switch is in progress.
+ * Other tabs share a server session but not React state. Treat every switch
+ * notification and tab resume as a possible scope change. Hide old data until
+ * a fresh server read (and, if needed, cache eviction) has completed.
  */
 export function useCompanySessionFollower({
   companiesRef,
   selectedCompanyRef,
   switchQueueRef,
   externalChangeObservedRef,
+  onTransitionStart,
+  onTransitionVerified,
   onAdopt,
 }: CompanySessionFollowerOptions): void {
   useEffect(() => {
@@ -41,56 +45,75 @@ export function useCompanySessionFollower({
         rerunRequested = true;
         return;
       }
-      if (!selectedCompanyRef.current && companiesRef.current.length === 0) return;
+      if (!selectedCompanyRef.current || companiesRef.current.length === 0) return;
+
       inProgress = true;
-
+      let verified = false;
       void (async () => {
-        // Avoid entering the switching/loading state on every harmless focus.
+        // Do not trust the broadcast's company ID or browser storage. The
+        // authenticated server session is the authoritative identity.
         const initialSession = await fetchSessionCompany();
-        if (disposed || !initialSession.companyId || initialSession.companyId === selectedCompanyRef.current?.id) return;
+        if (disposed) return;
+        if (!initialSession.companyId) throw new Error("Active company is unavailable.");
 
-        await switchQueueRef.current!.enqueue(async () => {
-          if (disposed) return;
-          // A local or another tab's switch might have completed while this
-          // task waited in the queue. Re-read the authoritative session.
-          const { companyId } = await fetchSessionCompany();
-          if (disposed || !companyId || companyId === selectedCompanyRef.current?.id) return;
-          const company = companiesRef.current.find((candidate) => candidate.id === companyId);
-          if (!company) return;
+        if (initialSession.companyId !== selectedCompanyRef.current?.id) {
+          await switchQueueRef.current!.enqueue(async () => {
+            if (disposed) return;
+            // Another local switch may have completed while waiting in the
+            // queue; always re-read after obtaining the session boundary.
+            const { companyId } = await fetchSessionCompany();
+            if (disposed) return;
+            const company = companiesRef.current.find((candidate) => candidate.id === companyId);
+            if (!company) throw new Error("The active company is not assigned to this user.");
+            if (company.id === selectedCompanyRef.current?.id) return;
 
-          await cancelCompanySessionQueries(queryClient);
-          if (disposed) return;
-          removeCompanySessionQueries(queryClient, { resetAuthenticatedUser: true });
-          // Persist even if this was detected on resume rather than via storage;
-          // otherwise a later reload could resurrect the old selection.
-          onAdopt(company);
-        });
+            await cancelCompanySessionQueries(queryClient);
+            if (disposed) return;
+            removeCompanySessionQueries(queryClient, { resetAuthenticatedUser: true });
+            onAdopt(company);
+          });
+        }
+        if (!disposed) verified = true;
       })()
         .catch((error: unknown) => {
           if (disposed) return;
-          if (attempt < 3) {
+          // Fail closed. After retries are exhausted, the loading state offers
+          // recovery instead of exposing records under an unverified session.
+          if (attempt < 3 && !rerunRequested) {
             retryTimer = window.setTimeout(() => {
               retryTimer = null;
               reconcile(attempt + 1);
             }, 2000);
-          } else {
-            console.error("[Company] Could not reconcile the shared company session.", error);
+          } else if (!rerunRequested) {
+            console.error("[Company] Could not verify the shared company session.", error);
           }
         })
         .finally(() => {
           inProgress = false;
-          if (rerunRequested && !disposed) {
+          if (disposed) return;
+          if (rerunRequested) {
             rerunRequested = false;
+            if (retryTimer !== null) window.clearTimeout(retryTimer);
+            retryTimer = null;
             reconcile(0);
+          } else if (verified) {
+            onTransitionVerified();
           }
         });
     };
 
     const onChange = () => {
       externalChangeObservedRef.current = true;
+      // During first activation the entire app is already hidden. Its startup
+      // path reconciles the server, so do not introduce a permanent second gate.
+      if (!selectedCompanyRef.current) return;
+      onTransitionStart();
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       retryTimer = null;
-      // Storage and BroadcastChannel often fire for the same commit.
+      if (inProgress) {
+        rerunRequested = true;
+        return;
+      }
       if (debounceTimer !== null) return;
       debounceTimer = window.setTimeout(() => {
         debounceTimer = null;
@@ -105,5 +128,13 @@ export function useCompanySessionFollower({
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       if (debounceTimer !== null) window.clearTimeout(debounceTimer);
     };
-  }, [companiesRef, selectedCompanyRef, switchQueueRef, externalChangeObservedRef, onAdopt]);
+  }, [
+    companiesRef,
+    selectedCompanyRef,
+    switchQueueRef,
+    externalChangeObservedRef,
+    onTransitionStart,
+    onTransitionVerified,
+    onAdopt,
+  ]);
 }
