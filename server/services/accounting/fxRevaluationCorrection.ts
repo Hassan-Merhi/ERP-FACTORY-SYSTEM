@@ -241,6 +241,12 @@ export async function applyFxCorrection(input: {
     const { preview, entries } = await previewFxCorrection(
       input.companyId, input.voucherId, input.targetDate, input.amountOverrides
     );
+    if (preview.lines.some((line) => line.manuallyOverridden) &&
+        (input.reason.trim().length < 20 ||
+         input.reason.trim() === "FX revaluation posted on the wrong business date")) {
+      throw new FxCorrectionError(400, "FX_CORRECTION_OVERRIDE_REASON_REQUIRED",
+        "Explain why the manually adjusted USD amounts differ from the automatic calculation.");
+    }
     if (preview.status !== "ready" || preview.previewKey !== input.previewKey) {
       throw new FxCorrectionError(409, "FX_CORRECTION_PREVIEW_STALE",
         "The rate, voucher or ledger changed. Refresh the preview before confirming.");
