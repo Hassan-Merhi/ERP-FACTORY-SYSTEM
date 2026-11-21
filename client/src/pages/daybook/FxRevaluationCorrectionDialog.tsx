@@ -54,6 +54,7 @@ export function FxRevaluationCorrectionDialog({
   const [finished, setFinished] = useState("");
   const [draftAmounts, setDraftAmounts] = useState<Record<string, string>>({});
   const [amountsChanged, setAmountsChanged] = useState(false);
+  const hasManualAmounts = preview?.lines.some((line) => line.manuallyOverridden) ?? false;
 
   useEffect(() => {
     if (!open) return;
@@ -202,13 +203,13 @@ export function FxRevaluationCorrectionDialog({
                   );
                 })}
               </div>
-              {preview.lines.some((line) => line.manuallyOverridden) && (
+              {hasManualAmounts && (
                 <p className="text-muted-foreground">
                   Manual USD adjustments require a documented accounting reason.
                   The FX gain/loss entry will be recalculated to balance the journal.
                 </p>
               )}
-              {preview.lines.some((line) => line.manuallyOverridden) &&
+              {hasManualAmounts &&
                 reason.trim() === DEFAULT_AUDIT_REASON && (
                 <p className="text-amber-500" role="alert">
                   Update Audit reason to explain why your manually entered USD amounts are correct.
@@ -240,7 +241,7 @@ export function FxRevaluationCorrectionDialog({
           {!finished && (
             <Button disabled={busy || preview?.status !== "ready" ||
               !preview.previewKey || amountsChanged || reason.trim().length < 10 || date !== preview.targetDate ||
-              (preview.lines.some((line) => line.manuallyOverridden) &&
+              (hasManualAmounts &&
                 (reason.trim() === DEFAULT_AUDIT_REASON || reason.trim().length < 20))}
               onClick={() => void correct()}>
               {busy ? "Posting..." : "Confirm correction"}
