@@ -7,6 +7,8 @@
  * the profit filter chips and the footer actions.
  */
 import { Pencil } from "lucide-react";
+import { useState } from "react";
+import { FxRevaluationCorrectionDialog } from "./FxRevaluationCorrectionDialog";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { VoucherCostCenters } from "@/components/financial/VoucherCostCenters";
 import { useQuery } from "@tanstack/react-query";
@@ -111,6 +113,7 @@ export function VoucherDetailsDialog({
   bankAccounts = [],
 }: VoucherDetailsDialogProps) {
   const appMode = useAppMode();
+  const [correctFxOpen, setCorrectFxOpen] = useState(false);
   const isStockTransferType =
     selectedVoucher?.voucherType === "Stock Transfer" ||
     selectedVoucher?.voucherType === "StockTransfer" ||
@@ -132,6 +135,9 @@ export function VoucherDetailsDialog({
   if (!selectedVoucher) return null;
 
   const isPOSUser = !user || user?.role === "POS";
+  const isAutomaticFx = selectedVoucher.voucherType === "Journal" &&
+    (selectedVoucher.description ?? "").startsWith("Automatic FX revaluation (");
+  const mayCorrectFx = isAutomaticFx && (user?.role === "Admin" || user?.role === "Owner");
   const resolveEntryName = createEntryNameResolver(employees, ledgerAccounts, bankAccounts);
   const isInvoiceLike =
     selectedVoucher.voucherType === "Purchase" ||
@@ -144,6 +150,7 @@ export function VoucherDetailsDialog({
       : { entries: viewVoucherEntries, entryBalances };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-full max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -286,7 +293,11 @@ export function VoucherDetailsDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close-view-dialog">
             Close
           </Button>
-          {canEdit(selectedVoucher) && (
+          {mayCorrectFx && (
+            <Button onClick={() => { onOpenChange(false); setCorrectFxOpen(true); }}
+              data-testid="button-correct-automatic-fx">Correct FX</Button>
+          )}
+          {!isAutomaticFx && canEdit(selectedVoucher) && (
             <Button
               onClick={() => {
                 onOpenChange(false);
@@ -305,5 +316,10 @@ export function VoucherDetailsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {mayCorrectFx && (
+      <FxRevaluationCorrectionDialog open={correctFxOpen}
+        onOpenChange={setCorrectFxOpen} voucher={selectedVoucher} />
+    )}
+    </>
   );
 }
