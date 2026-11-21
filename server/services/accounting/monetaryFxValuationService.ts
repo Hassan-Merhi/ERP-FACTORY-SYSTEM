@@ -281,7 +281,9 @@ function decimal(input: string | number | null | undefined): Decimal {
 export async function getMonetaryFxValuation(
   companyId: number,
   // Only trusted server-side policy data may approve additional monetary assets.
-  policy: MonetaryFxEligibilityOptions = {}
+  policy: MonetaryFxEligibilityOptions = {},
+  // An explicit accounting date is used only by the guarded FX correction preview.
+  asOfDate?: string
 ): Promise<MonetaryFxValuationResult> {
   if (!Number.isSafeInteger(companyId) || companyId <= 0) throw new Error("A selected company is required.");
   return db.transaction(async (tx) => {
@@ -292,7 +294,7 @@ export async function getMonetaryFxValuation(
       await tx.execute(sql`SELECT base_currency FROM companies WHERE id = ${companyId}`)
     );
     if (!company) throw new Error("Company not found.");
-    const businessDate = fxDay(await companyBusinessDate(companyId, tx));
+    const businessDate = fxDay(asOfDate ?? (await companyBusinessDate(companyId, tx)));
     const baseCurrency = canonicalMonetaryCurrency(company.base_currency) ?? "USD";
     const masters = await loadMonetaryMasters(tx, companyId);
     const movements = await loadNativeMovements(tx, companyId, businessDate);
