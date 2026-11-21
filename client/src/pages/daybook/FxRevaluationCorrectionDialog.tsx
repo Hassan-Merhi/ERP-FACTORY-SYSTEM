@@ -26,6 +26,7 @@ type Preview = {
   blockers: string[];
   previewKey: string | null;
 };
+const DEFAULT_AUDIT_REASON = "FX revaluation posted on the wrong business date";
 function accountKey(line: Preview["lines"][number]) {
   return line.accountKind + ":" + line.accountId;
 }
@@ -46,7 +47,7 @@ export function FxRevaluationCorrectionDialog({
   open: boolean; onOpenChange: (open: boolean) => void; voucher: Voucher;
 }) {
   const [date, setDate] = useState(() => previousDay(voucher.voucherDate));
-  const [reason, setReason] = useState("FX revaluation posted on the wrong business date");
+  const [reason, setReason] = useState(DEFAULT_AUDIT_REASON);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,7 +58,7 @@ export function FxRevaluationCorrectionDialog({
   useEffect(() => {
     if (!open) return;
     setDate(previousDay(voucher.voucherDate));
-    setReason("FX revaluation posted on the wrong business date");
+    setReason(DEFAULT_AUDIT_REASON);
     setPreview(null);
     setError("");
     setFinished("");
@@ -207,6 +208,12 @@ export function FxRevaluationCorrectionDialog({
                   The FX gain/loss entry will be recalculated to balance the journal.
                 </p>
               )}
+              {preview.lines.some((line) => line.manuallyOverridden) &&
+                reason.trim() === DEFAULT_AUDIT_REASON && (
+                <p className="text-amber-500" role="alert">
+                  Update Audit reason to explain why your manually entered USD amounts are correct.
+                </p>
+              )}
               {amountsChanged && (
                 <p role="status" className="text-amber-500">
                   Amounts changed. Click Recalculate edited amounts before confirming.
@@ -232,7 +239,9 @@ export function FxRevaluationCorrectionDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           {!finished && (
             <Button disabled={busy || preview?.status !== "ready" ||
-              !preview.previewKey || amountsChanged || reason.trim().length < 10 || date !== preview.targetDate}
+              !preview.previewKey || amountsChanged || reason.trim().length < 10 || date !== preview.targetDate ||
+              (preview.lines.some((line) => line.manuallyOverridden) &&
+                (reason.trim() === DEFAULT_AUDIT_REASON || reason.trim().length < 20))}
               onClick={() => void correct()}>
               {busy ? "Posting..." : "Confirm correction"}
             </Button>
