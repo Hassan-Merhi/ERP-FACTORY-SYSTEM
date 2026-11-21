@@ -1,9 +1,10 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (name: string) => fs.readFileSync(path.join(root, name), "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (name: string) => readModuleFamily(path.join(root, name));
 // Collapse formatter line breaks inside call arguments so signatures stay stable under Prettier.
 const readCode = (name: string) => read(name).replace(/\(\s+/g, "(").replace(/,\s+/g, ", ");
 

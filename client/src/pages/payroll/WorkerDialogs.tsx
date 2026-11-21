@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { ClientErrorLike } from "@/lib/clientError";
-import type { usePayrollModel } from "./usePayrollModel";
 
-type PayrollModel = ReturnType<typeof usePayrollModel>;
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -16,12 +14,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { MoneyInput } from "@/components/ui/decimal-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { FormSubmitButton } from "@/components/FormSubmitButton";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -29,32 +24,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { getApiRequest } from "@/lib/factoryApi";
 import { queryClient } from "@/lib/queryClient";
-import type { Employee } from "@shared/schema";
 import { EditWorkerDialog } from "./EditWorkerDialog";
-
-export interface WorkerDialogsProps {
-  newWorkerDialogOpen: boolean;
-  setNewWorkerDialogOpen: (open: boolean) => void;
-  newWorkerForm: PayrollModel["newWorkerForm"];
-  createWorkerMutation: PayrollModel["createWorkerMutation"];
-  editWorkerDialogOpen: boolean;
-  setEditWorkerDialogOpen: (open: boolean) => void;
-  selectedWorkerForEdit: PayrollModel["selectedWorkerForEdit"];
-  editWorkerForm: PayrollModel["editWorkerForm"];
-  updateWorkerMutation: PayrollModel["updateWorkerMutation"];
-  deleteWorkerConflict: PayrollModel["deleteWorkerConflict"];
-  setDeleteWorkerConflict: PayrollModel["setDeleteWorkerConflict"];
-  handleForceDeleteWorker: () => void;
-  createWorkerGroupDialogOpen: boolean;
-  setCreateWorkerGroupDialogOpen: (open: boolean) => void;
-  workerGroupMembersDialogOpen: boolean;
-  setWorkerGroupMembersDialogOpen: (open: boolean) => void;
-  selectedWorkerGroupForMembers: PayrollModel["selectedWorkerGroupForMembers"];
-  allWorkerGroups: PayrollModel["workerGroupsData"];
-  allWorkers: Employee[];
-  addWorkerToWorkerGroupMutation: PayrollModel["addWorkerToWorkerGroupMutation"];
-  removeWorkerFromWorkerGroupMutation: PayrollModel["removeWorkerFromWorkerGroupMutation"];
-}
+import type { WorkerDialogsProps } from "./WorkerDialogsTypes";
+import { WorkerDialogsContent } from "./WorkerDialogsContent";
+export type { WorkerDialogsProps } from "./WorkerDialogsTypes";
 
 export function WorkerDialogs({
   newWorkerDialogOpen,
@@ -110,134 +83,12 @@ export function WorkerDialogs({
   return (
     <>
       {/* New Worker Dialog */}
-      <Dialog open={newWorkerDialogOpen} onOpenChange={setNewWorkerDialogOpen}>
-        <DialogContent data-testid="dialog-new-worker">
-          <DialogHeader>
-            <DialogTitle>Add New Worker</DialogTitle>
-            <DialogDescription>Create a new worker for this company</DialogDescription>
-          </DialogHeader>
-
-          <Form {...newWorkerForm}>
-            <form
-              noValidate
-              onSubmit={newWorkerForm.handleSubmit((data) => createWorkerMutation.mutate(data))}
-              className="space-y-4"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={newWorkerForm.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>First Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-new-worker-firstname" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={newWorkerForm.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Last Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-new-worker-lastname" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={newWorkerForm.control}
-                name="code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Worker Code (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Auto-generated if left blank"
-                        {...field}
-                        data-testid="input-new-worker-code"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={newWorkerForm.control}
-                name="monthlySalary"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Monthly Salary</FormLabel>
-                    <FormControl>
-                      <MoneyInput step="0.01" {...field} data-testid="input-new-worker-salary" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={newWorkerForm.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department (Optional)</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-new-worker-department" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={newWorkerForm.control}
-                name="active"
-                render={({ field }) => (
-                  <FormItem className="flex items-center gap-2">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="checkbox-new-worker-active"
-                      />
-                    </FormControl>
-                    <FormLabel className="mt-0!">Active</FormLabel>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setNewWorkerDialogOpen(false)}
-                  data-testid="button-cancel-new-worker"
-                >
-                  Cancel
-                </Button>
-                <FormSubmitButton
-                  type="submit"
-                  pending={createWorkerMutation.isPending}
-                  pendingLabel="Creating…"
-                  data-testid="button-submit-new-worker"
-                >
-                  Create Worker
-                </FormSubmitButton>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <WorkerDialogsContent
+        createWorkerMutation={createWorkerMutation}
+        newWorkerDialogOpen={newWorkerDialogOpen}
+        newWorkerForm={newWorkerForm}
+        setNewWorkerDialogOpen={setNewWorkerDialogOpen}
+      />
 
       {/* Edit Worker Dialog */}
       <EditWorkerDialog

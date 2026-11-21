@@ -1,10 +1,11 @@
-import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { normalizeFactoryWorkerIds } from "../server/lib/factoryWorkerCategoryMembership";
 
 const root = process.cwd();
-const read = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (file: string) => readModuleFamily(path.join(root, file));
 
 describe("factory worker category membership", () => {
   it("normalizes category worker ids safely", () => {
