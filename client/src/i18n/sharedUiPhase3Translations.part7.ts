@@ -279,4 +279,5 @@ export const phase3SharedUiTranslationsPart7: readonly Phase3SharedUiEntry[] = [
   { en: "Recalculate edited amounts", ar: "إعادة احتساب المبالغ المعدلة", fr: "Recalculer les montants modifiés" },
   { en: "USD adjustment for", ar: "تسوية الدولار لحساب", fr: "Ajustement USD pour" },
   { en: "Manual USD FX valuation override:", ar: "تعديل يدوي لتقييم الصرف بالدولار:", fr: "Ajustement manuel de valorisation de change en USD :" },
+  { en: "Update Audit reason to explain why your manually entered USD amounts are correct.", ar: "حدّث سبب التدقيق لتوضيح سبب صحة المبالغ بالدولار التي أدخلتها يدوياً.", fr: "Précisez dans le motif d’audit pourquoi les montants USD saisis manuellement sont corrects." },
 ];
