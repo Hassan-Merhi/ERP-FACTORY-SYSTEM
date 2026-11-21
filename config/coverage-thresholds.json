@@ -138,10 +138,10 @@
   },
   "frontend": {
     "global": {
-      "lines": 37,
-      "statements": 35,
-      "functions": 26,
-      "branches": 27
+      "lines": 39,
+      "statements": 37,
+      "functions": 28,
+      "branches": 28
     },
     "perFile": {
       "client/src/pages/StockHub.tsx": {
@@ -157,10 +157,10 @@
         "branches": 97
       },
       "client/src/components/ui/period-filter.tsx": {
-        "lines": 78,
-        "statements": 79,
-        "functions": 65,
-        "branches": 82
+        "lines": 88,
+        "statements": 87,
+        "functions": 74,
+        "branches": 87
       },
       "client/src/pages/pos/hooks/usePosState.ts": {
         "lines": 97,
@@ -177,8 +177,8 @@
       "client/src/pages/analyticslegacy/accountMath.ts": {
         "lines": 93,
         "statements": 92,
-        "functions": 89,
-        "branches": 88
+        "functions": 91,
+        "branches": 90
       },
       "client/src/components/stock-transfer/smartTransferPreviewUi.ts": {
         "lines": 97,
@@ -196,19 +196,19 @@
         "lines": 97,
         "statements": 97,
         "functions": 97,
-        "branches": 87
+        "branches": 89
       },
       "client/src/components/vouchers/PaymentReceiptTab.tsx": {
         "lines": 84,
         "statements": 82,
-        "functions": 80,
+        "functions": 85,
         "branches": 86
       },
       "client/src/pages/StockInSalesReport.tsx": {
-        "lines": 60,
-        "statements": 57,
+        "lines": 69,
+        "statements": 72,
         "functions": 61,
-        "branches": 54
+        "branches": 79
       },
       "client/src/contexts/CurrencyContext.tsx": {
         "lines": 95,
@@ -274,12 +274,12 @@
         "lines": 95,
         "statements": 90,
         "functions": 92,
-        "branches": 78
+        "branches": 81
       },
       "client/src/contexts/CompanyContext.tsx": {
-        "lines": 93,
-        "statements": 90,
-        "functions": 91,
+        "lines": 97,
+        "statements": 94,
+        "functions": 97,
         "branches": 88
       },
       "client/src/contexts/LocationContext.tsx": {
@@ -313,10 +313,10 @@
         "branches": 87
       },
       "client/src/hooks/screen-feed-capture-engine.ts": {
-        "lines": 87,
-        "statements": 85,
-        "functions": 82,
-        "branches": 64
+        "lines": 89,
+        "statements": 88,
+        "functions": 92,
+        "branches": 78
       },
       "client/src/hooks/screen-feed-capture-policy.ts": {
         "lines": 97,
@@ -344,8 +344,8 @@
       },
       "client/src/hooks/use-client-table-pagination.ts": {
         "lines": 97,
-        "statements": 87,
-        "functions": 63,
+        "statements": 97,
+        "functions": 97,
         "branches": 63
       },
       "client/src/hooks/use-erp-phone-layout.ts": {
@@ -356,9 +356,9 @@
       },
       "client/src/hooks/use-escape-back.ts": {
         "lines": 97,
-        "statements": 88,
+        "statements": 90,
         "functions": 97,
-        "branches": 83
+        "branches": 86
       },
       "client/src/hooks/use-main-content-focus.ts": {
         "lines": 97,
@@ -403,10 +403,10 @@
         "branches": 88
       },
       "client/src/hooks/use-screen-feed.ts": {
-        "lines": 94,
-        "statements": 91,
+        "lines": 97,
+        "statements": 97,
         "functions": 97,
-        "branches": 82
+        "branches": 97
       },
       "client/src/hooks/use-scroll-overflow-probe.ts": {
         "lines": 97,
@@ -430,7 +430,7 @@
         "lines": 97,
         "statements": 97,
         "functions": 97,
-        "branches": 87
+        "branches": 92
       },
       "client/src/hooks/use-visual-viewport-metrics.ts": {
         "lines": 97,
@@ -452,15 +452,15 @@
       },
       "client/src/hooks/useBoundedTableRows.ts": {
         "lines": 93,
-        "statements": 89,
+        "statements": 91,
         "functions": 97,
-        "branches": 79
+        "branches": 86
       },
       "client/src/hooks/useLabelDesignColors.ts": {
         "lines": 97,
         "statements": 97,
         "functions": 97,
-        "branches": 54
+        "branches": 97
       },
       "client/src/hooks/useZmwVoucherRate.ts": {
         "lines": 97,
@@ -483,7 +483,7 @@
       "client/src/lib/bandwidthPhase1HotspotGuard.ts": {
         "lines": 96,
         "statements": 94,
-        "functions": 94,
+        "functions": 97,
         "branches": 87
       },
       "client/src/lib/bandwidthPhase2PayloadGuard.ts": {
@@ -572,9 +572,9 @@
       },
       "client/src/lib/factoryClientAccess.ts": {
         "lines": 97,
-        "statements": 85,
+        "statements": 91,
         "functions": 97,
-        "branches": 70
+        "branches": 77
       },
       "client/src/lib/factoryOfflineQueueSafety.ts": {
         "lines": 97,
@@ -589,10 +589,10 @@
         "branches": 89
       },
       "client/src/lib/formatNumber.ts": {
-        "lines": 85,
-        "statements": 87,
+        "lines": 88,
+        "statements": 89,
         "functions": 97,
-        "branches": 71
+        "branches": 79
       },
       "client/src/lib/labelHtml.ts": {
         "lines": 97,
@@ -681,7 +681,7 @@
       "client/src/lib/queryClient.ts": {
         "lines": 90,
         "statements": 88,
-        "functions": 94,
+        "functions": 97,
         "branches": 76
       },
       "client/src/lib/queryKeys.ts": {
@@ -712,7 +712,7 @@
         "lines": 93,
         "statements": 90,
         "functions": 97,
-        "branches": 84
+        "branches": 87
       },
       "client/src/lib/retailImageUrl.ts": {
         "lines": 97,
@@ -761,6 +761,24 @@
         "statements": 86,
         "functions": 77,
         "branches": 72
+      },
+      "client/src/components/vouchers/useCreditNoteTabState.ts": {
+        "lines": 89,
+        "statements": 86,
+        "functions": 94,
+        "branches": 79
+      },
+      "client/src/pages/pos/hooks/usePosMutations.ts": {
+        "lines": 97,
+        "statements": 96,
+        "functions": 97,
+        "branches": 77
+      },
+      "client/src/pages/useCashBankReconciliationState.tsx": {
+        "lines": 89,
+        "statements": 89,
+        "functions": 75,
+        "branches": 85
       }
     }
   }
