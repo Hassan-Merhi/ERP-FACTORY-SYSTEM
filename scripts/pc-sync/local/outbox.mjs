@@ -34,7 +34,21 @@ const CAPTURE_STALE_MINUTES = 10;
  * decisions, nothing to store).
  */
 export function deliveryDeviceId(pcDeviceId, userId, companyId) {
-  const h = createHash("sha256").update(`${pcDeviceId}|${userId}|${companyId}`).digest("hex");
+  return uuidFromHash(`${pcDeviceId}|${userId}|${companyId}`);
+}
+
+/**
+ * The key the cloud files this PC's own customers and ledgers under, one per
+ * company: the same for everyone who uses this PC, so an entry one person
+ * makes can name a customer another person created here (the PC's local ids
+ * are shared by all its users).
+ */
+export function pcRecordKey(pcDeviceId, companyId) {
+  return uuidFromHash(`pc-record-map|${pcDeviceId}|${companyId}`);
+}
+
+function uuidFromHash(text) {
+  const h = createHash("sha256").update(text).digest("hex");
   const variant = ((parseInt(h[16], 16) & 0x3) | 0x8).toString(16);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
@@ -86,11 +100,19 @@ export async function outboxSummary(local) {
   return rows.map((r) => ({ status: r.status, userId: r.user_id, count: r.n }));
 }
 
-async function mark(local, id, status, { code = null, overridable = false, receipt = null } = {}) {
+async function mark(local, id, status, { code = null, overridable = false, receipt = null, detail = null } = {}) {
   await local.query(
-    `UPDATE pc_local.outbox SET status = $2, code = $3, overridable = $4, receipt = $5::jsonb, updated_at = now()
+    `UPDATE pc_local.outbox
+        SET status = $2, code = $3, overridable = $4, receipt = $5::jsonb, detail = $6::jsonb, updated_at = now()
       WHERE id = $1`,
-    [id, status, code, overridable, receipt == null ? null : JSON.stringify(receipt)]
+    [
+      id,
+      status,
+      code,
+      overridable,
+      receipt == null ? null : JSON.stringify(receipt),
+      detail == null ? null : JSON.stringify(detail),
+    ]
   );
 }
 
@@ -134,6 +156,7 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
     }
     const res = await cloud.post("/api/offline/pc-sync/operations", {
       deviceId,
+      pcKey: pcRecordKey(state.device_id, op.company_id),
       operationId: op.operation_id,
       kind: op.kind,
       localRef: op.local_ref,
@@ -145,7 +168,11 @@ export async function deliverOutbox(local, cloud, { maxOperations = 200 } = {}) 
       await mark(local, op.id, "applied", { receipt: res.body });
       result.applied += 1;
     } else if (res.status === 409) {
-      await mark(local, op.id, "conflict", { code, overridable: res.body?.overridable === true });
+      await mark(local, op.id, "conflict", {
+        code,
+        overridable: res.body?.overridable === true,
+        detail: res.body?.detail ?? null,
+      });
       result.conflicts += 1;
     } else if (res.status === 202) {
       await mark(local, op.id, "waiting", { code });
@@ -209,6 +236,7 @@ export async function decideUnconfirmed(local, operationId, decision) {
 }
 
 const CUSTOMER_CREATE_KIND = "customer.create.v1";
+const CUSTOMER_DUPLICATE_CODE = "PHASE9_CUSTOMER_POSSIBLE_DUPLICATE";
 const DEPENDENT_STATUSES = ["unconfirmed", "pending", "waiting", "conflict"];
 
 /** Refuses every outstanding entry naming the customer (or its ledger) of a discarded customer create. */
@@ -233,9 +261,15 @@ async function refuseDependents(local, op) {
  * A held entry decided on this PC. "approve" sends it again with the conflict
  * code as the override (the cloud applies it only when the signed-in person is
  * an Admin or Developer); "discard" records it as rejected on the cloud.
+ * A customer held as a possible duplicate can instead be approved as the
+ * existing cloud customer `mergeInto`: the cloud then files the PC's customer
+ * (and its ledger) as that one and creates nothing.
  */
-export async function resolveConflict(local, cloud, operationId, decision) {
+export async function resolveConflict(local, cloud, operationId, decision, { mergeInto = null } = {}) {
   if (decision !== "approve" && decision !== "discard") throw new PcSyncAgentError("PC_SYNC_DECISION_INVALID");
+  if (mergeInto !== null && (decision !== "approve" || !Number.isSafeInteger(mergeInto) || mergeInto < 1)) {
+    throw new PcSyncAgentError("PC_SYNC_DECISION_INVALID");
+  }
   const state = await readLocalState(local);
   const { rows } = await local.query(
     `SELECT id, operation_id, kind, input, envelope, local_ref, captured_at, company_id, code, overridable, user_id
@@ -245,6 +279,9 @@ export async function resolveConflict(local, cloud, operationId, decision) {
   const op = rows[0];
   if (!op) throw new PcSyncAgentError("PC_SYNC_CONFLICT_NOT_FOUND");
   if (decision === "approve" && !op.overridable) throw new PcSyncAgentError("PC_SYNC_CONFLICT_NOT_OVERRIDABLE");
+  if (mergeInto !== null && (op.envelope?.kind !== CUSTOMER_CREATE_KIND || op.code !== CUSTOMER_DUPLICATE_CODE)) {
+    throw new PcSyncAgentError("PC_SYNC_MERGE_NOT_ALLOWED");
+  }
   if (decision === "discard" && op.envelope?.kind === CUSTOMER_CREATE_KIND) {
     // A customer the cloud never created: the entries that name it (or its
     // ledger) can never apply, so they are refused with it instead of waiting
@@ -267,7 +304,13 @@ export async function resolveConflict(local, cloud, operationId, decision) {
     localRef: op.local_ref,
     capturedAt: new Date(op.captured_at).toISOString(),
     ...entryBody(op),
-    ...(decision === "approve" ? { override: op.code } : {}),
+    ...(decision === "approve"
+      ? {
+          pcKey: pcRecordKey(state.device_id, op.company_id),
+          override: op.code,
+          ...(mergeInto !== null ? { mergeInto } : {}),
+        }
+      : {}),
   };
   const path =
     decision === "approve" ? "/api/offline/pc-sync/operations" : "/api/offline/browser-sync/operations/discard";

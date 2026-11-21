@@ -43,6 +43,7 @@ const resolveSchema = z.object({ note: z.string().trim().min(1).max(1000) }).str
 const pcOperationSchema = z
   .object({
     deviceId: z.string().uuid(),
+    pcKey: z.string().uuid().optional(),
     operationId: z.string().uuid(),
     kind: z.string().min(1).max(100),
     localRef: z.number().int(),
@@ -50,6 +51,7 @@ const pcOperationSchema = z
     input: z.record(z.string(), z.unknown()).optional(),
     envelope: z.record(z.string(), z.unknown()).optional(),
     override: z.string().max(100).nullable().optional(),
+    mergeInto: z.number().int().positive().optional(),
   })
   .strict()
   .refine((body) => (body.input === undefined) !== (body.envelope === undefined));

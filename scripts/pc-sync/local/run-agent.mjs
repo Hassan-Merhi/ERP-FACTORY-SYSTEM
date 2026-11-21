@@ -42,6 +42,15 @@ export function buildLocalDatabase(databaseUrl) {
   });
 }
 
+/** The existing cloud customers a held new customer looks like (at most 3), for the merge choice. */
+function heldCustomerCandidates(row) {
+  if (row.code !== "PHASE9_CUSTOMER_POSSIBLE_DUPLICATE" || !Array.isArray(row.detail?.candidates)) return [];
+  return row.detail.candidates
+    .filter((c) => Number.isSafeInteger(c?.customerId) && c.customerId > 0)
+    .slice(0, 3)
+    .map((c) => ({ customerId: c.customerId, code: String(c.code ?? ""), legalName: String(c.legalName ?? "") }));
+}
+
 async function main() {
   const databaseUrl = process.env.PC_LOCAL_DATABASE_URL;
   const cloudUrl = process.env.PC_SYNC_CLOUD_URL;
@@ -74,7 +83,7 @@ async function main() {
       outbox: await outboxSummary(local),
       conflicts: (
         await local.query(
-          `SELECT operation_id, kind, code, overridable, captured_at, status FROM pc_local.outbox
+          `SELECT operation_id, kind, code, overridable, captured_at, status, detail FROM pc_local.outbox
             WHERE status IN ('conflict', 'unconfirmed') ORDER BY id LIMIT 20`
         )
       ).rows.map((r) => ({
@@ -84,6 +93,8 @@ async function main() {
         overridable: r.overridable,
         capturedAt: r.captured_at,
         unconfirmed: r.status === "unconfirmed",
+        // A customer held as a possible duplicate: the existing ones it may be.
+        candidates: heldCustomerCandidates(r),
       })),
       ...extra,
     });
@@ -136,7 +147,8 @@ async function main() {
             // An interrupted save: "approve" means send it, "discard" drops it here.
             await decideUnconfirmed(local, command.operationId, command.cmd === "approve" ? "send" : "discard");
           } else {
-            await resolveConflict(local, cloud, command.operationId, command.cmd);
+            const mergeInto = Number.isSafeInteger(command.mergeInto) ? command.mergeInto : null;
+            await resolveConflict(local, cloud, command.operationId, command.cmd, { mergeInto });
           }
           send({ event: "decision", ok: true, operationId: command.operationId });
         } catch (error) {

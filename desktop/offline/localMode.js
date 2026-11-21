@@ -187,9 +187,10 @@ function createLocalMode({ cloudUrl, onStatus = () => {} }) {
       agent.stdin.write(`${JSON.stringify({ cmd: 'login', username, password })}\n`);
       return true;
     },
-    decide(operationId, decision) {
+    decide(operationId, decision, mergeInto = null) {
       if (!agent || (decision !== 'approve' && decision !== 'discard')) return;
-      agent.stdin.write(`${JSON.stringify({ cmd: decision, operationId })}\n`);
+      const merge = decision === 'approve' && Number.isSafeInteger(mergeInto) && mergeInto > 0 ? { mergeInto } : {};
+      agent.stdin.write(`${JSON.stringify({ cmd: decision, operationId, ...merge })}\n`);
     },
     syncNow() {
       if (agent) agent.stdin.write(`${JSON.stringify({ cmd: 'sync' })}\n`);

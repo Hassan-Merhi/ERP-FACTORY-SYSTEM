@@ -72,6 +72,10 @@ CREATE TABLE IF NOT EXISTS pc_local.outbox (
 -- transaction as the change, delivered as is.
 ALTER TABLE pc_local.outbox ADD COLUMN IF NOT EXISTS envelope jsonb;
 
+-- What the cloud said about a held entry (e.g. the existing customers a new
+-- one looks like), shown to the person deciding it.
+ALTER TABLE pc_local.outbox ADD COLUMN IF NOT EXISTS detail jsonb;
+
 -- Local refs for operations that do not name a created row (never a cloud id).
 CREATE SEQUENCE IF NOT EXISTS pc_local.local_ref_seq START 1900000000 MINVALUE 1900000000 MAXVALUE 2147483647;
 

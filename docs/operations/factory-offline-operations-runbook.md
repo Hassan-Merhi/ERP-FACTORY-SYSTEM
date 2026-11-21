@@ -463,17 +463,26 @@ name its customer or ledger (`customerId`, `ledgerAccountId`, or a `customer` /
 naming a customer the cloud has not created yet waits
 (`202 PHASE9_PC_RECORD_NOT_YET_SYNCED`). A customer with the same name
 (ignoring case and spaces) or the same phone (last 9 digits) as an existing one
-is held as `PHASE9_CUSTOMER_POSSIBLE_DUPLICATE`; approving it creates a new
-customer. Discarding it on the PC also refuses the outstanding entries that
+is held as `PHASE9_CUSTOMER_POSSIBLE_DUPLICATE`. In the PC app's held-entries
+dialog an Admin or Developer either creates it as a new customer, or picks one
+of the existing customers it looks like ("Same as …"): nothing is created, and
+the PC's customer and ledger are filed as that customer's, so its sales and
+payments from the PC post to it. A merge is refused while the PC's customer
+carries an opening balance (`PHASE9_CUSTOMER_MERGE_OPENING_BALANCE`, it would be
+lost), names a customer the company does not have
+(`PHASE9_CUSTOMER_MERGE_TARGET_MISSING`), or opened a ledger the existing
+customer does not have (`PHASE9_CUSTOMER_LEDGER_NOT_OPENED`); the entry stays
+held for another decision. Discarding it on the PC also refuses the outstanding entries that
 name it or its ledger (`PC_SYNC_NAMES_DISCARDED_CUSTOMER`), so they don't hold up
 later entries; they must be entered again against an existing customer.
-Merging it into the existing customer instead is the next slice. A POS credit
+The cloud files a PC's customers under the PC's record key (one per PC and
+company, the same for everyone using the PC), so an entry one person makes can
+name a customer another person created on that PC. A POS credit
 or cash sale paying into the PC's ledger is translated the same way. Customers created by Create Only users are held as
 `PHASE9_ACTOR_ROLE_NOT_PERMITTED`, because the replay cannot repeat that
 role's verified-create check. Covered by `tests/pc-sync-offline-customers.test.ts`.
 
-Still to come: merging a held customer into an existing one, customer and
-supplier edits with clash holds, suppliers and accounts (rest of Phase C),
+Still to come: customer and supplier edits with clash holds, suppliers and accounts (rest of Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 
