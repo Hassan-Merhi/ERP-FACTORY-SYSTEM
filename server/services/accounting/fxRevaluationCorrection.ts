@@ -242,7 +242,8 @@ export async function applyFxCorrection(input: {
     });
     await writeAuditEvent({
       companyId: input.companyId, userId: input.actor.userId,
-      username: input.actor.username, action: "correct", tableName: "vouchers",
+      username: input.actor.username, action: "repair", tableName: "vouchers",
+      reason: input.reason,
       recordId: input.voucherId, recordIdentifier: preview.originalVoucherNumber,
       changes: { fxCorrection: { new: {
         originalVoucherId: input.voucherId,
