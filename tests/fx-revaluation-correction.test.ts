@@ -96,6 +96,32 @@ describe("Admin FX date-correction preflight", () => {
     }]);
   });
 
+  it("recomputes USD book movements without manufacturing CFA cash", async () => {
+    prepare();
+    const { preview, entries } = await previewFxCorrection(9, 130, "2026-11-19", [
+      { accountKind: "ledger", accountId: 10, adjustmentUsd: "-5.75" },
+    ]);
+    expect(preview.status).toBe("ready");
+    expect(preview.lines).toMatchObject([{
+      accountKind: "ledger", accountId: 10,
+      adjustmentUsd: "-5.75", automaticAdjustmentUsd: "-2.00", manuallyOverridden: true,
+    }]);
+    expect(preview.correctedUsdTotal).toBe("5.75");
+    expect(preview.netGainUsd).toBe("-5.75");
+    expect(entries).toMatchObject([{
+      debitAmount: "0", creditAmount: "5.75",
+      baseDebitAmount: "0", baseCreditAmount: "5.75",
+      transactionCurrency: "CFA", transactionDebitAmount: "0", transactionCreditAmount: "0",
+    }]);
+  });
+
+  it("refuses manual amount changes to accounts outside the verified valuation", async () => {
+    prepare();
+    await expect(previewFxCorrection(9, 130, "2026-11-19", [
+      { accountKind: "ledger", accountId: 999999, adjustmentUsd: "15.00" },
+    ])).rejects.toMatchObject({ status: 400, code: "FX_CORRECTION_ACCOUNT_INVALID" });
+  });
+
   it("blocks a source that has dependent later revaluation journals", async () => {
     prepare({ ...original, later_fx: true });
     const { preview } = await previewFxCorrection(9, 130, "2026-11-19");

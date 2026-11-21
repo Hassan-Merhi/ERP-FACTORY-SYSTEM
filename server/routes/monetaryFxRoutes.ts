@@ -21,6 +21,22 @@ import {
 } from "../middleware/unifiedAccountingRolloutBoundary";
 
 const positive = z.coerce.number().int().positive();
+const fxOverrideSchema = z.array(
+  z.object({
+    accountKind: z.enum(["ledger", "bank", "customer"]),
+    accountId: positive,
+    adjustmentUsd: z.string().min(1).max(30),
+  }).strict()
+).max(100);
+function parseFxOverrideQuery(value: string | undefined) {
+  if (!value) return [];
+  try {
+    return fxOverrideSchema.parse(JSON.parse(value));
+  } catch (error) {
+    if (error instanceof z.ZodError) throw error;
+    throw new FxCorrectionError(400, "FX_CORRECTION_OVERRIDES_INVALID", "Invalid USD adjustment list.");
+  }
+}
 const date = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -55,8 +71,13 @@ export function registerMonetaryFxRoutes(app: Express): void {
     requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
       try {
         const c = company(req), voucherId = positive.parse(req.params.id);
-        const { targetDate } = z.object({ targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
-        return res.json((await previewFxCorrection(c, voucherId, targetDate)).preview);
+        const { targetDate, overrides } = z.object({
+          targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          overrides: z.string().max(12000).optional(),
+        }).parse(req.query);
+        return res.json((await previewFxCorrection(
+          c, voucherId, targetDate, parseFxOverrideQuery(overrides)
+        )).preview);
       } catch (e) { return fail(res, e); }
     }
   );
@@ -67,6 +88,7 @@ export function registerMonetaryFxRoutes(app: Express): void {
         const body = z.object({
           targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
           previewKey: z.string().length(64),
+          amountOverrides: fxOverrideSchema.optional(),
           reason: z.string().trim().min(10).max(1000),
         }).parse(req.body);
         return res.status(201).json(await applyFxCorrection({

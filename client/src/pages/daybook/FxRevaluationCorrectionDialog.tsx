@@ -18,10 +18,18 @@ type Preview = {
   originalUsdTotal: string;
   correctedUsdTotal: string;
   netGainUsd: string;
-  lines: { accountName: string; currency: string; adjustmentUsd: string }[];
+  lines: {
+    accountKind: "ledger" | "bank" | "customer";
+    accountId: number; accountName: string; currency: string; adjustmentUsd: string;
+    automaticAdjustmentUsd: string; manuallyOverridden: boolean;
+  }[];
   blockers: string[];
   previewKey: string | null;
 };
+const DEFAULT_AUDIT_REASON = "FX revaluation posted on the wrong business date";
+function accountKey(line: Preview["lines"][number]) {
+  return line.accountKind + ":" + line.accountId;
+}
 function previousDay(iso: string) {
   const base = iso.slice(0, 10);
   const ms = Date.parse(base + "T00:00:00Z");
@@ -39,29 +47,49 @@ export function FxRevaluationCorrectionDialog({
   open: boolean; onOpenChange: (open: boolean) => void; voucher: Voucher;
 }) {
   const [date, setDate] = useState(() => previousDay(voucher.voucherDate));
-  const [reason, setReason] = useState("FX revaluation posted on the wrong business date");
+  const [reason, setReason] = useState(DEFAULT_AUDIT_REASON);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [finished, setFinished] = useState("");
+  const [draftAmounts, setDraftAmounts] = useState<Record<string, string>>({});
+  const [amountsChanged, setAmountsChanged] = useState(false);
+  const hasManualAmounts = preview?.lines.some((line) => line.manuallyOverridden) ?? false;
 
   useEffect(() => {
     if (!open) return;
     setDate(previousDay(voucher.voucherDate));
-    setReason("FX revaluation posted on the wrong business date");
+    setReason(DEFAULT_AUDIT_REASON);
     setPreview(null);
     setError("");
     setFinished("");
+    setDraftAmounts({});
+    setAmountsChanged(false);
   }, [open, voucher.id, voucher.voucherDate]);
+
+  function editedUsdLines(currentPreview: Preview) {
+    return currentPreview.lines
+      .filter((line) => draftAmounts[accountKey(line)] !== line.automaticAdjustmentUsd)
+      .map((line) => ({
+        accountKind: line.accountKind,
+        accountId: line.accountId,
+        adjustmentUsd: draftAmounts[accountKey(line)] ?? line.adjustmentUsd,
+      }));
+  }
 
   async function loadPreview() {
     setBusy(true);
     setError("");
-    setPreview(null);
     try {
+      const overrides = preview ? editedUsdLines(preview) : [];
+      const search = new URLSearchParams({ targetDate: date });
+      if (overrides.length) search.set("overrides", JSON.stringify(overrides));
       const url = "/api/accounting/monetary-fx/revaluation/" + voucher.id +
-        "/correction-preview?targetDate=" + encodeURIComponent(date);
-      setPreview(await responseData(await apiRequest("GET", url)) as Preview);
+        "/correction-preview?" + search.toString();
+      const result = await responseData(await apiRequest("GET", url)) as Preview;
+      setPreview(result);
+      setDraftAmounts(Object.fromEntries(result.lines.map((line) => [accountKey(line), line.adjustmentUsd])));
+      setAmountsChanged(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to preview FX correction.");
     } finally {
@@ -70,13 +98,16 @@ export function FxRevaluationCorrectionDialog({
   }
 
   async function correct() {
-    if (!preview?.previewKey || preview.targetDate !== date) return;
+    if (!preview?.previewKey || preview.targetDate !== date || amountsChanged) return;
     setBusy(true);
     setError("");
     try {
       const result = await responseData(await apiRequest(
         "POST", "/api/accounting/monetary-fx/revaluation/" + voucher.id + "/correct",
-        { targetDate: date, previewKey: preview.previewKey, reason: reason.trim() }
+        { targetDate: date, previewKey: preview.previewKey, reason: reason.trim(),
+          amountOverrides: preview.lines.filter((line) => line.manuallyOverridden).map((line) => ({
+            accountKind: line.accountKind, accountId: line.accountId, adjustmentUsd: line.adjustmentUsd,
+          })) }
       )) as { reversalVoucherNumber: string; correctedVoucherNumber: string };
       setFinished("Posted " + result.correctedVoucherNumber +
         " dated " + date + ". Reversal: " + result.reversalVoucherNumber + ".");
@@ -121,7 +152,7 @@ export function FxRevaluationCorrectionDialog({
               <Input id="fx-correction-date" type="date" value={date}
                 max={previousDay(voucher.voucherDate)}
                 disabled={busy || !!finished}
-                onChange={(event) => { setDate(event.target.value); setPreview(null); }} />
+                onChange={(event) => { setDate(event.target.value); setPreview(null); setDraftAmounts({}); setAmountsChanged(false); }} />
             </div>
           </div>
           <div className="space-y-1">
@@ -133,7 +164,7 @@ export function FxRevaluationCorrectionDialog({
           {!finished && (
             <Button type="button" variant="outline" disabled={busy || !date}
               onClick={() => void loadPreview()}>
-              {busy ? "Checking..." : "Preview correction"}
+              {busy ? "Checking..." : amountsChanged ? "Recalculate edited amounts" : "Preview correction"}
             </Button>
           )}
           {preview && (
@@ -143,14 +174,52 @@ export function FxRevaluationCorrectionDialog({
                 <span>Recalculated: <strong>{"$"}{preview.correctedUsdTotal}</strong></span>
                 <span>FX gain/loss: <strong>{"$"}{preview.netGainUsd}</strong></span>
               </div>
-              <div className="max-h-52 overflow-y-auto">
-                {preview.lines.map((line, index) => (
-                  <div className="flex justify-between gap-3 border-t py-1" key={index}>
-                    <span>{line.accountName} ({line.currency})</span>
-                    <span className="font-mono tabular-nums">{"$"}{line.adjustmentUsd}</span>
-                  </div>
-                ))}
+              <div className="space-y-1">
+                <p className="font-medium">Edit USD adjustments per account</p>
+                <p className="text-muted-foreground">
+                  Positive = debit. Negative = credit. These adjust USD book values only, not the actual CFA amount.
+                </p>
               </div>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {preview.lines.map((line) => {
+                  const key = accountKey(line);
+                  return (
+                    <div className="grid grid-cols-[1fr_9rem] items-center gap-3 border-t py-2" key={key}>
+                      <div className="min-w-0">
+                        <Label htmlFor={"fx-usd-" + key}>{line.accountName} ({line.currency})</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Calculated USD: {line.automaticAdjustmentUsd}
+                        </p>
+                      </div>
+                      <Input id={"fx-usd-" + key} type="text" inputMode="decimal"
+                        aria-label={"USD adjustment for " + line.accountName}
+                        value={draftAmounts[key] ?? line.adjustmentUsd}
+                        disabled={busy || !!finished || preview.status !== "ready"}
+                        onChange={(event) => {
+                          setDraftAmounts((current) => ({ ...current, [key]: event.target.value }));
+                          setAmountsChanged(true);
+                        }} />
+                    </div>
+                  );
+                })}
+              </div>
+              {hasManualAmounts && (
+                <p className="text-muted-foreground">
+                  Manual USD adjustments require a documented accounting reason.
+                  The FX gain/loss entry will be recalculated to balance the journal.
+                </p>
+              )}
+              {hasManualAmounts &&
+                reason.trim() === DEFAULT_AUDIT_REASON && (
+                <p className="text-amber-500" role="alert">
+                  Update Audit reason to explain why your manually entered USD amounts are correct.
+                </p>
+              )}
+              {amountsChanged && (
+                <p role="status" className="text-amber-500">
+                  Amounts changed. Click Recalculate edited amounts before confirming.
+                </p>
+              )}
               {preview.blockers.length > 0 && (
                 <div role="alert" className="space-y-1 text-destructive">
                   {preview.blockers.map((blocker, index) => <p key={index}>{blocker}</p>)}
@@ -171,7 +240,9 @@ export function FxRevaluationCorrectionDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           {!finished && (
             <Button disabled={busy || preview?.status !== "ready" ||
-              !preview.previewKey || reason.trim().length < 10 || date !== preview.targetDate}
+              !preview.previewKey || amountsChanged || reason.trim().length < 10 || date !== preview.targetDate ||
+              (hasManualAmounts &&
+                (reason.trim() === DEFAULT_AUDIT_REASON || reason.trim().length < 20))}
               onClick={() => void correct()}>
               {busy ? "Posting..." : "Confirm correction"}
             </Button>
