@@ -69,3 +69,4 @@ export * from "./pos";
 export * from "./runtime";
 export * from "./unifiedAccounting";
 export * from "./offlineNegativeStockFlags";
+export * from "./offlinePcRecordMap";

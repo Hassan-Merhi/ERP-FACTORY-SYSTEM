@@ -246,7 +246,16 @@ plan are in the plan document and the
 - Accounting Purchase vouchers on a PC, the same way, as their own kind
   (`voucher.purchase.v1`). This completes step 1 (the voucher types). Container
   purchase orders stay online-only.
-- Next: Phases C to E.
+- Phase C owner decisions (2026-11-20): a PC customer that looks like an
+  existing one is held for review; a PC edit to a master record also changed
+  in the cloud is held (cloud kept until approved or rejected); Admin/Developer
+  decide.
+- Phase C1: customers created on a PC (`customer.create.v1`), created once in
+  the cloud through the live service, with the PC's customer and ledger ids
+  mapped (`factory_edge_pc_record_map`, migration 0013) and translated in later
+  entries; look-alikes held, approve creates new.
+- Next: merge a held customer into an existing one (C1b), master edits with
+  clash holds, suppliers and accounts; then Phases D and E.
 
 ## Resume checklist (next session)
 

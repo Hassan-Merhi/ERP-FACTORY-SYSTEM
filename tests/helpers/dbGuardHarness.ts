@@ -45,6 +45,11 @@ const CHECK_SATISFYING_VALUES: Record<string, Row | ((sequence: number) => Row)>
   accounting_fiscal_review_signoffs: { review_kind: "ACCOUNTING" },
   factory_edge_attachment_outbox: { operation_kind: "attachment.file.v1" },
   factory_edge_payment_outbox: { operation_kind: "voucher.payment-receipt.v1" },
+  factory_edge_pc_record_map: (sequence: number) => ({
+    record_type: "customer",
+    local_id: 1_000_000_000 + sequence,
+    cloud_id: sequence,
+  }),
   factory_edge_stock_outbox: { operation_kind: "stock.quick-adjust.v1" },
   factory_target_bonus_reviews: { status: "approved" },
   factory_production_target_bonus_weekly_methods: {

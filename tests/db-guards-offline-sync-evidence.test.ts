@@ -55,6 +55,7 @@ const EVIDENCE_TABLES = [
   { table: "factory_edge_event_conflicts", message: "PHASE9_EVENT_EVIDENCE_IMMUTABLE" },
   { table: "factory_edge_event_stage_receipts", message: "PHASE9_PRESSING_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_payment_outbox", message: "PHASE9_PAYMENT_OUTBOX_IMMUTABLE" },
+  { table: "factory_edge_pc_record_map", message: "PHASE9_PC_RECORD_MAP_IMMUTABLE" },
   { table: "factory_edge_pos_outbox", message: "PHASE9_POS_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_pressing_outbox", message: "PHASE9_PRESSING_OUTBOX_IMMUTABLE" },
   { table: "factory_edge_receiving_outbox", message: "PHASE9_RECEIVING_OUTBOX_IMMUTABLE" },
