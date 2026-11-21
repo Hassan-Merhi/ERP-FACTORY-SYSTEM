@@ -2,7 +2,7 @@
  * Phase 4 verification against a fresh, disposable CI PostgreSQL company.
  * Never use production Render credentials or known production IDs.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import Decimal from "decimal.js";
 import { pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
@@ -108,8 +108,8 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
   beforeAll(async () => {
     const company = await pool.query<{ id: number }>(
       `INSERT INTO companies (code, name, company_type, base_currency, display_currency)
-       VALUES ($1,$1,'erp','USD','ZMW') RETURNING id`,
-      [prefix]
+       VALUES ($1,$2,'erp','USD','ZMW') RETURNING id`,
+      [prefix, prefix]
     );
     companyId = company.rows[0].id;
     await pool.query("INSERT INTO company_settings (company_id, timezone) VALUES ($1,'Africa/Lusaka')", [companyId]);
@@ -130,13 +130,27 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
     await receipt("KIT209", kitwe, "18080", "20.9");
     await receipt("LUS208", lusaka, "147910", "20.8");
     await receipt("LUS209", lusaka, "13140", "20.9");
-    originalId = await journal("MANUALFX", [
-      { ledger: kitwe, debit: "0", credit: "11.60" },
-      { ledger: lusaka, debit: "0", credit: "34.03" },
-      { ledger: fxAccount, debit: "45.63", credit: "0" },
-    ], null, "Manual FX revaluation 20.8 to 20.9");
-    await linkPosting(originalId, "manual-journal", "manual");
+    originalId = await journal(
+      "MANUALFX",
+      [
+        { ledger: kitwe, debit: "0", credit: "11.60" },
+        { ledger: lusaka, debit: "0", credit: "34.03" },
+        { ledger: fxAccount, debit: "45.63", credit: "0" },
+      ],
+      null,
+      "Manual FX revaluation 20.8 to 20.9"
+    );
   }, 120_000);
+
+  // The shared afterEach in voucherRequestIdentityTestBridge clears posting
+  // identities between test cases; restore the original journal's before each.
+  beforeEach(async () => {
+    await pool.query("DELETE FROM accounting_posting_requests WHERE company_id=$1 AND idempotency_key=$2", [
+      companyId,
+      `${prefix}:manual`,
+    ]);
+    await linkPosting(originalId, "manual-journal", "manual");
+  });
 
   afterAll(async () => {
     if (!companyId) return;
@@ -159,17 +173,23 @@ databaseDescribe("Phase 4 FX correction audit (disposable PostgreSQL)", () => {
 
   it("reports original reversal needed after a reviewed P&L account correction", async () => {
     await pool.query("UPDATE ledger_accounts SET account_type='Indirect Expense' WHERE company_id=$1 AND id=$2", [
-      companyId, fxAccount,
+      companyId,
+      fxAccount,
     ]);
     expect((await verify()).status).toBe("reverse_original");
   });
 
   it("verifies exact audited reversal and refuses a second native-USD FX journal", async () => {
-    const reversingId = await journal("REVERSE", [
-      { ledger: kitwe, debit: "11.60", credit: "0" },
-      { ledger: lusaka, debit: "34.03", credit: "0" },
-      { ledger: fxAccount, debit: "0", credit: "45.63" },
-    ], originalId, "Exact reverse of the old native-USD FX journal");
+    const reversingId = await journal(
+      "REVERSE",
+      [
+        { ledger: kitwe, debit: "11.60", credit: "0" },
+        { ledger: lusaka, debit: "34.03", credit: "0" },
+        { ledger: fxAccount, debit: "0", credit: "45.63" },
+      ],
+      originalId,
+      "Exact reverse of the old native-USD FX journal"
+    );
     await linkPosting(reversingId, "voucher-reversal", "reversal");
     const before = await verify();
     expect(before.status).toBe("post_base_only");

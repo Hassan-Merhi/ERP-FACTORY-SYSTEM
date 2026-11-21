@@ -11,7 +11,7 @@ const shell = await read("client/src/app/PosShell.tsx");
 const header = await read("client/src/pages/pos/pos-components/POSHeader.tsx");
 // Read the layout with its extracted siblings (see ./lib/readModuleFamily.mjs).
 const mobile = readModuleFamily(path.join(ROOT, "client/src/pages/pos/pos-components/PosMobileLayout.tsx"));
-const transfers = await read("client/src/pages/pos/PosTransferOrders.tsx");
+const transfers = readModuleFamily(path.join(ROOT, "client/src/pages/pos/PosTransferOrders.tsx"));
 const failures = [];
 
 for (const token of [

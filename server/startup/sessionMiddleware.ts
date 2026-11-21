@@ -13,6 +13,7 @@ import type { RequestHandler } from "express";
 import { resolveDatabaseSsl } from "../lib/databaseSsl.mjs";
 import { logger } from "../lib/logger";
 import { SESSION_COOKIE_NAME } from "../services/security/sessionCookiePolicy";
+import { guardCompanySelectionWrites } from "../services/security/sessionCompanyWriteGuard";
 import { pcLocalReadOnly } from "../offline/pcLocal/localReadOnlyGuard";
 
 export function buildSessionMiddleware(): RequestHandler {
@@ -74,6 +75,10 @@ export function buildSessionMiddleware(): RequestHandler {
       // store must never run DDL at runtime.
       createTableIfMissing: false,
     });
+
+    // A request that finishes after a company switch must not write the
+    // previous company back over it.
+    guardCompanySelectionWrites(sessionConfig.store);
 
     logger.info(`✓ PostgreSQL session store configured (SSL: ${requiresSSL ? "enabled" : "disabled"})`);
   }

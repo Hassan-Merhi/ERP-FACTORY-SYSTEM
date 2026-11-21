@@ -10,6 +10,23 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import {
+  EMPTY_METRICS,
+  type LocationOption,
+  type StockGroupOption,
+  type StockInSalesRow,
+  type StockInSalesResponse,
+  type ReportGrouping,
+} from "./StockInSalesReportSummaryModelModel";
+export {
+  EMPTY_METRICS,
+  type LocationOption,
+  type StockGroupOption,
+  type StockInSalesMetrics,
+  type StockInSalesRow,
+  type StockInSalesResponse,
+  type ReportGrouping,
+} from "./StockInSalesReportSummaryModelModel";
 
 export function useStockInSalesReportSummaryModel() {
   const [, navigate] = useLocation();
@@ -253,57 +270,6 @@ export function useStockInSalesReportSummaryModel() {
 
 export type StockInSalesReportSummaryModel = ReturnType<typeof useStockInSalesReportSummaryModel>;
 
-export interface LocationOption {
-  id: number;
-  name: string;
-}
-
-export interface StockGroupOption {
-  id: number;
-  name: string;
-}
-
-export interface StockInSalesMetrics {
-  openingStockQty: number;
-  openingStockValue: number;
-  stockInQty: number;
-  stockInValue: number;
-  stockInAvgRate: number;
-  stockAdjustmentQty: number;
-  stockAdjustmentValue: number;
-  totalAvailableQty: number;
-  stockOutQty: number;
-  stockOutValue: number;
-  closingStockQty: number;
-  closingStockValue: number;
-  totalSales: number;
-  costOfSales: number;
-  costProfit: number;
-  avgProfitPerBale: number;
-  salesOutQty?: number;
-  salesOutValue?: number;
-  transferOutQty?: number;
-  transferOutValue?: number;
-  otherStockOutQty?: number;
-  otherStockOutValue?: number;
-  netSalesQty?: number;
-}
-
-export interface StockInSalesRow extends StockInSalesMetrics {
-  periodKey: string;
-  periodStart: string;
-  periodEnd: string;
-}
-
-export interface StockInSalesResponse {
-  generatedAt: string;
-  summary: StockInSalesMetrics;
-  rows: StockInSalesRow[];
-  rowCount: number;
-}
-
-export type ReportGrouping = "daily" | "monthly" | "yearly";
-
 export function resolveGrouping(period: PeriodFilterValue): ReportGrouping {
   if (["today", "yesterday", "this_week", "this_month", "last_1_month"].includes(period.preset)) {
     return "daily";
@@ -324,22 +290,3 @@ export function resolveGrouping(period: PeriodFilterValue): ReportGrouping {
 
   return "monthly";
 }
-
-export const EMPTY_METRICS: StockInSalesMetrics = {
-  openingStockQty: 0,
-  openingStockValue: 0,
-  stockInQty: 0,
-  stockInValue: 0,
-  stockInAvgRate: 0,
-  stockAdjustmentQty: 0,
-  stockAdjustmentValue: 0,
-  totalAvailableQty: 0,
-  stockOutQty: 0,
-  stockOutValue: 0,
-  closingStockQty: 0,
-  closingStockValue: 0,
-  totalSales: 0,
-  costOfSales: 0,
-  costProfit: 0,
-  avgProfitPerBale: 0,
-};

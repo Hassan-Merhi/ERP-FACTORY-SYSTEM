@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const source = (name: string) => readFileSync(path.resolve(process.cwd(), "server/services/reports", name), "utf8");
+// A split module is read together with the siblings extracted from it.
+const source = (name: string) => readModuleFamily(path.resolve(process.cwd(), "server/services/reports", name));
 
 describe("Stock In/Sales profit uses posted sale and cost totals", () => {
   it("aggregates signed sales minus COGS, never legacy stored profit", () => {
