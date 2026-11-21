@@ -78,7 +78,7 @@ export function useGroundScanModel() {
       const status = baleInfo?.status || "";
       const isInLoadingOrder = baleInfo?.isInLoadingOrder === true;
 
-      const saveRes = await apiRequest("POST", "/api/factory/ground-scan-items", {
+      await apiRequest("POST", "/api/factory/ground-scan-items", {
         locationId: selectedLocationId,
         referenceNumber: value,
         articleCode,
@@ -88,24 +88,27 @@ export function useGroundScanModel() {
         isInLoadingOrder,
       });
 
-      if (!saveRes.ok) {
-        const err = await saveRes.json();
-        if (saveRes.status === 409) {
-          setScanError(`Already scanned: ${value}`);
-          toast({ title: "Duplicate scan", description: `${value} is already in the list.`, variant: "destructive" });
-        } else {
-          toast({ title: "Save failed", description: err.message, variant: "destructive" });
-        }
-        setScanInput("");
-        return;
-      }
-
+      // apiRequest rejects HTTP errors before returning; handle 409/4xx in the
+      // catch below instead of treating every business rejection as a network fault.
       setScanInput("");
       setScanError("");
       toast({ title: "Bale scanned", description: `${productName} — ${status}` });
       invalidate();
-    } catch {
-      setScanError("Network error — try again");
+    } catch (error) {
+      const details = getErrorDetails(error);
+      if (details.status === 409) {
+        setScanError(`Already scanned: ${value}`);
+        setScanInput("");
+        toast({ title: "Duplicate scan", description: `${value} is already in the list.`, variant: "destructive" });
+      } else if (details.status && details.status < 500) {
+        // Show actual validation/permission errors returned by the server.
+        setScanError(details.message || `Scan rejected (HTTP ${details.status})`);
+        toast({ title: "Scan rejected", description: details.message, variant: "destructive" });
+      } else if (details.status) {
+        setScanError(`Server error (HTTP ${details.status}) — retry or contact support`);
+      } else {
+        setScanError("Connection problem — check the network and retry");
+      }
     } finally {
       setScanning(false);
       setTimeout(() => scanRef.current?.focus(), 50);
