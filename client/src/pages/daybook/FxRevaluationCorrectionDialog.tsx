@@ -1,0 +1,173 @@
+import { useEffect, useState } from "react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import type { Voucher } from "./types";
+
+type Preview = {
+  status: "ready" | "blocked";
+  originalVoucherNumber: string;
+  originalDate: string;
+  targetDate: string;
+  reversalDate: string;
+  originalUsdTotal: string;
+  correctedUsdTotal: string;
+  netGainUsd: string;
+  lines: { accountName: string; currency: string; adjustmentUsd: string }[];
+  blockers: string[];
+  previewKey: string | null;
+};
+function previousDay(iso: string) {
+  const base = iso.slice(0, 10);
+  const ms = Date.parse(base + "T00:00:00Z");
+  return Number.isFinite(ms) ? new Date(ms - 86400000).toISOString().slice(0, 10) : "";
+}
+async function responseData(res: Response) {
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "FX correction request failed.");
+  return data;
+}
+
+export function FxRevaluationCorrectionDialog({
+  open, onOpenChange, voucher,
+}: {
+  open: boolean; onOpenChange: (open: boolean) => void; voucher: Voucher;
+}) {
+  const [date, setDate] = useState(() => previousDay(voucher.voucherDate));
+  const [reason, setReason] = useState("FX revaluation posted on the wrong business date");
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [finished, setFinished] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(previousDay(voucher.voucherDate));
+    setReason("FX revaluation posted on the wrong business date");
+    setPreview(null);
+    setError("");
+    setFinished("");
+  }, [open, voucher.id, voucher.voucherDate]);
+
+  async function loadPreview() {
+    setBusy(true);
+    setError("");
+    setPreview(null);
+    try {
+      const url = "/api/accounting/monetary-fx/revaluation/" + voucher.id +
+        "/correction-preview?targetDate=" + encodeURIComponent(date);
+      setPreview(await responseData(await apiRequest("GET", url)) as Preview);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to preview FX correction.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function correct() {
+    if (!preview?.previewKey || preview.targetDate !== date) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await responseData(await apiRequest(
+        "POST", "/api/accounting/monetary-fx/revaluation/" + voucher.id + "/correct",
+        { targetDate: date, previewKey: preview.previewKey, reason: reason.trim() }
+      )) as { reversalVoucherNumber: string; correctedVoucherNumber: string };
+      setFinished("Posted " + result.correctedVoucherNumber +
+        " dated " + date + ". Reversal: " + result.reversalVoucherNumber + ".");
+      setPreview(null);
+      await queryClient.invalidateQueries();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not post the correction.");
+      setPreview(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Correct FX Revaluation</DialogTitle>
+          <DialogDescription>
+            {voucher.voucherNumber}: correct the accounting date without changing native CFA cash.
+            This creates an audited reversal and a corrected journal.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label>Original voucher date</Label>
+              <Input readOnly value={voucher.voucherDate.slice(0, 10)} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="fx-correction-date">Correct accounting date</Label>
+              <Input id="fx-correction-date" type="date" value={date}
+                max={previousDay(voucher.voucherDate)}
+                disabled={busy || !!finished}
+                onChange={(event) => { setDate(event.target.value); setPreview(null); }} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="fx-correction-reason">Audit reason</Label>
+            <Input id="fx-correction-reason" value={reason} maxLength={1000}
+              disabled={busy || !!finished}
+              onChange={(event) => setReason(event.target.value)} />
+          </div>
+          {!finished && (
+            <Button type="button" variant="outline" disabled={busy || !date}
+              onClick={() => void loadPreview()}>
+              {busy ? "Checking..." : "Preview correction"}
+            </Button>
+          )}
+          {preview && (
+            <div className="space-y-3 rounded-lg border p-3 text-sm">
+              <div className="flex flex-wrap gap-4">
+                <span>Original: <strong>{"$"}{preview.originalUsdTotal}</strong></span>
+                <span>Recalculated: <strong>{"$"}{preview.correctedUsdTotal}</strong></span>
+                <span>FX gain/loss: <strong>{"$"}{preview.netGainUsd}</strong></span>
+              </div>
+              <div className="max-h-52 overflow-y-auto">
+                {preview.lines.map((line, index) => (
+                  <div className="flex justify-between gap-3 border-t py-1" key={index}>
+                    <span>{line.accountName} ({line.currency})</span>
+                    <span className="font-mono tabular-nums">{"$"}{line.adjustmentUsd}</span>
+                  </div>
+                ))}
+              </div>
+              {preview.blockers.length > 0 && (
+                <div role="alert" className="space-y-1 text-destructive">
+                  {preview.blockers.map((blocker, index) => <p key={index}>{blocker}</p>)}
+                </div>
+              )}
+              {preview.status === "ready" && (
+                <p className="text-muted-foreground">
+                  No foreign-currency cash will be withdrawn or deposited.
+                  The original and reversal stay in the audit trail.
+                </p>
+              )}
+            </div>
+          )}
+          {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+          {finished && <p className="text-sm font-medium" role="status">{finished}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          {!finished && (
+            <Button disabled={busy || preview?.status !== "ready" ||
+              !preview.previewKey || reason.trim().length < 10 || date !== preview.targetDate}
+              onClick={() => void correct()}>
+              {busy ? "Posting..." : "Confirm correction"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
