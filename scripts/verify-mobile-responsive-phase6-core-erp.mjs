@@ -2,6 +2,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 // This source-contract verifier is intentionally independent of server, API, and database behavior.
 const ROOT = process.cwd();
@@ -12,7 +13,8 @@ const tabs = await read("client/src/components/ui/tabs.tsx");
 const periodFilter = await read("client/src/components/ui/period-filter.tsx");
 // The ERP Daybook filters render through the shared Daybook filter bar.
 const daybookFilters = `${await read("client/src/pages/daybook/DaybookFilters.tsx")}\n${await read("client/src/components/daybook/DaybookFilterBar.tsx")}`;
-const stockHistory = await read("client/src/pages/StockItemHistory.tsx");
+// Read the page with its extracted siblings (see ./lib/readModuleFamily.mjs).
+const stockHistory = readModuleFamily(path.join(ROOT, "client/src/pages/StockItemHistory.tsx"));
 const browserCompat = await read("client/src/mobile-browser-compat.css");
 const failures = [];
 

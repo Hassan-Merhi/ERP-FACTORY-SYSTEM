@@ -1,0 +1,63 @@
+// Extracted from ./BulkDialogs.tsx
+import type { usePayrollModel } from "./usePayrollModel";
+
+type PayrollModel = ReturnType<typeof usePayrollModel>;
+
+export interface BulkDialogsProps {
+  bulkDepositDialogOpen: boolean;
+  setBulkDepositDialogOpen: (open: boolean) => void;
+  bulkDepositDate: string;
+  setBulkDepositDate: (v: string) => void;
+  bulkDepositNotes: string;
+  setBulkDepositNotes: (v: string) => void;
+  employeeStaff: PayrollModel["employeeStaff"];
+  bulkDepositSelections: Record<number, boolean>;
+  bulkDepositAmounts: Record<number, string>;
+  setBulkDepositAmounts: PayrollModel["setBulkDepositAmounts"];
+  handleSelectAllEmployees: PayrollModel["handleSelectAllEmployees"];
+  handleToggleEmployeeDeposit: (id: number) => void;
+  bulkDepositTotal: number;
+  validSelectedEmployees: PayrollModel["validSelectedEmployees"];
+  bulkDepositMutation: PayrollModel["bulkDepositMutation"];
+  bulkWithdrawalDialogOpen: boolean;
+  setBulkWithdrawalDialogOpen: (open: boolean) => void;
+  bulkWithdrawalDate: string;
+  setBulkWithdrawalDate: (v: string) => void;
+  bulkWithdrawalAccountType: string;
+  setBulkWithdrawalAccountType: PayrollModel["setBulkWithdrawalAccountType"];
+  bulkWithdrawalAccountId: string;
+  setBulkWithdrawalAccountId: (v: string) => void;
+  bulkWithdrawalNotes: string;
+  setBulkWithdrawalNotes: (v: string) => void;
+  bulkWithdrawalAmounts: Record<number, string>;
+  setBulkWithdrawalAmounts: (fn: (prev: Record<number, string>) => Record<number, string>) => void;
+  bulkWithdrawalMutation: PayrollModel["bulkWithdrawalMutation"];
+  cashAccounts: PayrollModel["cashAccounts"];
+  bankAccounts: PayrollModel["bankAccounts"];
+  bulkBonusDialogOpen: boolean;
+  setBulkBonusDialogOpen: (open: boolean) => void;
+  bulkBonusStep: "edit" | "preview";
+  setBulkBonusStep: (v: "edit" | "preview") => void;
+  bulkBonusDate: string;
+  setBulkBonusDate: (v: string) => void;
+  bulkBonusNotes: string;
+  setBulkBonusNotes: (v: string) => void;
+  bulkBonusAutoMonth: "thisMonth" | "custom";
+  setBulkBonusAutoMonth: (v: "thisMonth" | "custom") => void;
+  bulkBonusAutoStart: string;
+  setBulkBonusAutoStart: (v: string) => void;
+  bulkBonusAutoEnd: string;
+  setBulkBonusAutoEnd: (v: string) => void;
+  autoCalculateBonuses: () => void;
+  bulkBonusAutoLoading: boolean;
+  bulkBonusAutoPctLocationId: string;
+  setBulkBonusAutoPctLocationId: (v: string) => void;
+  bulkBonusAmounts: Record<number, string>;
+  setBulkBonusAmounts: (fn: (prev: Record<number, string>) => Record<number, string>) => void;
+  pendingBonuses: PayrollModel["pendingBonuses"];
+  bulkBonusBreakdowns: Record<number, string[]>;
+  bulkBonusMutation: PayrollModel["bulkBonusMutation"];
+  handlePrintBulkBonus: () => void;
+  locations: PayrollModel["locations"];
+  allCompanyLocations: PayrollModel["allCompanyLocations"];
+}

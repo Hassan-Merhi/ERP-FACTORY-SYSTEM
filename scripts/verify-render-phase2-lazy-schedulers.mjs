@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import fs from "node:fs";
 import path from "node:path";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = process.cwd();
-const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (file) => readModuleFamily(path.join(root, file));
 const failures = [];
 
 const schedulerIndex = read("server/services/scheduler/index.ts");

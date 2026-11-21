@@ -25,9 +25,7 @@ import {
 import { phase9StockItemEditEnvelope, type Phase9StockItemEditEvidence } from "./phase9StockItemEditEnvelope.mjs";
 import {
   PHASE9_LAN_ITEM_ID_BASE,
-  phase9StockItemCreateEnvelope,
   phase9StockItemDeleteEnvelope,
-  type Phase9StockItemCreateEvidence,
   type Phase9StockItemDeleteEvidence,
 } from "./phase9StockItemLifecycleEnvelope.mjs";
 import {
@@ -46,6 +44,8 @@ import {
   type Phase9TransferSnapshot,
 } from "./phase9StockTransferWorkflowEnvelope.mjs";
 import { appendStockEventTx, appendStockFollowUpTx, pcLocalFollowUpTx } from "./phase9StockOutboxHelpers.ts";
+import { lanSiteId, recordedOnLanTx } from "./phase9StockOutboxHelpers2.ts";
+export { capturePhase9StockItemCreateTx } from "./phase9StockOutboxHelpers2.ts";
 
 /** Record the committed movement in the SAME transaction; no-op off the LAN primary. */
 export async function capturePhase9StockAdjustTx(
@@ -143,17 +143,6 @@ export async function capturePhase9StockItemEditTx(
   `);
 }
 
-/** Plan batch 2: a stock item created on the LAN primary; no-op elsewhere. */
-export async function capturePhase9StockItemCreateTx(
-  tx: DbTransaction,
-  evidence: Phase9StockItemCreateEvidence
-): Promise<void> {
-  const config = readFactoryEdgeConfiguration();
-  if (config.mode !== "lan" || !config.primary) return;
-  const event = phase9StockItemCreateEnvelope(evidence);
-  await appendStockEventTx(tx, String(config.siteId), event, event.localStockItemId);
-}
-
 /** Plan batch 2: a stock item deleted (soft) on the LAN primary or a PC in entry mode; no-op elsewhere. */
 export async function capturePhase9StockItemDeleteTx(
   tx: DbTransaction,
@@ -177,21 +166,6 @@ export async function nextPhase9LanStockItemIdTx(tx: DbTransaction): Promise<num
   if (!Number.isSafeInteger(id) || id < PHASE9_LAN_ITEM_ID_BASE)
     throw new EdgeRefusal("PHASE9_LAN_ITEM_ID_RANGE_INVALID");
   return id;
-}
-
-function lanSiteId(): string | null {
-  const config = readFactoryEdgeConfiguration();
-  return config.mode === "lan" && config.primary && config.siteId ? String(config.siteId) : null;
-}
-
-/** Was this row created on this LAN server during the outage (recorded on the stock stream)? */
-async function recordedOnLanTx(tx: DbTransaction, siteId: string, kind: string, localRef: number): Promise<boolean> {
-  const found = await tx.execute(sql`
-    SELECT 1 FROM factory_edge_stock_outbox
-     WHERE site_id = ${siteId}::uuid AND operation_kind = ${kind} AND local_movement_id = ${localRef}
-     LIMIT 1
-  `);
-  return found.rows.length > 0;
 }
 
 /** How an offline record names a transfer: by its LAN record if created offline, else by its shared id. */

@@ -106,7 +106,7 @@ describe("Factory unified blue theme", () => {
 
     const container = readFileSync(join(factoryStyles, "FactoryContainerLoadingScan.tsx"), "utf8");
     const financial = readModuleFamily(join(factoryStyles, "FactoryFinancialSnapshot.tsx"));
-    const pressing = readFileSync(join(factoryStyles, "PressingHistoryReport.tsx"), "utf8");
+    const pressing = readModuleFamily(join(factoryStyles, "PressingHistoryReport.tsx"));
     const theme = readFileSync(factoryTheme, "utf8");
     const targets = readFileSync(join(factoryStyles, "productiontargets/productionTargetsPremium.css"), "utf8");
 

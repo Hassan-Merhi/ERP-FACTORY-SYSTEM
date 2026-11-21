@@ -5,11 +5,12 @@
  * This does NOT replace TypeScript, Vitest, browser, authorization or ledger tests.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { readModuleFamily } from "./lib/readModuleFamily.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const read = (path) => readFileSync(new URL(path, "file://" + root), "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (path) => readModuleFamily(new URL(path, "file://" + root));
 const files = {
   centralDelete: "server/routes/rental/centralRentalPaymentDeletionRoute.ts",
   accrual: "server/routes/rental/rentalPaymentsAccrualRoutes.ts",

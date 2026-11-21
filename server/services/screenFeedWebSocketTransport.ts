@@ -1,4 +1,3 @@
-import type { WebSocket } from "ws";
 import { decodeRemoteSupportBinaryPacket, REMOTE_SUPPORT_MAX_FRAME_BYTES } from "@shared/remoteSupportTransport";
 import { isRemoteControlControllerRole, listRemoteControlTabs } from "./remoteControlSessionService";
 import { assertScreenFeedTenantAccess } from "./screenFeedTenantGate";
@@ -8,27 +7,22 @@ import {
   recordRemoteSupportMetric,
   recordRemoteSupportViewerRendered,
 } from "./remoteSupportRuntime";
+import {
+  producers,
+  viewers,
+  latestFrames,
+  clean,
+  safeSendJson,
+  safeSendBinary,
+  notifyProducerStatus,
+  type ScreenFeedSocketContext,
+  type SocketWithState,
+} from "./screenFeedWebSocketTransportHelpers";
+export type { ScreenFeedSocketContext } from "./screenFeedWebSocketTransportHelpers";
 
-export interface ScreenFeedSocketContext {
-  userId: string;
-  username: string;
-  role: string;
-  companyId: number | null;
-}
-
-type SocketWithState = WebSocket;
-
-const producers = new Map<string, Set<SocketWithState>>();
-const viewers = new Map<string, Set<SocketWithState>>();
-const latestFrames = new Map<string, { packet: Buffer; capturedAt: number }>();
 const producerKeysBySocket = new WeakMap<SocketWithState, Set<string>>();
 const viewerKeysBySocket = new WeakMap<SocketWithState, Set<string>>();
 const FRAME_RETENTION_MS = 2 * 60 * 1000;
-const OPEN = 1;
-
-function clean(value: unknown, max = 160): string {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
-}
 
 function finiteNumber(value: unknown): number | null {
   const number = typeof value === "number" ? value : Number(value);
@@ -41,24 +35,6 @@ function metadataRecord(value: unknown): Record<string, unknown> | null {
 
 export function screenFeedSocketKey(userId: string, tabId: string): string {
   return `${clean(userId, 128)}\u0000${clean(tabId, 160)}`;
-}
-
-function safeSendJson(socket: SocketWithState, payload: unknown): void {
-  if (socket.readyState !== OPEN) return;
-  try {
-    socket.send(JSON.stringify(payload));
-  } catch {
-    // Connection cleanup removes dead sockets.
-  }
-}
-
-function safeSendBinary(socket: SocketWithState, packet: Buffer): void {
-  if (socket.readyState !== OPEN) return;
-  try {
-    socket.send(packet, { binary: true });
-  } catch {
-    // Connection cleanup removes dead sockets.
-  }
 }
 
 function addSocket(map: Map<string, Set<SocketWithState>>, key: string, socket: SocketWithState): void {
@@ -78,17 +54,6 @@ function rememberSocketKey(store: WeakMap<SocketWithState, Set<string>>, socket:
   const keys = store.get(socket) ?? new Set<string>();
   keys.add(key);
   store.set(socket, keys);
-}
-
-function notifyProducerStatus(key: string): void {
-  const watched = (viewers.get(key)?.size ?? 0) > 0;
-  for (const producer of producers.get(key) ?? []) {
-    safeSendJson(producer, {
-      type: "screen-feed:status",
-      watched,
-      fast: watched && isRemoteSupportEnabled("fastScreenFeed"),
-    });
-  }
 }
 
 function clearViewerBindings(socket: SocketWithState): void {

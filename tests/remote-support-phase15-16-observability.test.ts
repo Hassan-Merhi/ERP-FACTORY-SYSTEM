@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import {
   getRemoteSupportRuntimeSnapshot,
   recordRemoteSupportCommandTelemetry,
@@ -9,7 +9,8 @@ import {
 } from "../server/services/remoteSupportRuntime";
 
 function source(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), "utf8");
+  // A split module is read together with the siblings extracted from it.
+  return readModuleFamily(resolve(process.cwd(), path));
 }
 
 describe("remote support Phase 15 presence and audit hygiene", () => {
