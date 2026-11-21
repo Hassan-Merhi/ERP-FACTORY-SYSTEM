@@ -94,6 +94,7 @@ export async function previewFxCorrection(companyId: number, voucherId: number, 
   const blockers: string[] = [];
   if (source.deleted || source.optional || source.reversed) blockers.push("Source voucher is deleted, optional or already reversed.");
   if (source.later_fx) blockers.push("Later FX revaluations depend on this journal. Review those first.");
+  if (originalDate !== reversalDate) blockers.push("Original voucher has a different effective date; an accountant must review it.");
   if (targetDate >= originalDate) blockers.push("Choose an accounting date before the original journal.");
   if (targetDate > today) blockers.push("Future dates cannot be used.");
   if (closedThrough && (targetDate <= closedThrough || reversalDate <= closedThrough)) {
