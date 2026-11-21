@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
-const read = (path: string) => readFileSync(path, "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (path: string) => readModuleFamily(path);
 
 describe("Phase 6 mix quantity writer guards", () => {
   it("serializes mix creation and carry-forward code allocation", () => {

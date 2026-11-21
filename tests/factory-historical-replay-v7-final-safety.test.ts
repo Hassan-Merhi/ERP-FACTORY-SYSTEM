@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 import { hasTrigger } from "./helpers/schemaManifest";
 import { FACTORY_HISTORICAL_REPLAY_V7_BACKFILL_SQL } from "../server/services/factory/historicalReplayV7MigrationSql";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+// A split module is read together with the siblings extracted from it.
+const read = (path: string) => readModuleFamily(resolve(process.cwd(), path));
 
 describe("Historical Replay V7 final safety wiring", () => {
   it("does not hardcode financial safety gates to zero", () => {

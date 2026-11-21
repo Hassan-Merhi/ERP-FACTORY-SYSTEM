@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const compositionPath = path.resolve(process.cwd(), "server/routes/authRoutes.ts");
 
@@ -31,11 +32,9 @@ describe("auth route composition", () => {
 
   it("keeps security-sensitive endpoints in focused modules", () => {
     const core = fs.readFileSync(path.resolve(process.cwd(), "server/routes/auth/coreAuthRoutes.ts"), "utf8");
-    const users = fs.readFileSync(
-      path.resolve(process.cwd(), "server/routes/auth/userAdministrationRoutes.ts"),
-      "utf8"
-    );
-    const access = fs.readFileSync(path.resolve(process.cwd(), "server/routes/auth/userAccessRoutes.ts"), "utf8");
+    // These two are split; read each with the siblings extracted from it.
+    const users = readModuleFamily(path.resolve(process.cwd(), "server/routes/auth/userAdministrationRoutes.ts"));
+    const access = readModuleFamily(path.resolve(process.cwd(), "server/routes/auth/userAccessRoutes.ts"));
     const companies = fs.readFileSync(path.resolve(process.cwd(), "server/routes/auth/companyAccessRoutes.ts"), "utf8");
     const audit = fs.readFileSync(path.resolve(process.cwd(), "server/routes/auth/auditLogRoutes.ts"), "utf8");
 

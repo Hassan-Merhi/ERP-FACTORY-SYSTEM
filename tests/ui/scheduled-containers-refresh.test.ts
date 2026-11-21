@@ -1,12 +1,13 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../../scripts/lib/readModuleFamily.mjs";
 
 const file = resolve(
   process.cwd(),
   "client/src/pages/factory/factoryshippingcontainers/components/ScheduledContainersTable.tsx"
 );
-const source = readFileSync(file, "utf8");
+// The table is split; read it together with the siblings extracted from it.
+const source = readModuleFamily(file);
 
 describe("scheduled containers request policy", () => {
   it("does not poll or refetch the editor on focus or reconnect", () => {

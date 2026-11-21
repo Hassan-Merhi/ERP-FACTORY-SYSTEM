@@ -1,14 +1,4 @@
-import { useState, useEffect } from "react";
-import { ErrorState, LoadingState } from "@/components/ui/page-state";
-import { addDays, format } from "date-fns";
-import { useDateFormat } from "@/contexts/DateFormatContext";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
-import { companyQueryKey } from "@/lib/companyQueryScope";
-import { factoryApiRequest } from "@/lib/factoryApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,122 +12,44 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Loader2, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { RowsExportMenu } from "@/components/export/RowsExportMenu";
-import { useExistingRecordChangeAccess } from "@/hooks/useExistingRecordChangeAccess";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface WasteEntry {
-  id: number;
-  date: string;
-  wasteType: string | null;
-  kgWaste: number;
-  reason: string | null;
-  mixBatchId: number | null;
-  supplierId: number | null;
-  containerId: number | null;
-}
-
-function getDefaultDateRange() {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 30);
-  return {
-    from: from.toLocaleDateString("en-CA"),
-    to: to.toLocaleDateString("en-CA"),
-  };
-}
+import { useFactoryWasteState } from "./useFactoryWasteState";
+import { FactoryWasteCard } from "./FactoryWasteCard";
 
 export default function FactoryWaste() {
-  const { selectedCompany } = useCompany();
-  const { formatDisplayDate } = useDateFormat();
-  const recordChanges = useExistingRecordChangeAccess();
-  const canAddWaste = recordChanges.canCreate("POST", "/api/factory/waste");
-  const defaults = getDefaultDateRange();
-  const [from, setFrom] = useState(defaults.from);
-  const [to, setTo] = useState(defaults.to);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
-
-  const [formDate, setFormDate] = useState(new Date().toLocaleDateString("en-CA"));
-  const [formKg, setFormKg] = useState("");
-  const [formWasteType, setFormWasteType] = useState("");
-  const [formReason, setFormReason] = useState("");
-  const [formMixBatchId, setFormMixBatchId] = useState("");
-  const [formSupplierId, setFormSupplierId] = useState("");
-  const [formContainerId, setFormContainerId] = useState("");
-
-  // Keyboard date navigation: "-" = back 1 day, Shift+"+" = forward 1 day
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      const fmt = "yyyy-MM-dd";
-      if (e.key === "-") {
-        e.preventDefault();
-        setFrom((prev) => format(addDays(new Date(prev + "T00:00:00"), -1), fmt));
-        setTo((prev) => format(addDays(new Date(prev + "T00:00:00"), -1), fmt));
-      } else if (e.key === "+" && e.shiftKey) {
-        e.preventDefault();
-        setFrom((prev) => format(addDays(new Date(prev + "T00:00:00"), 1), fmt));
-        setTo((prev) => format(addDays(new Date(prev + "T00:00:00"), 1), fmt));
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const wasteQuery = useQuery<WasteEntry[]>({
-    queryKey: companyQueryKey("/api/factory/waste", selectedCompany?.id, from, to),
-    enabled: Boolean(selectedCompany?.id),
-    queryFn: async () => {
-      const res = await fetch(`/api/factory/waste?from=${from}&to=${to}`);
-      if (!res.ok) throw new Error("Failed to load waste entries");
-      return res.json();
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: {
-      date: string;
-      kgWaste: number;
-      wasteType?: string;
-      reason?: string;
-      mixBatchId?: number;
-      supplierId?: number;
-      containerId?: number;
-    }) => {
-      const res = await factoryApiRequest("POST", "/api/factory/waste", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/waste", selectedCompany?.id, from, to) });
-      setDialogOpen(false);
-      resetForm();
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      if (!recordChanges.allowed) throw new Error(recordChanges.reason ?? "");
-      await factoryApiRequest("DELETE", `/api/factory/waste/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: companyQueryKey("/api/factory/waste", selectedCompany?.id, from, to) });
-      setPendingDeleteId(null);
-    },
-  });
-
-  function resetForm() {
-    setFormDate(new Date().toLocaleDateString("en-CA"));
-    setFormKg("");
-    setFormWasteType("");
-    setFormReason("");
-    setFormMixBatchId("");
-    setFormSupplierId("");
-    setFormContainerId("");
-  }
+  const {
+    formatDisplayDate,
+    recordChanges,
+    canAddWaste,
+    from,
+    setFrom,
+    to,
+    setTo,
+    dialogOpen,
+    setDialogOpen,
+    setPendingDeleteId,
+    pendingDeleteId,
+    formDate,
+    setFormDate,
+    formKg,
+    setFormKg,
+    formWasteType,
+    setFormWasteType,
+    formReason,
+    setFormReason,
+    formMixBatchId,
+    setFormMixBatchId,
+    formSupplierId,
+    setFormSupplierId,
+    formContainerId,
+    setFormContainerId,
+    wasteQuery,
+    createMutation,
+    deleteMutation,
+  } = useFactoryWasteState();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -325,69 +237,13 @@ export default function FactoryWaste() {
         )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Waste Entries</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {wasteQuery.isLoading ? (
-            <LoadingState title="Loading waste entries..." data-testid="loading-spinner" />
-          ) : wasteQuery.isError && !wasteQuery.data ? (
-            <ErrorState onAction={() => void wasteQuery.refetch()} actionLabel="Try again" />
-          ) : !Array.isArray(wasteQuery.data) || wasteQuery.data.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground" data-testid="text-no-data">
-                No waste entries for selected range
-              </p>
-            </div>
-          ) : (
-            <div className="table-responsive">
-              <Table mobileLayout="cards">
-                <TableHeader className="sticky top-0 z-30 bg-background">
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>KG</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead>Mix Batch</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Container</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {wasteQuery.data.map((entry, idx) => (
-                    <TableRow key={entry.id ?? idx} data-testid={`row-waste-${entry.id}`}>
-                      <TableCell className="font-mono text-sm">
-                        {entry.date ? formatDisplayDate(entry.date) : "—"}
-                      </TableCell>
-                      <TableCell className="text-sm">{entry.wasteType || "—"}</TableCell>
-                      <TableCell className="font-mono">{entry.kgWaste}</TableCell>
-                      <TableCell>{entry.reason || "—"}</TableCell>
-                      <TableCell className="font-mono">{entry.mixBatchId ?? "—"}</TableCell>
-                      <TableCell className="font-mono">{entry.supplierId ?? "—"}</TableCell>
-                      <TableCell className="font-mono">{entry.containerId ?? "—"}</TableCell>
-                      <TableCell>
-                        {recordChanges.allowed && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setPendingDeleteId(entry.id)}
-                            disabled={deleteMutation.isPending}
-                            data-testid={`button-delete-waste-${entry.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <FactoryWasteCard
+        deleteMutation={deleteMutation}
+        formatDisplayDate={formatDisplayDate}
+        recordChanges={recordChanges}
+        setPendingDeleteId={setPendingDeleteId}
+        wasteQuery={wasteQuery}
+      />
 
       {/* Delete Waste Entry Confirmation */}
       <Dialog

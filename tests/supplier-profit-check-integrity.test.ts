@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const harness = vi.hoisted(() => ({
   query: vi.fn(),
@@ -156,7 +157,8 @@ describe("Supplier Profit Check integrity", () => {
     const root = process.cwd();
     const proforma = fs.readFileSync(path.join(root, "server/routes/supplier-profit-check/proforma.ts"), "utf8");
     const overrides = fs.readFileSync(path.join(root, "server/routes/supplier-profit-check/po-overrides.ts"), "utf8");
-    const exportSource = fs.readFileSync(path.join(root, "server/routes/supplier-profit-check/export.ts"), "utf8");
+    // export.ts is split; read it with the siblings extracted from it.
+    const exportSource = readModuleFamily(path.join(root, "server/routes/supplier-profit-check/export.ts"));
 
     expect(proforma).toContain('client.query("BEGIN")');
     expect(proforma).toContain('client.query("COMMIT")');
