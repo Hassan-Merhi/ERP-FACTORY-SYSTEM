@@ -81,7 +81,17 @@ export function FxRevaluationCorrectionDialog({
       setFinished("Posted " + result.correctedVoucherNumber +
         " dated " + date + ". Reversal: " + result.reversalVoucherNumber + ".");
       setPreview(null);
-      await queryClient.invalidateQueries();
+      await queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = JSON.stringify(query.queryKey);
+          return [
+            "/api/vouchers", "/api/daybook", "/api/accounts",
+            "/api/ledger-accounts", "/api/bank-accounts", "/api/customers",
+            "/api/stats", "/api/accounting/monetary-fx",
+            "/api/factory/net-position",
+          ].some((path) => key.includes(path));
+        },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not post the correction.");
       setPreview(null);
