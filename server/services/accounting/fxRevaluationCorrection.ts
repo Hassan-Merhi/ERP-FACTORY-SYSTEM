@@ -137,7 +137,7 @@ export async function previewFxCorrection(
         ". Verify its effective date in Settings before correcting.");
     }
   }
-  const lines: FxCorrectionLine[] = [];
+  const lines: Omit<FxCorrectionLine, "automaticAdjustmentUsd" | "manuallyOverridden">[] = [];
   const entries: VoucherEntryInsertFields[] = [];
   for (const account of valuation.accounts) {
     if (account.deleted || !["cash_bank", "customer", "loan"].includes(account.eligibility)) continue;
