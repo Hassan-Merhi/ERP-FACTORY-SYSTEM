@@ -17,14 +17,8 @@ import { companyBusinessDate } from "./companyBusinessDate";
 import { openingSideOf } from "./balances/openingSide";
 import { customerLinksBody, noNonCustomerTarget } from "./balances/partyLineRules";
 import {
-  canonicalMonetaryCurrency,
-  monetaryFxEligibility,
-  translateMonetaryFxBalance,
-  type MonetaryFxCategory,
-  type MonetaryFxEligibility,
-  type MonetaryFxEligibilityOptions,
-  type MonetaryFxKind,
-  type MonetaryFxRate,
+  canonicalMonetaryCurrency, monetaryFxEligibility, translateMonetaryFxBalance,
+  type MonetaryFxCategory, type MonetaryFxEligibility, type MonetaryFxEligibilityOptions, type MonetaryFxKind, type MonetaryFxRate,
   type MonetaryFxRateMap,
 } from "./monetaryFxValuationCore";
 
@@ -113,9 +107,7 @@ export interface MonetaryFxValuationResult {
  * drop their still-posted financial history. Expose their deleted state.
  */
 async function loadMonetaryMasters(tx: DbTransaction, companyId: number): Promise<MonetaryMasterRow[]> {
-  const result = await tx.execute(
-    readSql(
-      `
+  const result = await tx.execute(readSql(`
     WITH customer_links AS (${customerLinksBody("$1")})
     SELECT 'ledger'::text AS kind, la.id, la.code, la.name, la.account_type,
            la.sub_type, (la.deleted_at IS NOT NULL) AS deleted,
@@ -145,10 +137,7 @@ async function loadMonetaryMasters(tx: DbTransaction, companyId: number): Promis
       FROM customers c
       LEFT JOIN customer_links cl ON cl.customer_id = c.id
      WHERE c.company_id = $1
-  `,
-      companyId
-    )
-  );
+  `, companyId));
   return resultRows<MonetaryMasterRow & Record<string, unknown>>(result);
 }
 
@@ -162,14 +151,8 @@ async function loadMonetaryMasters(tx: DbTransaction, companyId: number): Promis
  * current-day valuation. This function must not be used for historic-report
  * reconstruction without enforcing historical created/deleted knowledge.
  */
-async function loadNativeMovements(
-  tx: DbTransaction,
-  companyId: number,
-  businessDate: string
-): Promise<NativeMovementRow[]> {
-  const result = await tx.execute(
-    readSql(
-      `
+async function loadNativeMovements(tx: DbTransaction, companyId: number, businessDate: string): Promise<NativeMovementRow[]> {
+  const result = await tx.execute(readSql(`
     WITH customer_links AS (${customerLinksBody("$1")}),
     posted AS (
       SELECT ve.ledger_account_id, ve.bank_account_id, ve.fixed_asset_id,
@@ -242,11 +225,7 @@ async function loadNativeMovements(
     FROM attributed
     WHERE kind IN ('ledger', 'bank', 'customer') AND target_id IS NOT NULL
     GROUP BY kind, target_id, entry_currency
-  `,
-      companyId,
-      businessDate
-    )
-  );
+  `, companyId, businessDate));
   return resultRows<NativeMovementRow & Record<string, unknown>>(result);
 }
 
@@ -256,19 +235,16 @@ async function loadNativeMovements(
  * This keeps tenant RLS context and every SELECT on the same transaction.
  */
 function readSql(query: string, companyId: number, businessDate?: string) {
-  const chunks = query
-    .split(/(\$1|\$2)/g)
-    .filter(Boolean)
-    .map((chunk) => (chunk === "$1" ? sql`${companyId}` : chunk === "$2" ? sql`${businessDate}` : sql.raw(chunk)));
+  const chunks = query.split(/(\$1|\$2)/g).filter(Boolean).map((chunk) =>
+    chunk === "$1" ? sql`${companyId}` :
+    chunk === "$2" ? sql`${businessDate}` : sql.raw(chunk)
+  );
   return sql.join(chunks, sql``);
 }
 
 /** The existing audited datedMonetaryRateTx is authoritative for directions/conflicts. */
 async function resolveValuationRates(
-  tx: DbTransaction,
-  companyId: number,
-  day: string,
-  currencies: ReadonlySet<string>
+  tx: DbTransaction, companyId: number, day: string, currencies: ReadonlySet<string>
 ): Promise<{ rates: MonetaryFxRateMap; errors: Record<string, string> }> {
   const rates = new Map<string, MonetaryFxRate>();
   const errors: Record<string, string> = {};
@@ -327,17 +303,10 @@ export async function getMonetaryFxValuation(
     const eligibleKeys = new Set<string>();
     const currencies = new Set<string>();
     for (const master of masters) {
-      const eligibility = monetaryFxEligibility(
-        {
-          kind: master.kind,
-          id: Number(master.id),
-          code: master.code,
-          name: master.name,
-          accountType: master.account_type,
-          subType: master.sub_type,
-        },
-        policy
-      );
+      const eligibility = monetaryFxEligibility({
+        kind: master.kind, id: Number(master.id), code: master.code,
+        name: master.name, accountType: master.account_type, subType: master.sub_type,
+      }, policy);
       if (eligibility === "excluded" || eligibility === "needs_review") continue;
       eligibleKeys.add(`${master.kind}:${master.id}`);
       const currency = canonicalMonetaryCurrency(master.opening_balance_currency);
@@ -348,146 +317,134 @@ export async function getMonetaryFxValuation(
       const currency = canonicalMonetaryCurrency(movement.entry_currency);
       if (currency) currencies.add(currency);
     }
-    const rateResolution =
-      baseCurrency === "USD"
-        ? await resolveValuationRates(tx, companyId, businessDate, currencies)
-        : { rates: new Map<string, MonetaryFxRate>(), errors: {} as Record<string, string> };
+    const rateResolution = baseCurrency === "USD"
+      ? await resolveValuationRates(tx, companyId, businessDate, currencies)
+      : { rates: new Map<string, MonetaryFxRate>(), errors: {} as Record<string, string> };
     const rates = rateResolution.rates;
-    const movementsByKey = new Map<string, NativeMovementRow[]>();
-    for (const movement of movements) {
-      const key = `${movement.kind}:${movement.target_id}`;
-      const list = movementsByKey.get(key) ?? [];
-      list.push(movement);
-      movementsByKey.set(key, list);
-    }
+  const movementsByKey = new Map<string, NativeMovementRow[]>();
+  for (const movement of movements) {
+    const key = `${movement.kind}:${movement.target_id}`;
+    const list = movementsByKey.get(key) ?? [];
+    list.push(movement);
+    movementsByKey.set(key, list);
+  }
 
-    let excludedMasters = 0;
-    const customerLinkedLedgerMasters = masters.filter(
-      (m) => m.kind === "customer" && m.linked_ledger_id != null
-    ).length;
-    const accounts: MonetaryFxValuationRow[] = [];
-    for (const master of masters) {
-      const eligibility = monetaryFxEligibility(
-        {
-          kind: master.kind,
-          id: Number(master.id),
-          code: master.code,
-          name: master.name,
-          accountType: master.account_type,
-          subType: master.sub_type,
-        },
-        policy
-      );
-      if (eligibility === "excluded") {
-        excludedMasters++;
+  let excludedMasters = 0;
+  const customerLinkedLedgerMasters = masters.filter((m) => m.kind === "customer" && m.linked_ledger_id != null).length;
+  const accounts: MonetaryFxValuationRow[] = [];
+  for (const master of masters) {
+    const eligibility = monetaryFxEligibility({
+      kind: master.kind, id: Number(master.id), code: master.code,
+      name: master.name, accountType: master.account_type, subType: master.sub_type,
+    }, policy);
+    if (eligibility === "excluded") {
+      excludedMasters++;
+      continue;
+    }
+    const accountKey = `${master.kind}:${master.id}`;
+    const native = new Map<string, Decimal>();
+    let historical = new Decimal(0);
+    // The engine's book closing: signed master opening + every posted line's
+    // debit_amount - credit_amount, unresolved currency evidence included.
+    let bookClosing = new Decimal(0);
+    let unresolvedOpening = false;
+    let openingBookMismatch = false;
+    let unresolvedEntryCount = 0;
+    for (const movement of movementsByKey.get(accountKey) ?? []) {
+      bookClosing = bookClosing.plus(decimal(movement.posted_net));
+      if (movement.entry_currency === "__UNRESOLVED__") {
+        unresolvedEntryCount += Number(movement.unresolved_count) || 0;
         continue;
       }
-      const accountKey = `${master.kind}:${master.id}`;
-      const native = new Map<string, Decimal>();
-      let historical = new Decimal(0);
-      // The engine's book closing: signed master opening + every posted line's
-      // debit_amount - credit_amount, unresolved currency evidence included.
-      let bookClosing = new Decimal(0);
-      let unresolvedOpening = false;
-      let openingBookMismatch = false;
-      let unresolvedEntryCount = 0;
-      for (const movement of movementsByKey.get(accountKey) ?? []) {
-        bookClosing = bookClosing.plus(decimal(movement.posted_net));
-        if (movement.entry_currency === "__UNRESOLVED__") {
-          unresolvedEntryCount += Number(movement.unresolved_count) || 0;
-          continue;
-        }
-        const currency = canonicalMonetaryCurrency(movement.entry_currency);
-        if (!currency) {
-          unresolvedEntryCount++;
-          continue;
-        }
-        native.set(currency, (native.get(currency) ?? new Decimal(0)).plus(decimal(movement.native_net)));
-        historical = historical.plus(decimal(movement.historical_base_net));
+      const currency = canonicalMonetaryCurrency(movement.entry_currency);
+      if (!currency) {
+        unresolvedEntryCount++;
+        continue;
       }
+      native.set(currency, (native.get(currency) ?? new Decimal(0)).plus(decimal(movement.native_net)));
+      historical = historical.plus(decimal(movement.historical_base_net));
+    }
 
-      const opening = decimal(master.opening_balance);
-      const openingSign =
-        openingSideOf(master.kind, master.account_type, master.opening_balance_side).side === "Cr" ? -1 : 1;
-      bookClosing = bookClosing.plus(opening.mul(openingSign));
-      // A zero historical opening cannot quietly carry a nonzero *native*
-      // opening. Such a discrepancy needs review, not a newly invented USD
-      // balance after a rate change.
+    const opening = decimal(master.opening_balance);
+    const openingSign =
+      openingSideOf(master.kind, master.account_type, master.opening_balance_side).side === "Cr" ? -1 : 1;
+    bookClosing = bookClosing.plus(opening.mul(openingSign));
+    // A zero historical opening cannot quietly carry a nonzero *native*
+    // opening. Such a discrepancy needs review, not a newly invented USD
+    // balance after a rate change.
+    if (opening.isZero() && (
+      (master.opening_balance_base_amount != null &&
+        decimal(master.opening_balance_base_amount).abs().gt("0.03")) ||
+      (master.opening_balance_native_amount != null &&
+        !decimal(master.opening_balance_native_amount).isZero())
+    )) {
+      unresolvedOpening = true;
+      openingBookMismatch = true;
+    }
+    if (!opening.isZero()) {
+      const currency = canonicalMonetaryCurrency(master.opening_balance_currency);
       if (
-        opening.isZero() &&
-        ((master.opening_balance_base_amount != null && decimal(master.opening_balance_base_amount).abs().gt("0.03")) ||
-          (master.opening_balance_native_amount != null && !decimal(master.opening_balance_native_amount).isZero()))
+        !currency || master.opening_balance_native_amount === null ||
+        master.opening_balance_base_amount === null
       ) {
         unresolvedOpening = true;
-        openingBookMismatch = true;
-      }
-      if (!opening.isZero()) {
-        const currency = canonicalMonetaryCurrency(master.opening_balance_currency);
-        if (!currency || master.opening_balance_native_amount === null || master.opening_balance_base_amount === null) {
+      } else {
+        const sign = openingSign;
+        const nativeOpening = decimal(master.opening_balance_native_amount);
+        const baseOpening = decimal(master.opening_balance_base_amount);
+        // The balance engine's immutable/book opening is opening_balance.
+        // If the supplemental currency metadata disagrees with the actual
+        // book, we cannot safely translate the account. Preserve book USD.
+        if (!nativeOpening.isFinite() || !baseOpening.isFinite() ||
+            baseOpening.minus(opening.abs()).abs().gt("0.03")) {
+          openingBookMismatch = true;
           unresolvedOpening = true;
         } else {
-          const sign = openingSign;
-          const nativeOpening = decimal(master.opening_balance_native_amount);
-          const baseOpening = decimal(master.opening_balance_base_amount);
-          // The balance engine's immutable/book opening is opening_balance.
-          // If the supplemental currency metadata disagrees with the actual
-          // book, we cannot safely translate the account. Preserve book USD.
-          if (
-            !nativeOpening.isFinite() ||
-            !baseOpening.isFinite() ||
-            baseOpening.minus(opening.abs()).abs().gt("0.03")
-          ) {
-            openingBookMismatch = true;
-            unresolvedOpening = true;
-          } else {
-            native.set(currency, (native.get(currency) ?? new Decimal(0)).plus(nativeOpening.mul(sign)));
-            historical = historical.plus(baseOpening.mul(sign));
-          }
+          native.set(currency, (native.get(currency) ?? new Decimal(0))
+            .plus(nativeOpening.mul(sign)));
+          historical = historical.plus(baseOpening.mul(sign));
         }
       }
-
-      // No source current USD can be trusted if original currency is unresolved,
-      // or if an unverified non-USD company base is mistaken for USD.
-      const unresolved = unresolvedOpening || unresolvedEntryCount > 0 || baseCurrency !== "USD";
-      const calculation = translateMonetaryFxBalance(native, unresolved ? null : historical, rates, unresolved);
-      accounts.push({
-        accountKey,
-        accountKind: master.kind,
-        id: Number(master.id),
-        linkedLedgerId: master.linked_ledger_id === null ? null : Number(master.linked_ledger_id),
-        code: master.code ?? "",
-        name: master.name,
-        category: eligibility,
-        eligibility,
-        deleted: Boolean(master.deleted),
-        nativeBalancesByCurrency: calculation.nativeBalancesByCurrency,
-        historicalBaseUsd: calculation.historicalBaseUsd,
-        bookClosingUsd: bookClosing.toDecimalPlaces(6).toFixed(6),
-        // Unapproved generic assets must never receive an automatic valuation.
-        currentTranslatedUsd: eligibility === "needs_review" ? null : calculation.currentTranslatedUsd,
-        translationDifferenceUsd: eligibility === "needs_review" ? null : calculation.translationDifferenceUsd,
-        unresolvedCurrencies: calculation.unresolvedCurrencies,
-        unresolvedEntryCount,
-        unresolvedOpening,
-        openingBookMismatch,
-        provisional: eligibility === "needs_review" || calculation.provisional,
-      });
     }
-    accounts.sort((a, b) => a.accountKey.localeCompare(b.accountKey));
-    return {
-      companyId,
-      businessDate,
-      valuationMode: "CURRENT",
-      baseCurrency,
-      bookBalancesModified: false,
-      fxVouchersPosted: false,
-      accounts,
-      rates: [...rates.values()].sort((a, b) => a.currency.localeCompare(b.currency)),
-      rateErrorsByCurrency: rateResolution.errors,
-      eligibleAccountCount: accounts.filter((a) => a.eligibility !== "needs_review").length,
-      unresolvedAccountCount: accounts.filter((a) => a.provisional && a.eligibility !== "needs_review").length,
-      needsReviewCount: accounts.filter((a) => a.eligibility === "needs_review").length,
-      excludedLedgerAndPartyCounts: { excludedMasters, customerLinkedLedgerMasters },
-    };
+
+    // No source current USD can be trusted if original currency is unresolved,
+    // or if an unverified non-USD company base is mistaken for USD.
+    const unresolved = unresolvedOpening || unresolvedEntryCount > 0 || baseCurrency !== "USD";
+    const calculation = translateMonetaryFxBalance(native, unresolved ? null : historical, rates, unresolved);
+    accounts.push({
+      accountKey,
+      accountKind: master.kind,
+      id: Number(master.id),
+      linkedLedgerId: master.linked_ledger_id === null ? null : Number(master.linked_ledger_id),
+      code: master.code ?? "",
+      name: master.name,
+      category: eligibility,
+      eligibility,
+      deleted: Boolean(master.deleted),
+      nativeBalancesByCurrency: calculation.nativeBalancesByCurrency,
+      historicalBaseUsd: calculation.historicalBaseUsd,
+      bookClosingUsd: bookClosing.toDecimalPlaces(6).toFixed(6),
+      // Unapproved generic assets must never receive an automatic valuation.
+      currentTranslatedUsd: eligibility === "needs_review" ? null : calculation.currentTranslatedUsd,
+      translationDifferenceUsd: eligibility === "needs_review" ? null : calculation.translationDifferenceUsd,
+      unresolvedCurrencies: calculation.unresolvedCurrencies,
+      unresolvedEntryCount,
+      unresolvedOpening,
+      openingBookMismatch,
+      provisional: eligibility === "needs_review" || calculation.provisional,
+    });
+  }
+  accounts.sort((a,b)=>a.accountKey.localeCompare(b.accountKey));
+  return {
+    companyId, businessDate, valuationMode: "CURRENT", baseCurrency,
+    bookBalancesModified: false, fxVouchersPosted: false,
+    accounts,
+    rates: [...rates.values()].sort((a,b)=>a.currency.localeCompare(b.currency)),
+    rateErrorsByCurrency: rateResolution.errors,
+    eligibleAccountCount: accounts.filter(a=>a.eligibility!=="needs_review").length,
+    unresolvedAccountCount: accounts.filter(a=>a.provisional && a.eligibility!=="needs_review").length,
+    needsReviewCount: accounts.filter(a=>a.eligibility==="needs_review").length,
+    excludedLedgerAndPartyCounts: { excludedMasters, customerLinkedLedgerMasters },
+  };
   });
 }
