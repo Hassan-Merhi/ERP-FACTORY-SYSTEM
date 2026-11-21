@@ -7,6 +7,11 @@ import { resultRows } from "../../lib/queryResult";
 import { writeAuditEvent } from "../audit";
 import type { VoucherEntryInsertFields } from "./accountingTypes";
 import { companyBusinessDate } from "./companyBusinessDate";
+import {
+  applyFxUsdAdjustmentOverrides,
+  FxUsdAdjustmentOverrideError,
+  type FxUsdAdjustmentOverride,
+} from "./fxCorrectionAmountOverrides";
 import { createDatabasePostingDependencies } from "./databasePostingDependencies";
 import { postErpEntriesTx } from "./erpVoucherPosting";
 import { postedFxRevaluationAdjustmentUsd } from "./fxRevaluationAmount";
@@ -27,6 +32,7 @@ type OriginalEntry = {
 export type FxCorrectionLine = {
   accountKind: "ledger" | "bank" | "customer"; accountId: number; accountName: string;
   currency: string; adjustmentUsd: string;
+  automaticAdjustmentUsd: string; manuallyOverridden: boolean;
 };
 export type FxCorrectionPreview = {
   status: "ready" | "blocked"; originalVoucherId: number; originalVoucherNumber: string;
@@ -81,7 +87,12 @@ async function readSource(companyId: number, voucherId: number) {
   return { source, originalEntries };
 }
 
-export async function previewFxCorrection(companyId: number, voucherId: number, date: string) {
+export async function previewFxCorrection(
+  companyId: number,
+  voucherId: number,
+  date: string,
+  amountOverrides: readonly FxUsdAdjustmentOverride[] = []
+) {
   if (!Number.isSafeInteger(companyId) || companyId <= 0 || !Number.isSafeInteger(voucherId) || voucherId <= 0) {
     throw new FxCorrectionError(400, "FX_CORRECTION_SCOPE_INVALID", "Invalid company or voucher.");
   }
@@ -128,7 +139,6 @@ export async function previewFxCorrection(companyId: number, voucherId: number, 
   }
   const lines: FxCorrectionLine[] = [];
   const entries: VoucherEntryInsertFields[] = [];
-  let net = new Decimal(0);
   for (const account of valuation.accounts) {
     if (account.deleted || !["cash_bank", "customer", "loan"].includes(account.eligibility)) continue;
     const foreign = Object.entries(account.nativeBalancesByCurrency)
@@ -164,18 +174,48 @@ export async function previewFxCorrection(companyId: number, voucherId: number, 
     entries.push(entry);
     lines.push({ accountKind: account.accountKind, accountId: account.id,
       accountName: account.name, currency, adjustmentUsd: delta.toFixed(2) });
-    net = net.plus(delta);
   }
+  // Overrides may alter USD book valuation only, not the original CFA quantity,
+  // FX currency, account, rate or native debit/credit. The counter-entry is
+  // always derived afresh from the final signed account adjustments.
+  let revisedLines: FxCorrectionLine[];
+  try {
+    revisedLines = applyFxUsdAdjustmentOverrides(lines, amountOverrides);
+  } catch (error) {
+    if (error instanceof FxUsdAdjustmentOverrideError) {
+      throw new FxCorrectionError(400, error.code, error.message);
+    }
+    throw error;
+  }
+  const revisedEntries = entries.flatMap((entry, index) => {
+    const line = revisedLines[index];
+    const delta = new Decimal(line.adjustmentUsd);
+    if (delta.isZero()) return [];
+    const amount = delta.abs().toFixed(2);
+    const debit = delta.gt(0);
+    return [{
+      ...entry,
+      debitAmount: debit ? amount : "0",
+      creditAmount: debit ? "0" : amount,
+      baseDebitAmount: debit ? amount : "0",
+      baseCreditAmount: debit ? "0" : amount,
+      narration: line.manuallyOverridden
+        ? "Manual USD FX valuation override: " + (entry.narration ?? "")
+        : entry.narration,
+    }];
+  });
+  const net = revisedLines.reduce((total, line) => total.plus(line.adjustmentUsd), new Decimal(0));
+  if (!revisedEntries.length) blockers.push("At least one nonzero USD adjustment is required.");
   if (!lines.length) blockers.push("No eligible historical FX adjustment was found on the selected date.");
   const base = {
     originalVoucherId: voucherId, originalVoucherNumber: source.voucher_number,
     originalDate, targetDate, reversalDate,
     originalUsdTotal: new Decimal(source.total_amount).toFixed(2),
     correctedUsdTotal: Decimal.max(
-      entries.reduce((sum, e) => sum.plus(e.debitAmount ?? "0"), new Decimal(0)),
-      entries.reduce((sum, e) => sum.plus(e.creditAmount ?? "0"), new Decimal(0))
+      revisedEntries.reduce((sum, e) => sum.plus(e.debitAmount ?? "0"), new Decimal(0)),
+      revisedEntries.reduce((sum, e) => sum.plus(e.creditAmount ?? "0"), new Decimal(0))
     ).toFixed(2),
-    netGainUsd: net.toFixed(2), lines, blockers: [...new Set(blockers)],
+    netGainUsd: net.toFixed(2), lines: revisedLines, blockers: [...new Set(blockers)],
   };
   const previewKey = base.blockers.length ? null : createHash("sha256").update(JSON.stringify({
     base, originalEntries, accounts: valuation.accounts, rates: valuation.rates, today,
@@ -183,11 +223,12 @@ export async function previewFxCorrection(companyId: number, voucherId: number, 
   const preview: FxCorrectionPreview = {
     ...base, status: previewKey ? "ready" : "blocked", previewKey,
   };
-  return { preview, entries };
+  return { preview, entries: revisedEntries };
 }
 
 export async function applyFxCorrection(input: {
   companyId: number; voucherId: number; targetDate: string; previewKey: string;
+  amountOverrides?: readonly FxUsdAdjustmentOverride[];
   reason: string; actor: { userId: string; username: string };
 }) {
   if (!input.reason || input.reason.trim().length < 10) {
@@ -197,7 +238,9 @@ export async function applyFxCorrection(input: {
   return db.transaction(async tx => {
     const lockKey = "fx-unrealized-revaluation:" + input.companyId;
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
-    const { preview, entries } = await previewFxCorrection(input.companyId, input.voucherId, input.targetDate);
+    const { preview, entries } = await previewFxCorrection(
+      input.companyId, input.voucherId, input.targetDate, input.amountOverrides
+    );
     if (preview.status !== "ready" || preview.previewKey !== input.previewKey) {
       throw new FxCorrectionError(409, "FX_CORRECTION_PREVIEW_STALE",
         "The rate, voucher or ledger changed. Refresh the preview before confirming.");
@@ -255,6 +298,12 @@ export async function applyFxCorrection(input: {
         replacementVoucherId: corrected.voucher.id,
         targetDate: preview.targetDate,
         previewKey: preview.previewKey, reason: input.reason,
+        manualUsdAdjustments: preview.lines
+          .filter((line) => line.manuallyOverridden)
+          .map((line) => ({
+            accountKind: line.accountKind, accountId: line.accountId, currency: line.currency,
+            automaticUsd: line.automaticAdjustmentUsd, approvedUsd: line.adjustmentUsd,
+          })),
       } } },
     }, tx);
     return {
