@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
-import { customers, insertCustomerSchema, ledgerAccounts } from "@shared/schema";
+import { customers, insertCustomerSchema, ledgerAccounts, type Customer } from "@shared/schema";
 
-import { db } from "../../db";
+import { db, type DbTransaction } from "../../db";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
 import { getCustomersWithBalances } from "./customerBalanceQuery";
@@ -13,6 +13,7 @@ import {
   lockAccountRow,
 } from "../../services/accounting/accountHistoryPolicy";
 import type { CustomerAuditActor } from "./customerRequestContext";
+import { capturePcCustomerCreateTx } from "./customerPcCapture";
 
 async function requireCustomer(customerId: number, companyId: number) {
   const customer = await storage.getCustomerById(customerId);
@@ -41,22 +42,114 @@ function customerChanges(existing: Record<string, unknown>, updated: Record<stri
   return changes;
 }
 
-async function nextCustomerCode(companyId: number): Promise<string> {
-  const [maxRow] = await db
+async function nextCustomerCode(tx: DbTransaction, companyId: number): Promise<string> {
+  const [maxRow] = await tx
     .select({
       maxSuffix: sql<string>`MAX(CAST(NULLIF(REGEXP_REPLACE(code, '[^0-9]', '', 'g'), '') AS integer))`,
     })
     .from(customers)
-    .where(and(eq(customers.companyId, companyId), sql`code LIKE 'CUST%'`))
-    .execute();
+    .where(and(eq(customers.companyId, companyId), sql`code LIKE 'CUST%'`));
 
   let suffix = maxRow?.maxSuffix ? Number.parseInt(maxRow.maxSuffix, 10) + 1 : 1;
   let code = `CUST${suffix.toString().padStart(3, "0")}`;
-  while (await storage.getCustomerByCode(code, companyId)) {
+  const taken = async (candidate: string) =>
+    (
+      await tx
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.companyId, companyId), eq(customers.code, candidate)))
+        .limit(1)
+    ).length > 0;
+  while (await taken(code)) {
     suffix += 1;
     code = `CUST${suffix.toString().padStart(3, "0")}`;
   }
   return code;
+}
+
+/**
+ * A new customer, its own receivable ledger account and the audit row, on the
+ * caller's transaction: the one way the live route (POST /api/customers) and
+ * the replay of a customer created offline on a PC
+ * (server/edge/phase9CustomerCreateApply.ts) create a customer.
+ */
+export async function createCustomerTx(
+  tx: DbTransaction,
+  companyId: number,
+  input: unknown,
+  actor: CustomerAuditActor
+): Promise<Customer> {
+  const parsed = insertCustomerSchema.parse({
+    ...(input && typeof input === "object" ? input : {}),
+    companyId,
+  });
+  if (parsed.ledgerAccountId !== undefined) {
+    const [linkedLedger] = await tx
+      .select({ id: ledgerAccounts.id })
+      .from(ledgerAccounts)
+      .where(and(eq(ledgerAccounts.id, parsed.ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
+      .limit(1);
+    if (!linkedLedger) {
+      throw new CustomerRouteError(400, "Linked ledger account must belong to the customer company");
+    }
+  }
+  const code = await nextCustomerCode(tx, companyId);
+  const ledgerCode = `CUST-${code}`;
+  const [existingLedger] = await tx
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(and(eq(ledgerAccounts.code, ledgerCode), eq(ledgerAccounts.companyId, companyId)))
+    .limit(1);
+  const { role: _role, ...auditActor } = actor;
+  // Wave 16 (B): the customer, its ledger account and the audit row are
+  // written in one transaction (the audit was best-effort after the insert).
+  const [created] = await tx
+    .insert(customers)
+    .values({ ...parsed, code })
+    .returning();
+  await logAudit(
+    {
+      ...auditActor,
+      companyId,
+      action: "create",
+      tableName: "customers",
+      recordId: created.id,
+      recordIdentifier: created.legalName,
+      changes: {
+        name: { old: null, new: created.legalName },
+        code: { old: null, new: created.code },
+        phone: { old: null, new: created.phone || null },
+        openingBalance: { old: null, new: created.openingBalance || "0" },
+        openingBalanceSide: { old: null, new: created.openingBalanceSide || null },
+      },
+    },
+    tx
+  );
+
+  if (existingLedger) return created;
+  const [ledgerAccount] = await tx
+    .insert(ledgerAccounts)
+    .values({
+      companyId,
+      code: ledgerCode,
+      name: `${created.legalName} - Customer Account`,
+      accountType: "Asset",
+      subType: "Accounts Receivable",
+      // The customer record owns the opening (owner rule 1): the balance
+      // engine counts customers.opening_balance once and ignores the linked
+      // ledger's own opening, so the new ledger starts at zero instead of a
+      // copy that every ledger-only reader used to add a second time.
+      openingBalance: "0",
+      openingBalanceSide: "Dr",
+      active: true,
+    })
+    .returning();
+  const [linked] = await tx
+    .update(customers)
+    .set({ ledgerAccountId: ledgerAccount.id })
+    .where(eq(customers.id, created.id))
+    .returning();
+  return linked;
 }
 
 export const customerService = {
@@ -90,79 +183,13 @@ export const customerService = {
   },
 
   async create(companyId: number, input: unknown, actor: CustomerAuditActor) {
-    const parsed = insertCustomerSchema.parse({
-      ...(input && typeof input === "object" ? input : {}),
-      companyId,
-    });
-    if (parsed.ledgerAccountId !== undefined) {
-      const [linkedLedger] = await db
-        .select({ id: ledgerAccounts.id })
-        .from(ledgerAccounts)
-        .where(and(eq(ledgerAccounts.id, parsed.ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
-        .limit(1);
-      if (!linkedLedger) {
-        throw new CustomerRouteError(400, "Linked ledger account must belong to the customer company");
-      }
-    }
-    const code = await nextCustomerCode(companyId);
-    const ledgerCode = `CUST-${code}`;
-    const existingLedger = await storage.getLedgerAccountByCode(ledgerCode, companyId);
-    const { role: _role, ...auditActor } = actor;
-    // Wave 16 (B): the customer, its ledger account and the audit row are
-    // written in one transaction (the audit was best-effort after the insert).
-    const customer = await db.transaction(async (tx) => {
-      const [created] = await tx
-        .insert(customers)
-        .values({ ...parsed, code })
-        .returning();
-      await logAudit(
-        {
-          ...auditActor,
-          companyId,
-          action: "create",
-          tableName: "customers",
-          recordId: created.id,
-          recordIdentifier: created.legalName,
-          changes: {
-            name: { old: null, new: created.legalName },
-            code: { old: null, new: created.code },
-            phone: { old: null, new: created.phone || null },
-            openingBalance: { old: null, new: created.openingBalance || "0" },
-            openingBalanceSide: { old: null, new: created.openingBalanceSide || null },
-          },
-        },
-        tx
-      );
-
-      if (!existingLedger) {
-        const [ledgerAccount] = await tx
-          .insert(ledgerAccounts)
-          .values({
-            companyId,
-            code: ledgerCode,
-            name: `${created.legalName} - Customer Account`,
-            accountType: "Asset",
-            subType: "Accounts Receivable",
-            // The customer record owns the opening (owner rule 1): the balance
-            // engine counts customers.opening_balance once and ignores the linked
-            // ledger's own opening, so the new ledger starts at zero instead of a
-            // copy that every ledger-only reader used to add a second time.
-            openingBalance: "0",
-            openingBalanceSide: "Dr",
-            active: true,
-          })
-          .returning();
-        const [linked] = await tx
-          .update(customers)
-          .set({ ledgerAccountId: ledgerAccount.id })
-          .where(eq(customers.id, created.id))
-          .returning();
-        return linked;
-      }
+    return db.transaction(async (tx) => {
+      const created = await createCustomerTx(tx, companyId, input, actor);
+      // On a PC in entry mode the customer is recorded for the cloud in the
+      // same transaction (Phase C1); elsewhere this does nothing.
+      await capturePcCustomerCreateTx(tx, created, input, actor);
       return created;
     });
-
-    return customer;
   },
 
   async update(customerId: number, companyId: number, input: unknown, actor: CustomerAuditActor) {

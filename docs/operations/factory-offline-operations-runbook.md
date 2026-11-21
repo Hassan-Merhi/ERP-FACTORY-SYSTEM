@@ -442,7 +442,38 @@ type it was saved as. A save the PC answers as a replay of one it already made
 purchase orders stay online-only. Covered by
 `tests/pc-sync-offline-accounting-vouchers.test.ts`.
 
-Still to come: masters with held edits and duplicate-customer merge (Phase C),
+**Phase C owner decisions (2026-11-20).** A customer created on a PC that looks
+like one the cloud already has is held for review, never created silently. An
+edit made on a PC to a customer, supplier or account that was also changed in
+the cloud is held: the cloud version stays until the edit is approved
+(overwriting) or rejected. Only an Admin or Developer decides held master
+records, as for every other held offline item.
+
+**New customers on a PC (Phase C1).** In entry mode the PC accepts
+`POST /api/customers`. The customer service records the new customer as
+`customer.create.v1` in the customer's own transaction, with the PC's ids for
+the customer and for the receivable ledger account it opens. A customer the
+cloud could not replay (for example a negative opening) is refused on the PC
+(`423 OFFLINE_PC_LOCAL_CHANGE_NOT_SUPPORTED`). The cloud creates its own
+customer and ledger through the same service as the live route, with its own
+customer code, and records which cloud row each PC id became
+(`factory_edge_pc_record_map`, migration 0013). Later entries from that PC that
+name its customer or ledger (`customerId`, `ledgerAccountId`, or a `customer` /
+`ledger` account) are translated to the cloud's ids before they are applied; one
+naming a customer the cloud has not created yet waits
+(`202 PHASE9_PC_RECORD_NOT_YET_SYNCED`). A customer with the same name
+(ignoring case and spaces) or the same phone (last 9 digits) as an existing one
+is held as `PHASE9_CUSTOMER_POSSIBLE_DUPLICATE`; approving it creates a new
+customer. Discarding it on the PC also refuses the outstanding entries that
+name it or its ledger (`PC_SYNC_NAMES_DISCARDED_CUSTOMER`), so they don't hold up
+later entries; they must be entered again against an existing customer.
+Merging it into the existing customer instead is the next slice. A POS credit
+or cash sale paying into the PC's ledger is translated the same way. Customers created by Create Only users are held as
+`PHASE9_ACTOR_ROLE_NOT_PERMITTED`, because the replay cannot repeat that
+role's verified-create check. Covered by `tests/pc-sync-offline-customers.test.ts`.
+
+Still to come: merging a held customer into an existing one, customer and
+supplier edits with clash holds, suppliers and accounts (rest of Phase C),
 edits and deletes of synced records (Phase D), and factory screens and files
 (Phase E).
 

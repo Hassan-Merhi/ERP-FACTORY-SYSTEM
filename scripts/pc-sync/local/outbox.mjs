@@ -13,6 +13,7 @@
 // the feed, which brings back the cloud's version of every delivered entry.
 
 import { createHash } from "node:crypto";
+import { phase9PcRecordReferences } from "../../../server/edge/phase9PcRecordMap.mjs";
 import { PcSyncAgentError, syncOnce } from "./syncAgent.mjs";
 import {
   PC_LOCAL_ENTRY_LOCK,
@@ -207,6 +208,27 @@ export async function decideUnconfirmed(local, operationId, decision) {
   if (rowCount !== 1) throw new PcSyncAgentError("PC_SYNC_ENTRY_NOT_UNCONFIRMED");
 }
 
+const CUSTOMER_CREATE_KIND = "customer.create.v1";
+const DEPENDENT_STATUSES = ["unconfirmed", "pending", "waiting", "conflict"];
+
+/** Refuses every outstanding entry naming the customer (or its ledger) of a discarded customer create. */
+async function refuseDependents(local, op) {
+  const gone = new Set([`customer:${op.envelope.localCustomerId}`]);
+  if (op.envelope.localLedgerAccountId) gone.add(`ledger_account:${op.envelope.localLedgerAccountId}`);
+  const { rows } = await local.query(
+    "SELECT id, input, envelope FROM pc_local.outbox WHERE status = ANY($1::text[]) AND id <> $2 ORDER BY id",
+    [DEPENDENT_STATUSES, op.id]
+  );
+  let refused = 0;
+  for (const row of rows) {
+    const named = phase9PcRecordReferences(row.envelope ?? row.input);
+    if (![...named].some((key) => gone.has(key))) continue;
+    await mark(local, row.id, "refused", { code: "PC_SYNC_NAMES_DISCARDED_CUSTOMER" });
+    refused += 1;
+  }
+  return refused;
+}
+
 /**
  * A held entry decided on this PC. "approve" sends it again with the conflict
  * code as the override (the cloud applies it only when the signed-in person is
@@ -223,6 +245,13 @@ export async function resolveConflict(local, cloud, operationId, decision) {
   const op = rows[0];
   if (!op) throw new PcSyncAgentError("PC_SYNC_CONFLICT_NOT_FOUND");
   if (decision === "approve" && !op.overridable) throw new PcSyncAgentError("PC_SYNC_CONFLICT_NOT_OVERRIDABLE");
+  if (decision === "discard" && op.envelope?.kind === CUSTOMER_CREATE_KIND) {
+    // A customer the cloud never created: the entries that name it (or its
+    // ledger) can never apply, so they are refused with it instead of waiting
+    // forever and holding up every later entry.
+    await mark(local, op.id, "refused", { code: "DISCARDED" });
+    return { discarded: true, dependentsRefused: await refuseDependents(local, op) };
+  }
   if (decision === "discard" && op.envelope) {
     // An edit or delete the cloud refused: nothing later depends on it, so it
     // is dropped here; the cloud never applied it.

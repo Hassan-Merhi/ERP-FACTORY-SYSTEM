@@ -32,6 +32,11 @@ import {
 } from "./phase9AccountingVoucherEnvelope.mjs";
 import { phase9PressingEnvelope } from "./phase9PressingEnvelope.mjs";
 import {
+  PHASE9_CUSTOMER_CREATE_KIND,
+  PHASE9_CUSTOMER_DUPLICATE_CONFLICT,
+  phase9CustomerCreateEnvelope,
+} from "./phase9CustomerCreateEnvelope.mjs";
+import {
   PHASE9_STOCK_ADJUST_KIND,
   PHASE9_STOCK_NEGATIVE_CONFLICT,
   PHASE9_STOCK_TRANSFER_KIND,
@@ -123,51 +128,20 @@ function pressingPayload(payload) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
-function stockAdjustPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_STOCK_ADJUST_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9StockAdjustEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const stockAdjustPayload = (payload) => rebuiltPayload(payload, PHASE9_STOCK_ADJUST_KIND, phase9StockAdjustEnvelope);
 
-function stockTransferPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_STOCK_TRANSFER_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9StockTransferEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const stockTransferPayload = (payload) =>
+  rebuiltPayload(payload, PHASE9_STOCK_TRANSFER_KIND, phase9StockTransferEnvelope);
 
-function stockItemEditPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_STOCK_ITEM_EDIT_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9StockItemEditEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const stockItemEditPayload = (payload) =>
+  rebuiltPayload(payload, PHASE9_STOCK_ITEM_EDIT_KIND, phase9StockItemEditEnvelope);
 
-/** A kind no decision can force through, referenced by `field` of its payload. */
-const plainKind = (kind, envelope, field = "localVoucherId") =>
+/** A kind referenced by `field` of its payload; only `overridable` conflicts can be approved. */
+const plainKind = (kind, envelope, field = "localVoucherId", overridable = []) =>
   Object.freeze({
     parse: (payload) => rebuiltPayload(payload, kind, envelope),
     localRef: (payload) => payload[field],
-    overridable: Object.freeze([]),
+    overridable: Object.freeze(overridable),
   });
 
 function rebuiltPayload(payload, kind, envelope) {
@@ -183,70 +157,16 @@ function rebuiltPayload(payload, kind, envelope) {
   return stableEqual(rebuilt, payload) ? rebuilt : null;
 }
 
-function posSalePayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_POS_SALE_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9PosSaleEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const posSalePayload = (payload) => rebuiltPayload(payload, PHASE9_POS_SALE_KIND, phase9PosSaleEnvelope);
 
-function posSaleEditPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_POS_SALE_EDIT_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9PosSaleEditEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const posSaleEditPayload = (payload) => rebuiltPayload(payload, PHASE9_POS_SALE_EDIT_KIND, phase9PosSaleEditEnvelope);
 
-function posSaleCancelPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_POS_SALE_CANCEL_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9PosSaleCancelEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const posSaleCancelPayload = (payload) =>
+  rebuiltPayload(payload, PHASE9_POS_SALE_CANCEL_KIND, phase9PosSaleCancelEnvelope);
 
-function receivingPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_RECEIVING_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9ReceivingEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const receivingPayload = (payload) => rebuiltPayload(payload, PHASE9_RECEIVING_KIND, phase9ReceivingEnvelope);
 
-function attachmentPayload(payload) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  if (payload.kind !== PHASE9_ATTACHMENT_KIND) return null;
-  const { kind: _kind, ...evidence } = payload;
-  let rebuilt;
-  try {
-    rebuilt = phase9AttachmentEnvelope(evidence);
-  } catch {
-    return null;
-  }
-  return stableEqual(rebuilt, payload) ? rebuilt : null;
-}
+const attachmentPayload = (payload) => rebuiltPayload(payload, PHASE9_ATTACHMENT_KIND, phase9AttachmentEnvelope);
 
 /**
  * `overridable` lists the conflict codes an Admin/Developer may resolve with
@@ -379,6 +299,13 @@ const STREAMS = Object.freeze({
       [PHASE9_JOURNAL_KIND]: plainKind(PHASE9_JOURNAL_KIND, phase9JournalEnvelope), // PC entries: journals, sales, purchases
       [PHASE9_SALES_VOUCHER_KIND]: plainKind(PHASE9_SALES_VOUCHER_KIND, phase9SalesVoucherEnvelope),
       [PHASE9_PURCHASE_VOUCHER_KIND]: plainKind(PHASE9_PURCHASE_VOUCHER_KIND, phase9PurchaseVoucherEnvelope),
+      // Phase C1: a customer created on a PC, before the vouchers that name it.
+      [PHASE9_CUSTOMER_CREATE_KIND]: plainKind(
+        PHASE9_CUSTOMER_CREATE_KIND,
+        phase9CustomerCreateEnvelope,
+        "localCustomerId",
+        [PHASE9_CUSTOMER_DUPLICATE_CONFLICT]
+      ),
       [PHASE9_PAYMENT_DELETE_KIND]: Object.freeze({
         parse: (payload) => rebuiltPayload(payload, PHASE9_PAYMENT_DELETE_KIND, phase9PaymentDeleteEnvelope),
         localRef: (payload) => payload.localVoucherId,
