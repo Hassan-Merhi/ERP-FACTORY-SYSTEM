@@ -6,8 +6,9 @@ import { readDatabaseRuntimeConfig } from "./lib/databaseConfig";
 import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
 import { logDatabasePoolSnapshot, logSlowDatabaseQuery } from "./lib/databaseTelemetry";
 import { isRequestPerformanceContextActive, recordDatabaseQuery } from "./lib/requestPerformanceContext";
-import { getDatabaseScopeRuntimeContext } from "./services/security/databaseScopeRuntimeContext";
 import { auditActorSettingValues } from "./services/audit/auditActorContext";
+import { desiredDatabaseScope, POOL_PRESSURE_GRACE_MS } from "./dbDesiredDatabaseScope";
+export type { RawQueryRow } from "./dbDesiredDatabaseScope";
 
 let connectionString: string;
 let databaseSource: "DATABASE_URL" | "PG_ENV";
@@ -85,50 +86,6 @@ const basePool = new Pool({
  * tenant or maintenance identity from leaking across pooled requests.
  */
 const clientScopeSignatures = new WeakMap<PoolClient, string>();
-
-function desiredDatabaseScope(): {
-  signature: string;
-  maintenance: "on" | "off";
-  companyId: string;
-  authorizedCompanyIds: string;
-} {
-  const context = getDatabaseScopeRuntimeContext();
-
-  if (context?.kind === "maintenance") {
-    return {
-      signature: "maintenance",
-      maintenance: "on",
-      companyId: "",
-      authorizedCompanyIds: "",
-    };
-  }
-
-  if (context?.kind === "tenant") {
-    const authorizedCompanyIds =
-      context.scopeMode === "authorized-companies" ? context.authorizedCompanyIds.join(",") : "";
-
-    return {
-      // Ordinary tenant requests stay pinned to the active company. Only
-      // server-trusted cross-company surfaces may opt into the already-verified
-      // authorized company list; caller-supplied secondary IDs alone never widen
-      // the pooled RLS boundary.
-      signature:
-        context.scopeMode === "authorized-companies"
-          ? `tenant-authorized:${context.companyId}:${authorizedCompanyIds}`
-          : `tenant:${context.companyId}`,
-      maintenance: "off",
-      companyId: String(context.companyId),
-      authorizedCompanyIds,
-    };
-  }
-
-  return {
-    signature: "unscoped",
-    maintenance: "off",
-    companyId: "",
-    authorizedCompanyIds: "",
-  };
-}
 
 async function ensureDatabaseClientScope(client: PoolClient): Promise<void> {
   const desired = desiredDatabaseScope();
@@ -236,7 +193,6 @@ pool.on("error", (error) => {
 pool.on("connect", () => logPoolStats("connect"));
 pool.on("remove", () => logPoolStats("remove"));
 
-const POOL_PRESSURE_GRACE_MS = 250;
 let poolPressureTimer: NodeJS.Timeout | null = null;
 
 pool.on("acquire", () => {
@@ -274,16 +230,6 @@ export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * transaction. `db` and a transaction share the query surface these helpers use.
  */
 export type DatabaseOrTransaction = Database | DbTransaction;
-
-/**
- * A row shape for `db.execute` / `tx.execute`.
- *
- * Drizzle constrains that generic to `Record<string, unknown>`. Wrapping a
- * precise row interface here at the call site keeps the interface itself free
- * of a catch-all index signature, which would otherwise hide a misspelled
- * column in every consumer of the result.
- */
-export type RawQueryRow<TRow> = TRow & Record<string, unknown>;
 
 /** The application's pg connection pool. */
 export type DatabasePool = typeof pool;

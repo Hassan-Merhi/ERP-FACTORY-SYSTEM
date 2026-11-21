@@ -1,131 +1,43 @@
-import { SearchField } from "@/components/ui/search-field";
-import { searchAny } from "@shared/searchNormalization";
-import type { ClientErrorLike } from "@/lib/clientError";
-import { useDeferredValue, useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/hooks/use-toast";
 import { ArrowLeftRight, ArrowRight, Check } from "lucide-react";
-import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { formatUsd } from "@/lib/moneyDisplay";
-import { AccountCombobox, ENTRY_PAGE_SIZE, fmtMoney, type Account, type EntryPage } from "./AccountCombobox";
+import { AccountCombobox } from "./AccountCombobox";
+import { useAccountTransferState } from "./useAccountTransferState";
+import { AccountTransferCard } from "./AccountTransferCard";
 
 export default function AccountTransfer() {
-  const { selectedCompany } = useCompany();
-  const { toast } = useToast();
-
-  const [fromAccountId, setFromAccountId] = useState<number | null>(null);
-  const [toAccountId, setToAccountId] = useState<number | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [searchEntries, setSearchEntries] = useState("");
-  const [entryPage, setEntryPage] = useState(1);
-  const [done, setDone] = useState<{ moved: number; toAccount: string } | null>(null);
-  const deferredEntrySearch = useDeferredValue(searchEntries.trim());
-
-  const { data: accounts = [] } = useQuery<Account[]>({
-    queryKey: ["/api/ledger-accounts?profile=picker"],
-    enabled: !!selectedCompany,
-  });
-
   const {
-    data: entryData,
-    isLoading: loadingEntries,
-    isError: entriesError,
-    refetch: refetchEntries,
-  } = useQuery<EntryPage>({
-    queryKey: ["/api/voucher-entries/by-account", fromAccountId, entryPage, deferredEntrySearch],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        pagination: "1",
-        page: String(entryPage),
-        pageSize: String(ENTRY_PAGE_SIZE),
-      });
-      if (deferredEntrySearch) params.set("search", deferredEntrySearch);
-      const response = await fetch(`/api/voucher-entries/by-account/${fromAccountId}?${params}`, {
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error(response.statusText || String(response.status));
-      return response.json();
-    },
-    enabled: !!fromAccountId,
-  });
-  const entries = useMemo(() => entryData?.items ?? [], [entryData?.items]);
-
-  const filteredEntries = useMemo(() => {
-    if (!searchEntries.trim()) return entries;
-    return entries.filter((e) =>
-      searchAny(searchEntries, e.voucherNumber, e.narration, e.voucherDescription, e.voucherType)
-    );
-  }, [entries, searchEntries]);
-
-  const allChecked = filteredEntries.length > 0 && filteredEntries.every((e) => selectedIds.has(e.id));
-  const someChecked = filteredEntries.some((e) => selectedIds.has(e.id));
-
-  function toggleAll() {
-    if (allChecked) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        filteredEntries.forEach((e) => next.delete(e.id));
-        return next;
-      });
-    } else {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        filteredEntries.forEach((e) => next.add(e.id));
-        return next;
-      });
-    }
-  }
-
-  function toggleOne(id: number) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const selectedEntries = entries.filter((e) => selectedIds.has(e.id));
-  const totalDebit = selectedEntries.reduce((s, e) => s + Number(e.debitAmount || 0), 0);
-  const totalCredit = selectedEntries.reduce((s, e) => s + Number(e.creditAmount || 0), 0);
-
-  const fromAccount = accounts.find((a) => a.id === fromAccountId);
-  const toAccount = accounts.find((a) => a.id === toAccountId);
-
-  const transfer = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/voucher-entries/transfer-account", {
-        entryIds: Array.from(selectedIds),
-        toAccountId,
-      });
-      return (await res.json()) as { moved: number; toAccount: string };
-    },
-    onSuccess: (data) => {
-      setDone({ moved: data.moved, toAccount: data.toAccount });
-      setSelectedIds(new Set());
-      queryClient.invalidateQueries({ queryKey: ["/api/voucher-entries/by-account", fromAccountId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts?profile=picker"] });
-    },
-    onError: (e: ClientErrorLike) =>
-      toast({ title: "Transfer failed", description: e.message, variant: "destructive" }),
-  });
-
-  function resetAll() {
-    setFromAccountId(null);
-    setToAccountId(null);
-    setSelectedIds(new Set());
-    setSearchEntries("");
-    setEntryPage(1);
-    setDone(null);
-  }
+    fromAccountId,
+    setFromAccountId,
+    toAccountId,
+    setToAccountId,
+    setSelectedIds,
+    selectedIds,
+    setSearchEntries,
+    searchEntries,
+    setEntryPage,
+    done,
+    setDone,
+    accounts,
+    loadingEntries,
+    entryData,
+    entriesError,
+    refetchEntries,
+    entries,
+    filteredEntries,
+    allChecked,
+    someChecked,
+    toggleAll,
+    toggleOne,
+    totalDebit,
+    totalCredit,
+    fromAccount,
+    toAccount,
+    transfer,
+    resetAll,
+  } = useAccountTransferState();
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -205,158 +117,24 @@ export default function AccountTransfer() {
       </div>
 
       {fromAccountId && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <CardTitle className="text-base">
-                  Entries under <span className="text-primary">{fromAccount?.name}</span>
-                  {!loadingEntries && (
-                    <Badge variant="secondary" className="ml-2">
-                      {entryData?.total ?? entries.length}
-                    </Badge>
-                  )}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">Select which entries to transfer</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <SearchField
-                  value={searchEntries}
-                  onValueChange={(value) => {
-                    setSearchEntries(value);
-                    setEntryPage(1);
-                    setSelectedIds(new Set());
-                  }}
-                  placeholder="Filter entries…"
-                  wrapperClassName="w-52"
-                  className="text-sm"
-                  data-testid="input-search-entries"
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loadingEntries ? (
-              <LoadingState title="Loading entries…" className="py-10" />
-            ) : entriesError && !entryData ? (
-              <ErrorState onAction={() => void refetchEntries()} actionLabel="Try again" className="py-10" />
-            ) : entries.length === 0 ? (
-              <EmptyState title="No entries found for this account" className="py-10" />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-2 text-left w-10">
-                        <Checkbox
-                          checked={allChecked}
-                          onCheckedChange={toggleAll}
-                          data-testid="checkbox-select-all"
-                          ref={(el) => {
-                            if (el)
-                              (el as unknown as HTMLButtonElement & { indeterminate: boolean }).indeterminate =
-                                someChecked && !allChecked;
-                          }}
-                        />
-                      </th>
-                      <th className="px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide">Voucher #</th>
-                      <th className="px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide">Date</th>
-                      <th className="px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide">Type</th>
-                      <th className="px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide">
-                        Description / Narration
-                      </th>
-                      <th className="px-3 py-2 text-right font-semibold text-xs uppercase tracking-wide">Debit</th>
-                      <th className="px-3 py-2 text-right font-semibold text-xs uppercase tracking-wide">Credit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEntries.map((e) => {
-                      const checked = selectedIds.has(e.id);
-                      const label = e.narration || e.voucherDescription || "—";
-                      const dr = fmtMoney(e.debitAmount);
-                      const cr = fmtMoney(e.creditAmount);
-                      return (
-                        <tr
-                          key={e.id}
-                          className={`border-t cursor-pointer hover-elevate ${checked ? "bg-primary/5" : ""}`}
-                          onClick={() => toggleOne(e.id)}
-                          data-testid={`row-entry-${e.id}`}
-                        >
-                          <td className="px-4 py-2" onClick={(ev) => ev.stopPropagation()}>
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={() => toggleOne(e.id)}
-                              data-testid={`checkbox-entry-${e.id}`}
-                            />
-                          </td>
-                          <td className="px-3 py-2 font-mono text-xs">{e.voucherNumber}</td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                            {e.voucherDate ? format(new Date(e.voucherDate), "dd MMM yyyy") : "—"}
-                          </td>
-                          <td className="px-3 py-2">
-                            <Badge variant="outline" className="text-xs">
-                              {e.voucherType}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground max-w-xs truncate" title={label}>
-                            {label}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-xs">
-                            {dr ? (
-                              <span className="font-medium">{dr}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-xs">
-                            {cr ? (
-                              <span className="font-medium">{cr}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {entryData && entryData.totalPages > 1 && (
-                  <div className="flex items-center justify-between gap-3 border-t px-4 py-3">
-                    <p className="text-xs text-muted-foreground">
-                      Page {entryData.page} of {entryData.totalPages} · {entryData.total} entries
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!entryData.hasPreviousPage}
-                        onClick={() => {
-                          setSelectedIds(new Set());
-                          setEntryPage((page) => Math.max(1, page - 1));
-                        }}
-                        data-testid="button-entries-previous-page"
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!entryData.hasNextPage}
-                        onClick={() => {
-                          setSelectedIds(new Set());
-                          setEntryPage((page) => page + 1);
-                        }}
-                        data-testid="button-entries-next-page"
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <AccountTransferCard
+          allChecked={allChecked}
+          entries={entries}
+          entriesError={entriesError}
+          entryData={entryData}
+          filteredEntries={filteredEntries}
+          fromAccount={fromAccount}
+          loadingEntries={loadingEntries}
+          refetchEntries={refetchEntries}
+          searchEntries={searchEntries}
+          selectedIds={selectedIds}
+          setEntryPage={setEntryPage}
+          setSearchEntries={setSearchEntries}
+          setSelectedIds={setSelectedIds}
+          someChecked={someChecked}
+          toggleAll={toggleAll}
+          toggleOne={toggleOne}
+        />
       )}
 
       {selectedIds.size > 0 && (

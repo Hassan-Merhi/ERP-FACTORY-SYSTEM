@@ -71,7 +71,14 @@ const DEVELOPER_ONLY_PREFIXES = [
   "/api/accounting/unified-dashboard",
   "/api/accounting/rollout",
 ] as const;
+/**
+ * The audited correction has its own company-scoped Admin/Owner guard and
+ * never enables the Developer-only unified accounting rollout elsewhere.
+ * Do not broaden this exception to /api/accounting/monetary-fx generally.
+ */
+export const FX_CORRECTION_ADMIN_ROUTE = /^\/api\/accounting\/monetary-fx\/revaluation\/[1-9][0-9]*\/(?:correction-preview|correct)$/;
 export function isDeveloperOnlyAccountingPath(path: string): boolean {
+  if (FX_CORRECTION_ADMIN_ROUTE.test(normalizedAccountingPath(path))) return false;
   return DEVELOPER_ONLY_PREFIXES.some((p) => prefix(path, p));
 }
 export async function enforceUnifiedAccountingRollout(req: Request, res: Response, next: NextFunction) {

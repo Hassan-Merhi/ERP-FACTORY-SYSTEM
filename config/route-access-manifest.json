@@ -1,7 +1,7 @@
 {
   "formatVersion": 2,
   "description": "Access rule for every registered Express route, in registration order. The access boundary (server/security/access/manifestAccessBoundary.ts) enforces these rules; tests/route-access-manifest.test.ts fails when a route has no rule or a rule no longer matches its route. See docs/manifest-driven-access-consolidation.md before editing.",
-  "routeCount": 2473,
+  "routeCount": 2475,
   "routes": [
     {"id":"POST /api/stock-transfer-order/wa-approval/webhook#1","guards":"stockTransferOrderWaWebhookHandler","auth":"service-token","companyScope":"none","roles":"any","permission":"none"},
     {"id":"GET /api/admin/operational-monitoring#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none"},
@@ -1850,6 +1850,8 @@
     {"id":"POST /api/accounting/cash-bank/lines/:id/review#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},
     {"id":"POST /api/accounting/cash-bank/matches#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},
     {"id":"POST /api/accounting/cash-bank/matches/:id/void#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},
+    {"id":"GET /api/accounting/monetary-fx/revaluation/:id/correction-preview#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},
+    {"id":"POST /api/accounting/monetary-fx/revaluation/:id/correct#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},
     {"id":"GET /api/accounting/monetary-fx/rates#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},
     {"id":"GET /api/accounting/monetary-fx/rate#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},
     {"id":"GET /api/accounting/monetary-fx/manual-revaluation/preflight#1","guards":"requireAuth > <anonymous> > <anonymous>","auth":"session","companyScope":"active-company","roles":{"session":{"allow":["Developer","Admin","Owner"]}},"permission":"none","policies":["shared-factory-access"]},

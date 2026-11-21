@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/page-state";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,61 +8,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Plus,
-  ChevronDown,
-  ArrowDownCircle,
-  Gift,
-  ArrowUpCircle,
-  TrendingUp,
-  DollarSign,
-  TrendingDown,
-  Pencil,
-  Trash2,
-  Users,
-  UserCheck,
-  WalletCards,
-} from "lucide-react";
-import { ConfirmationDialog } from "@/components/ConfirmationDialog";
+import { Plus, ChevronDown, ArrowDownCircle, Gift, ArrowUpCircle, Users, UserCheck, WalletCards } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
-import type { Employee } from "@shared/schema";
-import type { EmployeeGroup } from "./payrollTypes";
-import { getEmpAvatarColor, getEmpInitials } from "./payrollSchemas";
 import { SearchField } from "@/components/ui/search-field";
-
-interface EmployeesTabProps {
-  empSearch: string;
-  setEmpSearch: (val: string) => void;
-  empStatusFilter: string;
-  setEmpStatusFilter: (val: string) => void;
-  setCreateEmployeeDialogOpen: (val: boolean) => void;
-  employeeStaff: (Employee & { calculatedBalance: string })[];
-  filteredEmployeeStaff: (Employee & { calculatedBalance: string })[];
-  employeeGroups: EmployeeGroup[];
-  setCreateGroupDialogOpen: (val: boolean) => void;
-  setSelectedGroupForMembers: (group: EmployeeGroup | null) => void;
-  setGroupMembersDialogOpen: (val: boolean) => void;
-  pendingBonuses: Record<number, { amount: number; description: string; employeeName: string }>;
-  setBulkDepositSelections: (val: Record<number, boolean>) => void;
-  setBulkDepositAmounts: (val: Record<number, string>) => void;
-  setBulkDepositDialogOpen: (val: boolean) => void;
-  setBulkBonusAmounts: (val: Record<number, string>) => void;
-  setBulkBonusStep: (val: "edit" | "preview") => void;
-  setBulkBonusDialogOpen: (val: boolean) => void;
-  setBulkWithdrawalAmounts: (val: Record<number, string>) => void;
-  setBulkWithdrawalAccountId: (val: string) => void;
-  setBulkWithdrawalDialogOpen: (val: boolean) => void;
-  setStatementEmployee: (val: (Employee & { calculatedBalance?: string }) | null) => void;
-  handleDeposit: (emp: Employee) => void;
-  handleBonus: (emp: Employee) => void;
-  handleWithdrawal: (emp: Employee) => void;
-  setEditingEmployee: (emp: Employee | null) => void;
-  setEditEmployeeDialogOpen: (val: boolean) => void;
-  handleDeleteEmployee: (emp: Employee) => void;
-  /** False for View Only and Create Only: hide controls that change existing records. */
-  canChangeExistingRecords: boolean;
-  canCreate: (method: string, path: string) => boolean;
-}
+import type { EmployeesTabProps } from "./EmployeesTabTypes";
+import { EmployeesTabContent } from "./EmployeesTabContent";
 
 export function EmployeesTab({
   empSearch,
@@ -291,164 +240,18 @@ export function EmployeesTab({
           </div>
         ) : (
           // Phones: each employee is a card (two figures per row, labelled); sm+ keeps the grid table.
-          <div className="overflow-x-auto" data-testid="employee-list">
-            <div className="sm:min-w-[980px]">
-              <div className="hidden grid-cols-[minmax(260px,1.5fr)_130px_150px_140px_140px_150px] items-center gap-3 border-b bg-muted/25 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
-                <div>Employee</div>
-                <div>Salary</div>
-                <div>Balance</div>
-                <div>Deposits</div>
-                <div>Withdrawals</div>
-                <div className="text-right">Actions</div>
-              </div>
-
-              {filteredEmployeeStaff.map((employee) => {
-                const balance = parseFloat(employee.calculatedBalance || "0");
-                const initials = getEmpInitials(employee.firstName, employee.lastName);
-                const avatarColor = getEmpAvatarColor(`${employee.firstName}${employee.lastName}`);
-
-                return (
-                  <div
-                    key={employee.id}
-                    className="grid grid-cols-2 items-center gap-3 border-b px-4 py-3.5 transition-colors last:border-b-0 hover:bg-muted/25 sm:grid-cols-[minmax(260px,1.5fr)_130px_150px_140px_140px_150px] sm:px-5"
-                    data-testid={`card-employee-${employee.id}`}
-                  >
-                    <div className="col-span-2 flex min-w-0 items-center gap-3 sm:col-span-1">
-                      <Avatar className="h-10 w-10 shrink-0 border">
-                        <AvatarFallback className={`text-sm font-bold ${avatarColor}`}>{initials}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <button
-                            onClick={() => setStatementEmployee(employee)}
-                            className="truncate text-left font-semibold hover:underline"
-                            data-testid={`link-employee-statement-${employee.id}`}
-                          >
-                            {employee.firstName} {employee.lastName}
-                          </button>
-                          <Badge variant={employee.active ? "outline" : "secondary"} className="shrink-0 text-[11px]">
-                            {employee.active ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {[employee.code, employee.department].filter(Boolean).join(" · ") || "No department"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
-                        Salary
-                      </p>
-                      <p className="font-mono text-sm font-medium">
-                        {formatAmount(parseFloat(employee.monthlySalary || "0"))}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
-                        Balance
-                      </p>
-                      <p
-                        className={`font-mono text-sm font-semibold ${balance >= 0 ? "text-emerald-500" : "text-destructive"}`}
-                      >
-                        {formatAmount(balance)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
-                        Deposits
-                      </p>
-                      <p className="font-mono text-sm text-muted-foreground">
-                        {formatAmount(parseFloat(employee.totalDeposits || "0"))}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
-                        Withdrawals
-                      </p>
-                      <p className="font-mono text-sm text-muted-foreground">
-                        {formatAmount(parseFloat(employee.totalWithdrawals || "0"))}
-                      </p>
-                    </div>
-
-                    <div className="col-span-2 flex items-center justify-end gap-1 max-sm:border-t max-sm:pt-2 sm:col-span-1">
-                      {canChangeExistingRecords && (
-                        <>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8"
-                                data-testid={`button-actions-${employee.id}`}
-                              >
-                                Actions <ChevronDown className="ml-1 h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => handleDeposit(employee)}
-                                data-testid={`button-deposit-${employee.id}`}
-                              >
-                                <TrendingUp className="mr-2 h-4 w-4" /> Deposit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleBonus(employee)}
-                                data-testid={`button-bonus-${employee.id}`}
-                              >
-                                <DollarSign className="mr-2 h-4 w-4" /> Bonus
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleWithdrawal(employee)}
-                                data-testid={`button-withdraw-${employee.id}`}
-                              >
-                                <TrendingDown className="mr-2 h-4 w-4" /> Withdraw
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => {
-                              setEditingEmployee(employee);
-                              setEditEmployeeDialogOpen(true);
-                            }}
-                            aria-label={`Edit ${employee.firstName} ${employee.lastName}`}
-                            data-testid={`button-edit-${employee.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-
-                          <ConfirmationDialog
-                            trigger={
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                aria-label={`Delete ${employee.firstName} ${employee.lastName}`}
-                                data-testid={`button-delete-${employee.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            }
-                            title="Delete Employee"
-                            description={`Are you sure you want to delete ${[employee.firstName, employee.lastName]
-                              .filter(Boolean)
-                              .join(" ")}? This action cannot be undone.`}
-                            confirmText="Delete"
-                            variant="destructive"
-                            onConfirm={() => handleDeleteEmployee(employee)}
-                          />
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <EmployeesTabContent
+            canChangeExistingRecords={canChangeExistingRecords}
+            filteredEmployeeStaff={filteredEmployeeStaff}
+            formatAmount={formatAmount}
+            handleBonus={handleBonus}
+            handleDeleteEmployee={handleDeleteEmployee}
+            handleDeposit={handleDeposit}
+            handleWithdrawal={handleWithdrawal}
+            setEditEmployeeDialogOpen={setEditEmployeeDialogOpen}
+            setEditingEmployee={setEditingEmployee}
+            setStatementEmployee={setStatementEmployee}
+          />
         )}
       </div>
     </div>
