@@ -170,7 +170,10 @@ export async function previewFxCorrection(companyId: number, voucherId: number, 
     originalVoucherId: voucherId, originalVoucherNumber: source.voucher_number,
     originalDate, targetDate, reversalDate,
     originalUsdTotal: new Decimal(source.total_amount).toFixed(2),
-    correctedUsdTotal: entries.reduce((sum, e) => sum.plus(e.debitAmount ?? "0"), new Decimal(0)).toFixed(2),
+    correctedUsdTotal: Decimal.max(
+      entries.reduce((sum, e) => sum.plus(e.debitAmount ?? "0"), new Decimal(0)),
+      entries.reduce((sum, e) => sum.plus(e.creditAmount ?? "0"), new Decimal(0))
+    ).toFixed(2),
     netGainUsd: net.toFixed(2), lines, blockers: [...new Set(blockers)],
   };
   const previewKey = base.blockers.length ? null : createHash("sha256").update(JSON.stringify({
