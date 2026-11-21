@@ -18,41 +18,18 @@ import {
   readHistoricalReplayProductionControl,
   type HistoricalReplaySchemaReadiness,
 } from "../../../services/factory/historical-replay/productionReadinessV8";
-
-const APPLY_PATH = "/api/factory/raw-stock/recalc/historical-replay/apply";
-const READINESS_PATH = "/api/factory/raw-stock/recalc/historical-replay/readiness";
-const ADMIN_ROLES = ["Admin", "Developer"] as const;
-const APPLY_AUTHORIZATION_KIND = "HISTORICAL_REPLAY_V8_APPLY_AUTHORIZATION" as const;
-
-interface HistoricalReplayApplyAuthorizationPayload {
-  kind: typeof APPLY_AUTHORIZATION_KIND;
-  companyId: number;
-  userId: string;
-  releaseId: string;
-  algorithmVersion: string;
-  readinessVersion: string;
-  confirmationTokenHash: string;
-  issuedAt: number;
-  expiresAt: number;
-}
-
-interface LatestReplayRow {
-  id: number;
-  algorithm_version: string | null;
-  scope_fingerprint: string | null;
-  applied_at: Date | string;
-  undone_at: Date | string | null;
-}
+import {
+  APPLY_PATH,
+  READINESS_PATH,
+  ADMIN_ROLES,
+  APPLY_AUTHORIZATION_KIND,
+  positiveIntegerIds,
+  type HistoricalReplayApplyAuthorizationPayload,
+  type LatestReplayRow,
+} from "./historicalReplayPhase8ReadinessRoutesHelpers";
 
 function sha256(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
-}
-
-function positiveIntegerIds(value: unknown): number[] {
-  if (!Array.isArray(value)) return [];
-  const ids = value.map((item) => Number(item));
-  if (ids.some((item) => !Number.isInteger(item) || item <= 0)) return [];
-  return [...new Set(ids)].sort((left, right) => left - right);
 }
 
 function disabledSchemaReadiness(error: unknown): HistoricalReplaySchemaReadiness {

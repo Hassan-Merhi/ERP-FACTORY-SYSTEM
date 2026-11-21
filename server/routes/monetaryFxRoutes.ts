@@ -11,6 +11,7 @@ import { companyBusinessDate } from "../services/accounting/companyBusinessDate"
 import { datedMonetaryRateTx, fxDay, MonetaryFxError } from "../services/accounting/monetaryFxRates";
 import { monetaryAccountValuationTx } from "../services/accounting/monetaryFxValuation";
 import { getManualFxCorrectionPreflight } from "../services/accounting/manualFxCorrectionPreflight";
+import { applyFxCorrection, previewFxCorrection, FxCorrectionError } from "../services/accounting/fxRevaluationCorrection";
 import { verifyManualFxCorrection } from "../services/accounting/manualFxCorrectionVerification";
 import { getZambiaSalesNetPositionReconciliation } from "../services/accounting/zambiaSalesNetPositionReconciliation";
 import { previewRealizedFxTx, listRealizedFxTx, recognizeRealizedFxTx } from "../services/accounting/realizedFxService";
@@ -44,9 +45,37 @@ function fail(res: Response, e: unknown) {
   if (e instanceof z.ZodError)
     return res.status(400).json({ code: "FX_REQUEST_INVALID", message: e.issues.map((x) => x.message).join("; ") });
   if (e instanceof MonetaryFxError) return res.status(e.status).json({ code: e.code, message: e.message });
+  if (e instanceof FxCorrectionError) return res.status(e.status).json({ code: e.code, message: e.message });
   return res.status(500).json({ code: "FX_INTERNAL_ERROR", message: getErrorMessage(e) });
 }
 export function registerMonetaryFxRoutes(app: Express): void {
+  // Owner/Admin only. Preview has no side effects; commit verifies the preview
+  // again, then exact-reverses and reposts in one audited transaction.
+  app.get("/api/accounting/monetary-fx/revaluation/:id/correction-preview",
+    requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+      try {
+        const c = company(req), voucherId = positive.parse(req.params.id);
+        const { targetDate } = z.object({ targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+        return res.json((await previewFxCorrection(c, voucherId, targetDate)).preview);
+      } catch (e) { return fail(res, e); }
+    }
+  );
+  app.post("/api/accounting/monetary-fx/revaluation/:id/correct",
+    requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+      try {
+        const c = company(req), voucherId = positive.parse(req.params.id);
+        const body = z.object({
+          targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          previewKey: z.string().length(64),
+          reason: z.string().trim().min(10).max(1000),
+        }).parse(req.body);
+        return res.status(201).json(await applyFxCorrection({
+          companyId: c, voucherId, actor: actor(req), ...body,
+        }));
+      } catch (e) { return fail(res, e); }
+    }
+  );
+
   const gate = [requireAuth, requireRole("Admin", "Owner", "Developer")] as const;
   // Core ERP/Factory/Rental currency set. Never manufacture a rate for
   // dates without an actual company exchange-rate record.

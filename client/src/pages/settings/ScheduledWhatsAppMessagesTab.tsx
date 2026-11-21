@@ -1,8 +1,3 @@
-import { useEffect, useState } from "react";
-import { useCompany } from "@/contexts/CompanyContext";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/page-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,159 +7,34 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { CalendarClock, CheckCircle2, Clock, Pencil, Plus, Trash2, MessageSquare } from "lucide-react";
-import type { ClientErrorLike } from "@/lib/clientError";
 import { ScheduledWhatsAppGroupPicker } from "./ScheduledWhatsAppGroupPicker";
 import { confirmAction } from "@/components/ConfirmHost";
-
-type WeeklyTimes = Record<string, string>;
-type Schedule = {
-  id: string;
-  title: string;
-  message: string;
-  timezone: string;
-  weeklyTimes: WeeklyTimes;
-  startDate: string | null;
-  endDate: string | null;
-  enabled: boolean;
-  recipientIds: number[];
-  updatedAt: string;
-};
-type Group = {
-  id: number;
-  name: string;
-  chatId: string;
-  active: boolean;
-  isGroup: boolean;
-};
-type Delivery = {
-  id: string;
-  title: string;
-  recipientName: string;
-  localDate: string;
-  status: "sending" | "sent" | "failed";
-  error: string | null;
-  createdAt: string;
-};
-type Form = Omit<Schedule, "id" | "updatedAt">;
-const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-function blankForm(): Form {
-  return {
-    title: "",
-    message: "",
-    timezone: "Asia/Beirut",
-    weeklyTimes: { "1": "09:00", "2": "09:00", "3": "09:00", "4": "09:00", "5": "09:00" },
-    startDate: null,
-    endDate: null,
-    enabled: true,
-    recipientIds: [],
-  };
-}
-function formatDays(times: WeeklyTimes): string {
-  return days
-    .flatMap((day, index) => (times?.[String(index)] ? [day.slice(0, 3) + " " + times[String(index)]] : []))
-    .join(" · ");
-}
+import { days, formatDays } from "./ScheduledWhatsAppMessagesTabHelpers";
+import { useScheduledWhatsAppMessagesTabState } from "./useScheduledWhatsAppMessagesTabState";
 
 export function ScheduledWhatsAppMessagesTab() {
-  const { toast } = useToast();
-  const { selectedCompany } = useCompany();
-  const companyId = selectedCompany?.id;
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<Form>(blankForm);
-  const [editorOpen, setEditorOpen] = useState(false);
   const {
-    data: schedules = [],
-    isLoading: loading,
-    isError: schedulesError,
-    refetch: refetchSchedules,
-  } = useQuery<Schedule[]>({
-    queryKey: ["/api/whatsapp/message-schedules", companyId],
-    enabled: !!companyId,
-  });
-  const { data: whatsappSettings } = useQuery<{ enabled: boolean; hasCredentials: boolean }>({
-    queryKey: ["/api/whatsapp/settings"],
-    enabled: !!companyId,
-  });
-  const { data: recipients = [] } = useQuery<Group[]>({
-    queryKey: ["/api/whatsapp/recipients", companyId],
-    enabled: !!companyId,
-  });
-  const { data: history = [] } = useQuery<Delivery[]>({
-    queryKey: ["/api/whatsapp/message-schedules/history", companyId],
-    enabled: !!companyId,
-    refetchInterval: 60000,
-  });
-  useEffect(() => {
-    setEditorOpen(false);
-    setEditingId(null);
-    setForm(blankForm());
-  }, [companyId]);
-
-  const groups = recipients.filter((r) => r.active && r.isGroup);
-
-  const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/message-schedules"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/message-schedules/history"] });
-  };
-  const save = useMutation({
-    mutationFn: async (payload: { id?: string; values: Form }) =>
-      apiRequest(
-        payload.id ? "PUT" : "POST",
-        payload.id ? "/api/whatsapp/message-schedules/" + payload.id : "/api/whatsapp/message-schedules",
-        payload.values
-      ),
-    onSuccess: () => {
-      refresh();
-      setEditorOpen(false);
-      setEditingId(null);
-      setForm(blankForm());
-      toast({ title: "WhatsApp message schedule saved" });
-    },
-    onError: (error: ClientErrorLike) =>
-      toast({ title: "Unable to save", description: error.message, variant: "destructive" }),
-  });
-  const remove = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", "/api/whatsapp/message-schedules/" + id),
-    onSuccess: () => {
-      refresh();
-      toast({ title: "Schedule deleted" });
-    },
-    onError: (error: ClientErrorLike) =>
-      toast({ title: "Unable to delete", description: error.message, variant: "destructive" }),
-  });
-
-  const beginNew = () => {
-    setForm(blankForm());
-    setEditingId(null);
-    setEditorOpen(true);
-  };
-  const beginEdit = (item: Schedule) => {
-    setEditingId(item.id);
-    setForm({
-      title: item.title,
-      message: item.message,
-      timezone: item.timezone,
-      weeklyTimes: { ...item.weeklyTimes },
-      startDate: item.startDate,
-      endDate: item.endDate,
-      enabled: item.enabled,
-      recipientIds: [...item.recipientIds],
-    });
-    setEditorOpen(true);
-  };
-  const setField = <K extends keyof Form>(key: K, value: Form[K]) => setForm((old) => ({ ...old, [key]: value }));
-  const submit = () => {
-    if (!form.title.trim() || !form.message.trim()) {
-      toast({ title: "Enter a title and message", variant: "destructive" });
-      return;
-    }
-    if (!Object.keys(form.weeklyTimes).length || !form.recipientIds.length) {
-      toast({ title: "Select at least one day and WhatsApp group", variant: "destructive" });
-      return;
-    }
-    save.mutate({ id: editingId || undefined, values: form });
-  };
+    companyId,
+    editingId,
+    form,
+    setForm,
+    editorOpen,
+    setEditorOpen,
+    loading,
+    schedulesError,
+    schedules,
+    refetchSchedules,
+    whatsappSettings,
+    recipients,
+    history,
+    groups,
+    save,
+    remove,
+    beginNew,
+    beginEdit,
+    setField,
+    submit,
+  } = useScheduledWhatsAppMessagesTabState();
 
   return (
     <div className="space-y-6 max-w-5xl" data-testid="scheduled-whatsapp-messages-settings">

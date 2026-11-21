@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { readModuleFamily } from "../scripts/lib/readModuleFamily.mjs";
 
 const compositionPath = path.resolve(process.cwd(), "server/routes/reportsRoutes.ts");
 
@@ -39,7 +40,8 @@ describe("report route composition", () => {
     ];
 
     for (const [fileName, route] of expectedRoutes) {
-      const source = fs.readFileSync(path.resolve(process.cwd(), "server/routes", fileName), "utf8");
+      // A split module is read together with the siblings extracted from it.
+      const source = readModuleFamily(path.resolve(process.cwd(), "server/routes", fileName));
       expect(source).toContain(route);
       expect(source).toContain("requireAuth");
     }
