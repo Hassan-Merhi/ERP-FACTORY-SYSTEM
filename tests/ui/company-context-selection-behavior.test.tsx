@@ -179,6 +179,36 @@ describe("initial company selection", () => {
     expect(prefetched()).toHaveLength(0);
   });
 
+  it.each([
+    ["online", true],
+    ["offline", false],
+  ])("retries the %s startup selection when saving it fails", async (_label, online) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(online);
+    localStorage.setItem("selectedCompanyId", "2");
+    sessionCompanyId = 1;
+    const setItem = Storage.prototype.setItem;
+    let failures = 0;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (key === "selectedCompanyId" && failures === 0) {
+        failures += 1;
+        throw new Error("storage full");
+      }
+      return setItem.call(this, key, value);
+    });
+    const { result } = renderHook(() => useCompany(), { wrapper });
+
+    await waitFor(() => expect(error).toHaveBeenCalled());
+    expect(failures).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    await waitFor(() => expect(result.current.selectedCompany?.id).toBe(2));
+    expect(localStorage.getItem("selectedCompanyId")).toBe("2");
+  });
+
   it("lists each assigned company once and maps its permissions", async () => {
     harness.assignments = [
       assignment(1, { role: "POS", assignedLocationId: 7, posViewOnly: true }),
@@ -309,7 +339,10 @@ describe("selectCompany", () => {
     const { result } = await renderOnCompanyOne();
     let resolveServerSwitch!: (value: { ok: boolean }) => void;
     harness.apiRequest.mockImplementation(
-      () => new Promise<{ ok: boolean }>((resolve) => { resolveServerSwitch = resolve; })
+      () =>
+        new Promise<{ ok: boolean }>((resolve) => {
+          resolveServerSwitch = resolve;
+        })
     );
 
     let selection!: Promise<boolean>;

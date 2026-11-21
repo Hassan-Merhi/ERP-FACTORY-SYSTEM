@@ -352,3 +352,65 @@ describe("hotspot guard — hidden tabs", () => {
     expect(underlying).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("hotspot guard — company scope", () => {
+  /** The cache-scope module instance the freshly installed guard reads. */
+  const scope = () => import("@/lib/companyCacheScope");
+
+  it("never serves one company's snapshot to another", async () => {
+    const underlying: Underlying = vi.fn(async () => json([{ id: 1 }]));
+    const guarded = await installGuard(underlying);
+    const { activateCompanyCacheScope } = await scope();
+    activateCompanyCacheScope(1);
+
+    await guarded("/api/inventory");
+    await guarded("/api/inventory");
+    expect(underlying).toHaveBeenCalledTimes(1);
+
+    activateCompanyCacheScope(2);
+    await guarded("/api/inventory");
+    expect(underlying).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a company read while a company switch is in progress, without sending it", async () => {
+    const underlying: Underlying = vi.fn(async () => json([]));
+    const guarded = await installGuard(underlying);
+    const { activateCompanyCacheScope, beginCompanyCacheTransition } = await scope();
+    activateCompanyCacheScope(1);
+    beginCompanyCacheTransition();
+
+    await expect(guarded("/api/inventory")).rejects.toMatchObject({ name: "AbortError" });
+    expect(underlying).not.toHaveBeenCalled();
+  });
+
+  it("drops a response that arrives after the company changed, and does not snapshot it", async () => {
+    const first = pending();
+    const underlying: Underlying = vi
+      .fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>()
+      .mockReturnValueOnce(first.promise)
+      .mockImplementation(async () => json([{ id: 2 }]));
+    const guarded = await installGuard(underlying);
+    const { activateCompanyCacheScope } = await scope();
+    activateCompanyCacheScope(1);
+
+    const read = guarded("/api/inventory");
+    await flush();
+    activateCompanyCacheScope(2);
+    first.release(json([{ id: 1 }]));
+
+    await expect(read).rejects.toMatchObject({ name: "AbortError" });
+    await expect((await guarded("/api/inventory")).json()).resolves.toEqual([{ id: 2 }]);
+    expect(underlying).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps global reads such as the session check outside the company fence", async () => {
+    const underlying: Underlying = vi.fn(async () => json({ ok: true }));
+    const guarded = await installGuard(underlying);
+    const { isCompanyOwnedApiRead } = await scope();
+
+    expect(isCompanyOwnedApiRead("/api/auth/me")).toBe(false);
+    expect(isCompanyOwnedApiRead("/api/inventory")).toBe(true);
+    await guarded("/api/inventory");
+    expect(underlying).toHaveBeenCalledTimes(1);
+  });
+});
