@@ -10,8 +10,15 @@
  *
  * Owner decision 2026-11-20: a customer that looks like one the cloud already
  * has (same name, or same phone) is held, never created silently. An Admin or
- * Developer approving PHASE9_CUSTOMER_POSSIBLE_DUPLICATE creates it as a new
- * customer.
+ * Developer approving PHASE9_CUSTOMER_POSSIBLE_DUPLICATE either creates it as a
+ * new customer, or (Phase C1b) approves it as an existing cloud customer
+ * (`mergeInto`): nothing is created, the PC's customer and ledger are filed as
+ * that customer's, and every later entry naming them posts to it. A merge is
+ * refused while the PC's customer carries an opening balance (it would be
+ * lost) or the PC opened a ledger the existing customer does not have.
+ *
+ * The map is filed under the PC's record key when the PC sends one, so an
+ * entry one person makes on a PC can name a customer another made there.
  */
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { PoolClient } from "pg";
@@ -59,7 +66,12 @@ export interface Phase9CustomerCreateResult {
   businessDate: string;
 }
 
-type Context = { readonly overrideConflicts: readonly string[]; readonly siteId?: string };
+type Context = {
+  readonly overrideConflicts: readonly string[];
+  readonly siteId?: string;
+  readonly pcRecordSite?: string;
+  readonly mergeInto?: number;
+};
 
 // The live route is requireNonPOS with a verified create for Create Only; the
 // replay cannot repeat that verification, so Create Only is held as well.
@@ -116,10 +128,12 @@ async function apply(
   context: Context = { overrideConflicts: [] }
 ): Promise<Phase9CustomerCreateResult> {
   const p = event.payload;
-  if (!context.siteId) throw new Phase9ApplyRefusal("PHASE9_PC_RECORD_SITE_MISSING");
+  const site = context.pcRecordSite ?? context.siteId;
+  if (!site) throw new Phase9ApplyRefusal("PHASE9_PC_RECORD_SITE_MISSING");
   const mapped = await readPhase9PcRecordMapping(
     client,
-    context.siteId,
+    site,
+    event.companyId,
     PHASE9_PC_RECORD_TYPES.customer,
     p.localCustomerId
   );
@@ -127,7 +141,12 @@ async function apply(
 
   // Serialise creates per company so a look-alike and the next code cannot race.
   await client.query("SELECT pg_advisory_xact_lock(hashtext('phase9-customer-create'), $1)", [event.companyId]);
-  if (!context.overrideConflicts.includes(PHASE9_CUSTOMER_DUPLICATE_CONFLICT)) {
+  const approvedDuplicate = context.overrideConflicts.includes(PHASE9_CUSTOMER_DUPLICATE_CONFLICT);
+  const mapping = { siteId: site, companyId: event.companyId, operationId: event.operationId };
+  if (approvedDuplicate && context.mergeInto !== undefined) {
+    return mergeIntoExisting(client, event, context.mergeInto, mapping);
+  }
+  if (!approvedDuplicate) {
     const candidates = await lookalikes(client, event.companyId, p.customer);
     if (candidates.length) {
       throw new Phase9EventConflict(PHASE9_CUSTOMER_DUPLICATE_CONFLICT, {
@@ -156,7 +175,6 @@ async function apply(
     }
     throw error;
   }
-  const mapping = { siteId: context.siteId, companyId: event.companyId, operationId: event.operationId };
   await recordPhase9PcRecordMapping(client, {
     ...mapping,
     recordType: PHASE9_PC_RECORD_TYPES.customer,
@@ -179,6 +197,55 @@ async function apply(
   return { outcome: "cloud-applied", cloudRef: created.id, businessDate: p.businessDate };
 }
 
+type Mapping = { siteId: string; companyId: number; operationId: string };
+
+/** The PC's customer approved as an existing cloud customer: nothing is created. */
+async function mergeIntoExisting(
+  client: Queryable,
+  event: Phase9CustomerCreateEvent,
+  targetId: number,
+  mapping: Mapping
+): Promise<Phase9CustomerCreateResult> {
+  const p = event.payload;
+  const target = await client.query(
+    `SELECT id, ledger_account_id FROM customers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
+    [targetId, event.companyId]
+  );
+  if (!target.rows.length) {
+    throw new Phase9EventConflict("PHASE9_CUSTOMER_MERGE_TARGET_MISSING", { mergeInto: targetId });
+  }
+  // An opening balance the PC recorded would silently disappear in a merge.
+  if (Number(p.customer.openingBalance) !== 0) {
+    throw new Phase9EventConflict("PHASE9_CUSTOMER_MERGE_OPENING_BALANCE", {
+      mergeInto: targetId,
+      openingBalance: p.customer.openingBalance,
+      openingBalanceSide: p.customer.openingBalanceSide,
+    });
+  }
+  const targetLedger = target.rows[0].ledger_account_id == null ? null : Number(target.rows[0].ledger_account_id);
+  if (p.localLedgerAccountId !== null && targetLedger === null) {
+    throw new Phase9EventConflict("PHASE9_CUSTOMER_LEDGER_NOT_OPENED", {
+      mergeInto: targetId,
+      localLedgerAccountId: p.localLedgerAccountId,
+    });
+  }
+  await recordPhase9PcRecordMapping(client, {
+    ...mapping,
+    recordType: PHASE9_PC_RECORD_TYPES.customer,
+    localId: p.localCustomerId,
+    cloudId: targetId,
+  });
+  if (p.localLedgerAccountId !== null && targetLedger !== null) {
+    await recordPhase9PcRecordMapping(client, {
+      ...mapping,
+      recordType: PHASE9_PC_RECORD_TYPES.ledger,
+      localId: p.localLedgerAccountId,
+      cloudId: targetLedger,
+    });
+  }
+  return { outcome: "already-present", cloudRef: targetId, businessDate: p.businessDate };
+}
+
 async function verify(
   client: Queryable,
   event: Phase9CustomerCreateEvent,
@@ -187,10 +254,14 @@ async function verify(
   const row = await client.query(
     `SELECT c.legal_name FROM factory_edge_pc_record_map m
        JOIN customers c ON c.id = m.cloud_id
-      WHERE m.record_type = 'customer' AND m.local_id = $1 AND m.cloud_id = $2 AND c.company_id = $3`,
+      WHERE m.record_type = 'customer' AND m.local_id = $1 AND m.cloud_id = $2
+        AND m.company_id = $3 AND c.company_id = $3`,
     [event.payload.localCustomerId, result.cloudRef, event.companyId]
   );
-  return row.rows.length === 1 && String(row.rows[0].legal_name) === event.payload.customer.legalName;
+  if (row.rows.length < 1) return false;
+  // A created customer carries the PC's name; an existing one (a replay, or a
+  // merge) keeps its own.
+  return result.outcome !== "cloud-applied" || String(row.rows[0].legal_name) === event.payload.customer.legalName;
 }
 
 export const phase9CustomerCreateApplyHandler = Object.freeze({ authorize, apply, verify });

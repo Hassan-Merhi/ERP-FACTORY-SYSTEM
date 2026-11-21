@@ -14,6 +14,13 @@
  * customer in its own transaction; discarding a held customer on the PC also
  * refuses the entries naming it; and the guard lets POST /api/customers
  * through only in entry mode.
+ *
+ * Phase C1b: an entry one person makes on a PC can name a customer another
+ * person created there (the map is filed under the PC's record key, not the
+ * per-person device id); a held customer can be approved as an existing one
+ * (nothing created, its later entries post to the existing customer), refused
+ * while it carries an opening balance or names a customer the cloud does not
+ * have; and a merge is only offered for a held new customer.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -27,7 +34,8 @@ import { makePcLocalReadOnlyGuard } from "../server/offline/pcLocal/localReadOnl
 import { phase9CustomerCreateEnvelope } from "../server/edge/phase9CustomerCreateEnvelope.mjs";
 import { createCustomerTx } from "../server/routes/customers/customerService";
 import { translatePhase9PcRecords } from "../server/edge/phase9PcRecordMap.mjs";
-import { resolveConflict } from "../scripts/pc-sync/local/outbox.mjs";
+import { pcRecordKey, resolveConflict } from "../scripts/pc-sync/local/outbox.mjs";
+import { readPhase9PcRecordMapping } from "../server/edge/phase9PcRecordMap.mjs";
 import { capturePcCustomerCreateTx } from "../server/routes/customers/customerPcCapture";
 import { loadPcSyncPolicy } from "../server/offline/pcSync/tablePolicy.mjs";
 import { prepareLocalDatabase } from "../scripts/pc-sync/local/localStore.mjs";
@@ -36,12 +44,15 @@ import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from
 
 const PREFIX = `pccust_${Date.now()}`;
 const DEVICE = randomUUID();
+// The same PC as another person sees it: its own delivery device id.
+const SECOND_DEVICE = randomUUID();
+const PC_KEY = randomUUID();
 const KIND = "customer.create.v1";
 let ctx: TestContext;
 let agent: ReturnType<typeof request.agent>;
 let localId = 1_000_000_100;
 
-function customerEnvelope(legalName: string, phone: string | null = null) {
+function customerEnvelope(legalName: string, phone: string | null = null, openingBalance = "0") {
   localId += 2;
   const requestId = randomUUID();
   return phase9CustomerCreateEnvelope({
@@ -55,7 +66,7 @@ function customerEnvelope(legalName: string, phone: string | null = null) {
     customer: {
       legalName,
       phone,
-      openingBalance: "0",
+      openingBalance,
       openingBalanceSide: "Dr",
       active: true,
       statementNote: null,
@@ -65,7 +76,11 @@ function customerEnvelope(legalName: string, phone: string | null = null) {
   });
 }
 
-function deliver(envelope: { requestId: string; localCustomerId: number }, override?: string) {
+function deliver(
+  envelope: { requestId: string; localCustomerId: number },
+  override?: string,
+  extra: { deviceId?: string; pcKey?: string; mergeInto?: number } = {}
+) {
   return agent.post("/api/offline/pc-sync/operations").send({
     deviceId: DEVICE,
     operationId: envelope.requestId,
@@ -74,15 +89,43 @@ function deliver(envelope: { requestId: string; localCustomerId: number }, overr
     capturedAt: new Date().toISOString(),
     envelope,
     ...(override ? { override } : {}),
+    ...extra,
   });
 }
 
-async function mapping(localRecord: number) {
+async function mapping(localRecord: number, site = DEVICE) {
   const { rows } = await pool.query(
     "SELECT record_type, cloud_id FROM factory_edge_pc_record_map WHERE site_id = $1::uuid AND local_id = $2",
-    [DEVICE, localRecord]
+    [site, localRecord]
   );
   return rows.map((r) => ({ type: String(r.record_type), cloudId: Number(r.cloud_id) }));
+}
+
+function salesVoucher(customerId: number, ledgerAccountId: number, extra: { deviceId?: string; pcKey?: string } = {}) {
+  return agent.post("/api/offline/pc-sync/operations").send({
+    deviceId: DEVICE,
+    operationId: randomUUID(),
+    kind: "voucher.sales.v1",
+    localRef: (localId += 2) + 50,
+    capturedAt: new Date().toISOString(),
+    input: {
+      clientRequestId: randomUUID(),
+      voucher: { voucherType: "Sales", voucherDate: new Date().toISOString().slice(0, 10), description: PREFIX },
+      entries: [
+        { customerId, ledgerAccountId, debitAmount: "12.00", creditAmount: "0" },
+        { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "12.00" },
+      ],
+    },
+    ...extra,
+  });
+}
+
+async function debitLine(voucherId: number) {
+  const lines = await pool.query(
+    "SELECT customer_id, ledger_account_id FROM voucher_entries WHERE voucher_id = $1 AND debit_amount > 0",
+    [voucherId]
+  );
+  return lines.rows.map((r) => [Number(r.customer_id), Number(r.ledger_account_id)]);
 }
 
 beforeAll(async () => {
@@ -99,10 +142,12 @@ afterAll(async () => {
   delete process.env.OFFLINE_BROWSER_SYNC_ENABLED;
   delete process.env.OFFLINE_PC_LOCAL_MODE;
   await pool.query("ALTER TABLE factory_edge_applied_events DISABLE TRIGGER USER");
-  await pool.query("DELETE FROM factory_edge_applied_events WHERE site_id = $1::uuid", [DEVICE]);
+  await pool.query("DELETE FROM factory_edge_applied_events WHERE site_id = ANY($1::uuid[])", [
+    [DEVICE, SECOND_DEVICE],
+  ]);
   await pool.query("ALTER TABLE factory_edge_applied_events ENABLE TRIGGER USER");
   await pool.query("ALTER TABLE factory_edge_pc_record_map DISABLE TRIGGER USER");
-  await pool.query("DELETE FROM factory_edge_pc_record_map WHERE site_id = $1::uuid", [DEVICE]);
+  await pool.query("DELETE FROM factory_edge_pc_record_map WHERE site_id = ANY($1::uuid[])", [[DEVICE, PC_KEY]]);
   await pool.query("ALTER TABLE factory_edge_pc_record_map ENABLE TRIGGER USER");
   await cleanupTestData(PREFIX);
   closeTestServer();
@@ -203,6 +248,7 @@ describe("PC offline customers: in the cloud", () => {
       }),
     };
     const event = (paymentAccountType: string) => ({
+      companyId: 1,
       payload: { paymentAccountType, paymentAccountId: 1_000_000_007, items: [{ stockItemId: 5 }] },
     });
     expect((await translatePhase9PcRecords(queryable, DEVICE, event("credit"))).payload.paymentAccountId).toBe(70);
@@ -211,6 +257,85 @@ describe("PC offline customers: in the cloud", () => {
     expect((await translatePhase9PcRecords(queryable, DEVICE, event("bank"))).payload.paymentAccountId).toBe(
       1_000_000_007
     );
+  });
+
+  it("lets another person on the same PC name a customer created there", async () => {
+    const envelope = customerEnvelope(`${PREFIX} Shared PC Customer`);
+    const created = await deliver(envelope, undefined, { pcKey: PC_KEY });
+    expect(created.status, JSON.stringify(created.body)).toBe(200);
+    expect(await mapping(envelope.localCustomerId, PC_KEY)).toHaveLength(1);
+    expect(await mapping(envelope.localCustomerId)).toEqual([]);
+    const ledger = (await mapping(envelope.localLedgerAccountId!, PC_KEY))[0].cloudId;
+
+    // The second person's entries come from another delivery device id: with the
+    // PC's key they resolve the customer; without it they would wait for ever.
+    const local = [envelope.localCustomerId, envelope.localLedgerAccountId!] as const;
+    const without = await salesVoucher(...local, { deviceId: SECOND_DEVICE });
+    expect(without.status).toBe(202);
+    const sale = await salesVoucher(...local, { deviceId: SECOND_DEVICE, pcKey: PC_KEY });
+    expect(sale.status, JSON.stringify(sale.body)).toBe(200);
+    expect(await debitLine(Number(sale.body.cloudRef))).toEqual([[Number(created.body.cloudRef), ledger]]);
+  });
+
+  it("never answers a PC record filed under the same key by another company", async () => {
+    const queryable = { query: async () => ({ rows: [{ cloud_id: 70, company_id: 2 }] }) };
+    expect(await readPhase9PcRecordMapping(queryable, PC_KEY, 2, "customer", 1_000_000_001)).toBe(70);
+    await expect(readPhase9PcRecordMapping(queryable, PC_KEY, 3, "customer", 1_000_000_001)).rejects.toThrow(
+      "PHASE9_PC_RECORD_KEY_FOREIGN"
+    );
+    // The key is per PC and per company, and never the device id itself.
+    expect(pcRecordKey("pc-1", 7)).toBe(pcRecordKey("pc-1", 7));
+    expect(pcRecordKey("pc-1", 7)).not.toBe(pcRecordKey("pc-1", 8));
+    expect(pcRecordKey("pc-1", 7)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it("approves a held customer as the existing one: nothing created, later entries post to it", async () => {
+    const existing = customerEnvelope(`${PREFIX} Banda Hardware`, "0966 222 333");
+    const first = await deliver(existing);
+    expect(first.status).toBe(200);
+    const existingId = Number(first.body.cloudRef);
+    const existingLedger = (await mapping(existing.localLedgerAccountId!))[0].cloudId;
+
+    const lookalike = customerEnvelope(`${PREFIX} BANDA HARDWARE`);
+    const held = await deliver(lookalike);
+    expect(held.status).toBe(409);
+    expect(held.body.detail.candidates).toEqual(
+      expect.arrayContaining([expect.objectContaining({ customerId: existingId })])
+    );
+
+    // A merge is only taken with the duplicate approval, and only for a customer the company has.
+    expect((await deliver(lookalike, undefined, { mergeInto: existingId })).status).toBe(400);
+    const missing = await deliver(lookalike, "PHASE9_CUSTOMER_POSSIBLE_DUPLICATE", { mergeInto: 999_999_999 });
+    expect(missing.status).toBe(409);
+    expect(missing.body).toMatchObject({ code: "PHASE9_CUSTOMER_MERGE_TARGET_MISSING", overridable: false });
+
+    const merged = await deliver(lookalike, "PHASE9_CUSTOMER_POSSIBLE_DUPLICATE", { mergeInto: existingId });
+    expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+    expect(merged.body).toMatchObject({ outcome: "already-present", cloudRef: existingId });
+    expect(await mapping(lookalike.localCustomerId)).toEqual([{ type: "customer", cloudId: existingId }]);
+    expect(await mapping(lookalike.localLedgerAccountId!)).toEqual([
+      { type: "ledger_account", cloudId: existingLedger },
+    ]);
+    const named = await pool.query(
+      "SELECT count(*)::int AS n FROM customers WHERE company_id = $1 AND lower(legal_name) = lower($2)",
+      [ctx.companyId, existing.customer.legalName]
+    );
+    expect(named.rows[0].n).toBe(1);
+
+    const sale = await salesVoucher(lookalike.localCustomerId, lookalike.localLedgerAccountId!);
+    expect(sale.status, JSON.stringify(sale.body)).toBe(200);
+    expect(await debitLine(Number(sale.body.cloudRef))).toEqual([[existingId, existingLedger]]);
+  });
+
+  it("refuses to merge a held customer that carries an opening balance", async () => {
+    const existing = customerEnvelope(`${PREFIX} Phiri Farms`);
+    const existingId = Number((await deliver(existing)).body.cloudRef);
+    const withBalance = customerEnvelope(`${PREFIX} Phiri Farms`, null, "150.00");
+    expect((await deliver(withBalance)).status).toBe(409);
+    const refused = await deliver(withBalance, "PHASE9_CUSTOMER_POSSIBLE_DUPLICATE", { mergeInto: existingId });
+    expect(refused.status).toBe(409);
+    expect(refused.body).toMatchObject({ code: "PHASE9_CUSTOMER_MERGE_OPENING_BALANCE", overridable: false });
+    expect(await mapping(withBalance.localCustomerId)).toEqual([]);
   });
 
   it("refuses customer envelopes on the browser route", async () => {
@@ -317,6 +442,23 @@ describe("PC offline customers: on the PC", () => {
     expect(byId.get(sale)).toEqual(["refused", "PC_SYNC_NAMES_DISCARDED_CUSTOMER"]);
     expect(byId.get(credit)).toEqual(["refused", "PC_SYNC_NAMES_DISCARDED_CUSTOMER"]);
     expect(byId.get(unrelated)).toEqual(["pending", null]);
+    await local.query("DELETE FROM pc_local.outbox");
+  });
+
+  it("offers a merge only for a held new customer", async () => {
+    await local.query("DELETE FROM pc_local.outbox");
+    const { rows } = await local.query(
+      `INSERT INTO pc_local.outbox (operation_id, kind, input, local_ref, user_id, company_id, status, code, overridable)
+       VALUES ($1::uuid, 'stock.adjust.v1', '{}'::jsonb, 1, 'u1', 7, 'conflict', 'PHASE9_STOCK_NEGATIVE', true)
+       RETURNING operation_id`,
+      [randomUUID()]
+    );
+    await expect(
+      resolveConflict(local, null as never, rows[0].operation_id, "approve", { mergeInto: 5 })
+    ).rejects.toMatchObject({ code: "PC_SYNC_MERGE_NOT_ALLOWED" });
+    await expect(
+      resolveConflict(local, null as never, rows[0].operation_id, "discard", { mergeInto: 5 })
+    ).rejects.toMatchObject({ code: "PC_SYNC_DECISION_INVALID" });
     await local.query("DELETE FROM pc_local.outbox");
   });
 

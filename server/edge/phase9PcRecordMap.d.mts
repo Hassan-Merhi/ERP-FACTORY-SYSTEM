@@ -10,7 +10,7 @@ export declare class Phase9PcRecordNotYetSynced extends Error {
   constructor(missing: string[]);
 }
 
-export declare function translatePhase9PcRecords<T extends { payload: unknown }>(
+export declare function translatePhase9PcRecords<T extends { payload: unknown; companyId: number }>(
   queryable: Queryable,
   siteId: string,
   event: T
@@ -19,6 +19,7 @@ export declare function translatePhase9PcRecords<T extends { payload: unknown }>
 export declare function readPhase9PcRecordMapping(
   queryable: Queryable,
   siteId: string,
+  companyId: number,
   recordType: Phase9PcRecordType,
   localId: number
 ): Promise<number | null>;

@@ -58,10 +58,14 @@ async function reviewHeldEntries() {
     return dialog.showMessageBox(mainWindow, { type: 'info', title: 'Held entries', message: 'No entries are held.' });
   }
   for (const entry of held) {
+    // A new customer that looks like existing ones: it can also be approved as
+    // one of them (Admin/Developer), so nothing new is created.
+    const candidates = (!entry.unconfirmed && entry.overridable && entry.candidates) || [];
+    const sameAs = candidates.map((c) => `Same as ${c.code} ${c.legalName}`.trim());
     const buttons = entry.unconfirmed
       ? ['Send it', 'Discard', 'Later']
       : entry.overridable
-        ? ['Approve (Admin/Developer)', 'Discard', 'Later']
+        ? [candidates.length ? 'Create as new (Admin/Developer)' : 'Approve (Admin/Developer)', ...sameAs, 'Discard', 'Later']
         : ['Discard', 'Later'];
     const { response } = await dialog.showMessageBox(mainWindow, {
       type: 'question',
@@ -69,12 +73,17 @@ async function reviewHeldEntries() {
       message: `${entry.kind} from ${new Date(entry.capturedAt).toLocaleString()}`,
       detail: entry.unconfirmed
         ? 'This PC stopped while the entry was being saved, so it is not certain it was saved. Send it if you made it; discard it if you did not.'
-        : `The cloud did not apply it: ${entry.code}. Approving applies it anyway. Discarding drops it; the cloud is not changed.`,
+        : candidates.length
+          ? 'This new customer looks like an existing one. Create it as a new customer, or choose the existing customer it is: its sales and payments from this PC then go to that customer. Discarding drops it and the entries that name it.'
+          : `The cloud did not apply it: ${entry.code}. Approving applies it anyway. Discarding drops it; the cloud is not changed.`,
       buttons,
       cancelId: buttons.length - 1,
     });
     const choice = buttons[response];
-    if (choice.startsWith('Approve') || choice === 'Send it') localMode.decide(entry.operationId, 'approve');
+    const merged = sameAs.indexOf(choice);
+    if (merged >= 0) localMode.decide(entry.operationId, 'approve', candidates[merged].customerId);
+    else if (choice.startsWith('Approve') || choice.startsWith('Create as new') || choice === 'Send it')
+      localMode.decide(entry.operationId, 'approve');
     else if (choice === 'Discard') localMode.decide(entry.operationId, 'discard');
   }
 }

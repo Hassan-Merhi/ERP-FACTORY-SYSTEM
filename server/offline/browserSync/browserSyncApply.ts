@@ -26,6 +26,7 @@ import { phase9OverridableConflicts, validatePhase9Event } from "../../edge/phas
 import { Phase9EventConflict } from "../../edge/phase9CloudEventStore.mjs";
 import { Phase9StockItemNotYetSynced, translatePhase9LanStockItems } from "../../edge/phase9StockItemMap.mjs";
 import { Phase9PcRecordNotYetSynced, translatePhase9PcRecords } from "../../edge/phase9PcRecordMap.mjs";
+import { pcRequestExtras } from "./pcRequestExtras";
 import { PC_ENVELOPE_KINDS } from "./pcEnvelopeKinds";
 
 export { PC_ENVELOPE_KINDS };
@@ -63,6 +64,9 @@ export interface BrowserOperationRequest {
   envelope?: Record<string, unknown>;
   /** A conflict code the user (Admin/Developer) approves, the factory's version winning. */
   override?: string | null;
+  /** PC route only (see pcRequestExtras): the PC's record key, and a held customer's merge target. */
+  pcKey?: string;
+  mergeInto?: number;
 }
 
 export interface BrowserReceipt {
@@ -374,6 +378,9 @@ export async function applyBrowserOperation(
       if (prior) return { status: "applied" as const, receipt: prior };
 
       const override = typeof request.override === "string" && request.override ? request.override : null;
+      const pcRoute = options.allowEnvelope === true;
+      const extras = pcRequestExtras(request, { pcRoute, deviceId, kind: prepared.event.kind, override });
+      if (!extras) throw new BrowserSyncRefusal("OFFLINE_BROWSER_REQUEST_INVALID", 400);
       if (override) {
         const allowed = phase9OverridableConflicts(prepared.stream, prepared.event.kind).includes(override);
         const preApproved = options.preApprovedOverrides?.includes(override) === true;
@@ -389,7 +396,7 @@ export async function applyBrowserOperation(
       // ledgers) are named by the cloud's ids before the handler sees them.
       const handled = await translatePhase9PcRecords(
         client,
-        deviceId,
+        extras.recordSite,
         await translatePhase9LanStockItems(client, deviceId, prepared.event)
       );
       await handler.authorize(client, handled as never);
@@ -399,6 +406,8 @@ export async function applyBrowserOperation(
         {
           overrideConflicts: override ? [override] : [],
           siteId: deviceId,
+          pcRecordSite: extras.recordSite,
+          ...(extras.mergeInto !== undefined ? { mergeInto: extras.mergeInto } : {}),
         } as never
       )) as { outcome: "cloud-applied" | "already-present"; cloudRef: number; businessDate: string };
       if (

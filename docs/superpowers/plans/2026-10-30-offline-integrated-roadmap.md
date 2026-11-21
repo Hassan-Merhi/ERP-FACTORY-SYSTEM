@@ -254,8 +254,13 @@ plan are in the plan document and the
   the cloud through the live service, with the PC's customer and ledger ids
   mapped (`factory_edge_pc_record_map`, migration 0013) and translated in later
   entries; look-alikes held, approve creates new.
-- Next: merge a held customer into an existing one (C1b), master edits with
-  clash holds, suppliers and accounts; then Phases D and E.
+- Phase C1b: a held customer can be approved as an existing cloud customer
+  (nothing created; its later entries post to the existing one; refused while
+  it carries an opening balance), and the map is filed under a per-PC record
+  key shared by everyone using the PC, so one person's entry can name a
+  customer another person created there. Map reads are always for one company.
+- Next: master edits with clash holds, suppliers and accounts; then Phases D
+  and E.
 
 ## Resume checklist (next session)
 

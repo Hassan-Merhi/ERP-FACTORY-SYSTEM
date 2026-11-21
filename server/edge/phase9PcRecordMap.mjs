@@ -11,7 +11,12 @@
  * One the cloud has not created yet makes the apply wait
  * (Phase9PcRecordNotYetSynced, no conflict recorded); the customer's own create
  * comes first on the same stream.
+ *
+ * The map is filed per PC (`site_id`: the PC's record key, shared by everyone
+ * using it, or the delivery device id without one) and always read for one
+ * company only, so one company's rows never translate another's entries.
  */
+import { Phase9ApplyRefusal } from "./ensurePhase9CloudEventSchema.mjs";
 import { PHASE9_PC_RECORD_ID_BASE } from "./phase9CustomerCreateEnvelope.mjs";
 
 export const PHASE9_PC_RECORD_TYPES = Object.freeze({ customer: "customer", ledger: "ledger_account" });
@@ -102,8 +107,8 @@ export async function translatePhase9PcRecords(queryable, siteId, event) {
   if (!wanted.size) return event;
   const rows = await queryable.query(
     `SELECT record_type, local_id, cloud_id FROM factory_edge_pc_record_map
-      WHERE site_id = $1::uuid AND local_id = ANY($2::int[])`,
-    [siteId, [...new Set([...wanted.values()].map(([, id]) => id))]]
+      WHERE site_id = $1::uuid AND company_id = $2 AND local_id = ANY($3::int[])`,
+    [siteId, event.companyId, [...new Set([...wanted.values()].map(([, id]) => id))]]
   );
   const map = new Map(rows.rows.map((row) => [mapKey(row.record_type, Number(row.local_id)), Number(row.cloud_id)]));
   const missing = [...wanted.keys()].filter((key) => !map.has(key));
@@ -111,13 +116,20 @@ export async function translatePhase9PcRecords(queryable, siteId, event) {
   return { ...event, payload: replace(event.payload, map) };
 }
 
-export async function readPhase9PcRecordMapping(queryable, siteId, recordType, localId) {
+/**
+ * The cloud id a PC's local record became, or null. A row filed under the same
+ * key by another company is never answered: it is refused, as the key is not
+ * that company's.
+ */
+export async function readPhase9PcRecordMapping(queryable, siteId, companyId, recordType, localId) {
   const row = await queryable.query(
-    `SELECT cloud_id FROM factory_edge_pc_record_map
+    `SELECT cloud_id, company_id FROM factory_edge_pc_record_map
       WHERE site_id = $1::uuid AND record_type = $2 AND local_id = $3`,
     [siteId, recordType, localId]
   );
-  return row.rows.length ? Number(row.rows[0].cloud_id) : null;
+  if (!row.rows.length) return null;
+  if (Number(row.rows[0].company_id) !== companyId) throw new Phase9ApplyRefusal("PHASE9_PC_RECORD_KEY_FOREIGN");
+  return Number(row.rows[0].cloud_id);
 }
 
 export async function recordPhase9PcRecordMapping(queryable, input) {
