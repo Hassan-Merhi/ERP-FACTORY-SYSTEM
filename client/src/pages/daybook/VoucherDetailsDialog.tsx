@@ -135,7 +135,8 @@ export function VoucherDetailsDialog({
   if (!selectedVoucher) return null;
 
   const isPOSUser = !user || user?.role === "POS";
-  const isAutomaticFx = selectedVoucher.voucherType === "Journal" &&
+  const isAutomaticFx =
+    selectedVoucher.voucherType === "Journal" &&
     (selectedVoucher.description ?? "").startsWith("Automatic FX revaluation (");
   const mayCorrectFx = isAutomaticFx && (user?.role === "Admin" || user?.role === "Owner");
   const resolveEntryName = createEntryNameResolver(employees, ledgerAccounts, bankAccounts);
@@ -151,175 +152,183 @@ export function VoucherDetailsDialog({
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Voucher Details</DialogTitle>
-          <DialogDescription>
-            {selectedVoucher.voucherType === "Purchase"
-              ? "View voucher information"
-              : `${selectedVoucher.voucherNumber} — ${formatDisplayDate(selectedVoucher.voucherDate)}`}
-          </DialogDescription>
-        </DialogHeader>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="w-full max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Voucher Details</DialogTitle>
+            <DialogDescription>
+              {selectedVoucher.voucherType === "Purchase"
+                ? "View voucher information"
+                : `${selectedVoucher.voucherNumber} — ${formatDisplayDate(selectedVoucher.voucherDate)}`}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {isInvoiceLike ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Date</p>
-                  <p className="text-sm font-medium">{formatDisplayDate(selectedVoucher.voucherDate)}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Type</p>
-                  <Badge {...getVoucherTypeBadge(selectedVoucher.voucherType)}>{selectedVoucher.voucherType}</Badge>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Description</p>
-                  <p className="text-sm leading-relaxed">{selectedVoucher.description || "—"}</p>
-                </div>
-                {isSalesLike && selectedVoucher.locationName && (
+          <div className="space-y-6 py-4">
+            {isInvoiceLike ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">Location</p>
-                    <p className="text-sm font-medium">{selectedVoucher.locationName}</p>
+                    <p className="text-xs text-muted-foreground">Date</p>
+                    <p className="text-sm font-medium">{formatDisplayDate(selectedVoucher.voucherDate)}</p>
                   </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1">
-                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Description</span>
-                <p className="text-sm leading-relaxed">{selectedVoucher.description || "No description provided."}</p>
-              </div>
-              <div className="space-y-1 md:text-right">
-                <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Created At</span>
-                <p className="text-sm font-mono">
-                  {formatDisplayDate(selectedVoucher.createdAt)} {formatDisplayTime(selectedVoucher.createdAt)}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                Entries
-                {viewEntriesLoading && <Skeleton className="h-4 w-4 rounded-full" />}
-              </h3>
-              {isSalesLike && !isPOSUser && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Filter:</span>
-                  <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-lg">
-                    {PROFIT_FILTERS.map((filter) => (
-                      <Button
-                        key={filter}
-                        variant={viewProfitFilter === filter ? "secondary" : "ghost"}
-                        size="sm"
-                        className="h-7 text-xs px-2.5 capitalize"
-                        onClick={() => setViewProfitFilter(filter)}
-                      >
-                        {filter}
-                      </Button>
-                    ))}
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Type</p>
+                    <Badge {...getVoucherTypeBadge(selectedVoucher.voucherType)}>{selectedVoucher.voucherType}</Badge>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {viewEntriesLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Description</p>
+                    <p className="text-sm leading-relaxed">{selectedVoucher.description || "—"}</p>
+                  </div>
+                  {isSalesLike && selectedVoucher.locationName && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Location</p>
+                      <p className="text-sm font-medium">{selectedVoucher.locationName}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="border rounded-lg overflow-hidden">
-                {selectedVoucher.voucherType === "Purchase" ? (
-                  <PurchaseVoucherEntries
-                    viewVoucherEntries={viewVoucherEntries}
-                    purchaseOrderData={purchaseOrderData}
-                    poSupplierBalance={poSupplierBalance}
-                    isPOSUser={isPOSUser}
-                    formatAmount={formatAmount}
-                    onOpenChange={onOpenChange}
-                    navigate={navigate}
-                  />
-                ) : isSalesLike ? (
-                  <SalesVoucherEntries
-                    viewVoucherEntries={viewVoucherEntries}
-                    viewProfitFilter={viewProfitFilter}
-                    isPOSUser={isPOSUser}
-                    cashAccountBalance={cashAccountBalance}
-                    entryBalances={entryBalances}
-                    selectedDialogRow={selectedDialogRow}
-                    setSelectedDialogRow={setSelectedDialogRow}
-                    formatAmount={formatAmount}
-                  />
-                ) : (
-                  <LedgerVoucherEntries
-                    selectedVoucher={selectedVoucher}
-                    viewVoucherEntries={gcOwnerWithdrawalPresentation.entries}
-                    isPOSUser={isPOSUser}
-                    isStockTransferType={isStockTransferType}
-                    transferDetail={transferDetail}
-                    cashAccountBalance={cashAccountBalance}
-                    entryBalances={gcOwnerWithdrawalPresentation.entryBalances}
-                    formatAmount={formatAmount}
-                    resolveEntryName={resolveEntryName}
-                    user={user}
-                  />
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1">
+                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                    Description
+                  </span>
+                  <p className="text-sm leading-relaxed">{selectedVoucher.description || "No description provided."}</p>
+                </div>
+                <div className="space-y-1 md:text-right">
+                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Created At</span>
+                  <p className="text-sm font-mono">
+                    {formatDisplayDate(selectedVoucher.createdAt)} {formatDisplayTime(selectedVoucher.createdAt)}
+                  </p>
+                </div>
               </div>
             )}
 
-            {appMode === "erp" && <VoucherCostCenters voucherId={selectedVoucher.id} />}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  Entries
+                  {viewEntriesLoading && <Skeleton className="h-4 w-4 rounded-full" />}
+                </h3>
+                {isSalesLike && !isPOSUser && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Filter:</span>
+                    <div className="flex items-center gap-1 p-1 bg-muted/50 rounded-lg">
+                      {PROFIT_FILTERS.map((filter) => (
+                        <Button
+                          key={filter}
+                          variant={viewProfitFilter === filter ? "secondary" : "ghost"}
+                          size="sm"
+                          className="h-7 text-xs px-2.5 capitalize"
+                          onClick={() => setViewProfitFilter(filter)}
+                        >
+                          {filter}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            {isStockTransferVoucher && (
-              <VoucherRevisionHistory
-                voucherRevisions={voucherRevisions}
-                revisionsLoading={revisionsLoading}
-                revisionsError={revisionsError}
-                revisionsErrorMessage={revisionsErrorMessage}
-                retryVoucherRevisions={retryVoucherRevisions}
-              />
-            )}
+              {viewEntriesLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  {selectedVoucher.voucherType === "Purchase" ? (
+                    <PurchaseVoucherEntries
+                      viewVoucherEntries={viewVoucherEntries}
+                      purchaseOrderData={purchaseOrderData}
+                      poSupplierBalance={poSupplierBalance}
+                      isPOSUser={isPOSUser}
+                      formatAmount={formatAmount}
+                      onOpenChange={onOpenChange}
+                      navigate={navigate}
+                    />
+                  ) : isSalesLike ? (
+                    <SalesVoucherEntries
+                      viewVoucherEntries={viewVoucherEntries}
+                      viewProfitFilter={viewProfitFilter}
+                      isPOSUser={isPOSUser}
+                      cashAccountBalance={cashAccountBalance}
+                      entryBalances={entryBalances}
+                      selectedDialogRow={selectedDialogRow}
+                      setSelectedDialogRow={setSelectedDialogRow}
+                      formatAmount={formatAmount}
+                    />
+                  ) : (
+                    <LedgerVoucherEntries
+                      selectedVoucher={selectedVoucher}
+                      viewVoucherEntries={gcOwnerWithdrawalPresentation.entries}
+                      isPOSUser={isPOSUser}
+                      isStockTransferType={isStockTransferType}
+                      transferDetail={transferDetail}
+                      cashAccountBalance={cashAccountBalance}
+                      entryBalances={gcOwnerWithdrawalPresentation.entryBalances}
+                      formatAmount={formatAmount}
+                      resolveEntryName={resolveEntryName}
+                      user={user}
+                    />
+                  )}
+                </div>
+              )}
+
+              {appMode === "erp" && <VoucherCostCenters voucherId={selectedVoucher.id} />}
+
+              {isStockTransferVoucher && (
+                <VoucherRevisionHistory
+                  voucherRevisions={voucherRevisions}
+                  revisionsLoading={revisionsLoading}
+                  revisionsError={revisionsError}
+                  revisionsErrorMessage={revisionsErrorMessage}
+                  retryVoucherRevisions={retryVoucherRevisions}
+                />
+              )}
+            </div>
           </div>
-        </div>
 
-        <DialogFooter className="gap-2 pt-2 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close-view-dialog">
-            Close
-          </Button>
-          {mayCorrectFx && (
-            <Button onClick={() => { onOpenChange(false); setCorrectFxOpen(true); }}
-              data-testid="button-correct-automatic-fx">Correct FX</Button>
-          )}
-          {!isAutomaticFx && canEdit(selectedVoucher) && (
-            <Button
-              onClick={() => {
-                onOpenChange(false);
-                if (selectedVoucher.voucherType === "Purchase" && purchaseOrderData?.id) {
-                  navigate(`/purchase-orders/${purchaseOrderData.id}/edit`);
-                } else {
-                  handleEdit(selectedVoucher);
-                }
-              }}
-              data-testid="button-edit-from-view-dialog"
-            >
-              <Pencil className="w-4 h-4 mr-2" />
-              Edit
+          <DialogFooter className="gap-2 pt-2 border-t">
+            <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close-view-dialog">
+              Close
             </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    {mayCorrectFx && (
-      <FxRevaluationCorrectionDialog open={correctFxOpen}
-        onOpenChange={setCorrectFxOpen} voucher={selectedVoucher} />
-    )}
+            {mayCorrectFx && (
+              <Button
+                onClick={() => {
+                  onOpenChange(false);
+                  setCorrectFxOpen(true);
+                }}
+                data-testid="button-correct-automatic-fx"
+              >
+                Correct FX
+              </Button>
+            )}
+            {!isAutomaticFx && canEdit(selectedVoucher) && (
+              <Button
+                onClick={() => {
+                  onOpenChange(false);
+                  if (selectedVoucher.voucherType === "Purchase" && purchaseOrderData?.id) {
+                    navigate(`/purchase-orders/${purchaseOrderData.id}/edit`);
+                  } else {
+                    handleEdit(selectedVoucher);
+                  }
+                }}
+                data-testid="button-edit-from-view-dialog"
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {mayCorrectFx && (
+        <FxRevaluationCorrectionDialog open={correctFxOpen} onOpenChange={setCorrectFxOpen} voucher={selectedVoucher} />
+      )}
     </>
   );
 }

@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+# A new merge must not cancel the run already certifying the previous one:
+# with cancel-in-progress a quick series of merges left most main SHAs with no
+# verdict at all, so a breaking commit went unseen until it was buried. Runs in
+# progress now finish; GitHub still keeps only the newest pending run, so the
+# latest main is always certified.
 concurrency:
   group: main-certification
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # Main Certification used to run every gate one after another in a single

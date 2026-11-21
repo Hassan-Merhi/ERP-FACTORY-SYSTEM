@@ -35,6 +35,36 @@ The live ruleset currently names 16 required status contexts:
 15. `ci/circleci: frontend-regression`
 16. `ci/circleci: security-readiness`
 
+## 2026-11-21 finding: red pull requests reach main
+
+On 2026-11-20 and 2026-11-21 at least six merges each passed their own pull-request CI and still broke `main`
+together, and several merged while their own CI was red (for example #3380, merged with seven unformatted files).
+Main Certification, which runs on every push to `main`, reported most of these, but it failed on nearly every
+commit and nobody acted on it.
+
+Two causes:
+
+1. **The ruleset cannot be satisfied by a pull request.** Fifteen of the sixteen required contexts listed below
+   never run on a pull request, so no PR can ever show all of them green. Merging therefore always goes through a
+   bypass, and a bypass does not wait for `Check / Build / Lint / Test` either.
+2. **Main Certification cancelled itself.** Its concurrency group used `cancel-in-progress: true`, so each merge
+   cancelled the run certifying the previous one. A quick series of merges left most `main` SHAs with no verdict.
+   Fixed in `main-certification.yml` (runs in progress now finish).
+
+### Recommended ruleset change (repository settings, owner action)
+
+In **Settings → Rules → Rulesets → Phase 1 - Protect main and Release Governance → Require status checks**:
+
+- keep `Check / Build / Lint / Test` required (it runs on every pull request and aggregates audits, type-check,
+  lint/format, build, backend/database tests, backend coverage floors and frontend tests);
+- remove the fifteen contexts marked "No" in the table below, which only run on `main`, on a schedule or not at
+  all, until each has a pull-request trigger;
+- keep "require branches to be up to date before merging", so a PR is tested against the `main` it will join;
+- stop merging with a bypass.
+
+With that, a pull request cannot merge until its CI is green against current `main`, and Main Certification
+returns to its intended job of certifying what landed.
+
 ## Required-context audit
 
 Only one of those 16 contexts currently has a normal pull-request execution path: `Check / Build / Lint / Test`, produced by `ci.yml`.
