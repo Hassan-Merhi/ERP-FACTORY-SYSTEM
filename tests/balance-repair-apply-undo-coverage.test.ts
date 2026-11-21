@@ -1,15 +1,21 @@
 /**
  * /api/admin/repair-balances apply and undo through the real app inside one
  * rolled-back transaction: what apply repairs (and only in the active
- * company), a second apply that finds nothing, undo of an applied snapshot,
- * undo repeated or of a snapshot that was never applied, apply in a closed
- * period (a clean 409 that leaves nothing half applied), and undo snapshots
- * naming another company's rows (refused, nothing changed).
+ * company), a second apply that finds nothing, undo of an applied run rebuilt
+ * from its stored record, a second undo of the same run (refused), and apply
+ * in a closed period (a clean 409 that leaves nothing half applied). The undo
+ * refusals live in balance-repair-undo-run-coverage.test.ts (the privileged
+ * mutation rate limit allows 30 requests per file).
  */
 import { describe, expect, it } from "vitest";
 
 import { withFactoryWorld, type FactoryWorld } from "./helpers/rolledBackFactoryApp";
-import { balanceRepairState, seedBalanceRepair, type BalanceRepairSeed } from "./helpers/balanceRepairFixture";
+import {
+  balanceRepairState,
+  balanceRepairTransferRows,
+  seedBalanceRepair,
+  type BalanceRepairSeed,
+} from "./helpers/balanceRepairFixture";
 
 const APPLY = "/api/admin/repair-balances/apply";
 const UNDO = "/api/admin/repair-balances/undo";
@@ -170,15 +176,19 @@ describe("balance repair apply and undo", () => {
       ]);
     }));
 
-  it("undo restores the applied snapshot, and a repeated undo changes nothing more", () =>
+  it("undo rebuilds the applied run from its stored record, and a second undo is refused", () =>
     withFactoryWorld(async (w) => {
       const seed = await seedBalanceRepair(w);
       const before = await balanceRepairState(w, seed);
+      const transfersBefore = await balanceRepairTransferRows(w, seed);
       const applied = await w.agent.post(APPLY).send({});
       expect(applied.status).toBe(200);
-      const { snapshot } = applied.body;
+      const { snapshot, repairRunId } = applied.body;
+      expect(Number.isInteger(repairRunId) && repairRunId > 0).toBe(true);
+      const [run] = await w.q(`SELECT company_id, table_name, action FROM audit_log WHERE id = $1`, [repairRunId]);
+      expect(run).toEqual({ company_id: w.companyId, table_name: "balance_repair_runs", action: "repair" });
 
-      const undo = await w.agent.post(UNDO).send({ snapshot });
+      const undo = await w.agent.post(UNDO).send({ repairRunId, snapshot });
       expect(undo.status, JSON.stringify(undo.body)).toBe(200);
       expect(undo.body).toEqual({ ledgerRestored: 1, entriesRemoved: 8, orphansRestored: 2, depositsRestored: 3 });
 
@@ -193,146 +203,30 @@ describe("balance repair apply and undo", () => {
         )
       );
       expect(after.transfers).toEqual(before.transfers);
+      // The transfers come back exactly as they were, created_at included.
+      expect(await balanceRepairTransferRows(w, seed)).toEqual(transfersBefore);
       // The FROM-side voucher was soft-deleted before apply and stays deleted.
       expect(after.vouchers).toEqual(before.vouchers);
       expect(after.accounts.length).toBeGreaterThan(before.accounts.length);
 
-      const audit = await w.q(
-        `SELECT record_id FROM audit_log WHERE table_name = 'vouchers' AND action = 'restore' AND record_id = $1`,
-        [String(seed.toOrphanVoucherId)]
-      );
-      expect(audit).toHaveLength(1);
+      const restoreAudit = () =>
+        w.q(`SELECT record_id FROM audit_log WHERE table_name = 'vouchers' AND action = 'restore' AND record_id = $1`, [
+          String(seed.toOrphanVoucherId),
+        ]);
+      expect(await restoreAudit()).toHaveLength(1);
+      expect(
+        await w.q(
+          `SELECT company_id FROM audit_log WHERE table_name = 'balance_repair_runs' AND action = 'reverse' AND record_id = $1`,
+          [repairRunId]
+        )
+      ).toEqual([{ company_id: w.companyId }]);
 
-      const repeat = await w.agent.post(UNDO).send({ snapshot });
-      expect(repeat.status).toBe(200);
-      const afterRepeat = await balanceRepairState(w, seed);
-      expect(afterRepeat.ledger).toEqual(before.ledger);
-      expect(afterRepeat.transfers).toEqual(before.transfers);
-      expect(afterRepeat.vouchers).toEqual(before.vouchers);
-      const auditAgain = await w.q(
-        `SELECT record_id FROM audit_log WHERE table_name = 'vouchers' AND action = 'restore' AND record_id = $1`,
-        [String(seed.toOrphanVoucherId)]
-      );
-      expect(auditAgain).toHaveLength(1);
-    }));
-
-  it("undo of a snapshot that was never applied restores no voucher", () =>
-    withFactoryWorld(async (w) => {
-      const seed = await seedBalanceRepair(w);
-      const before = await balanceRepairState(w, seed);
-      const res = await w.agent.post(UNDO).send({
-        snapshot: {
-          voucherEntriesAdded: [2147483000],
-          orphanedVouchersDeleted: [
-            { id: seed.fromOrphanVoucherId, voucherNumber: `${w.tag}-TF2` },
-            { id: 0, voucherNumber: "X" },
-            { id: "abc", voucherNumber: "Y" },
-            { id: seed.toOrphanVoucherId, voucherNumber: 42 },
-          ],
-        },
-      });
-      expect(res.status, JSON.stringify(res.body)).toBe(200);
-      // Counts echo the snapshot, not what changed.
-      expect(res.body).toEqual({ ledgerRestored: 0, entriesRemoved: 1, orphansRestored: 0, depositsRestored: 0 });
-      // The soft-deleted FROM voucher was not retired by apply, so its number
-      // does not match the retired form and it stays deleted.
-      expect(await balanceRepairState(w, seed)).toEqual(before);
-    }));
-
-  it("refuses an undo whose snapshot names another company's rows and changes nothing", () =>
-    withFactoryWorld(async (w) => {
-      const seed = await seedBalanceRepair(w);
-      const [otherEntry] = await w.q<{ id: number }>(
-        `SELECT e.id FROM voucher_entries e JOIN vouchers v ON v.id = e.voucher_id
-          WHERE v.company_id = $1 ORDER BY e.id LIMIT 1`,
-        [seed.otherCompanyId]
-      );
-      const [otherAccount] = await w.q<{ id: number }>(
-        `SELECT id FROM ledger_accounts WHERE company_id = $1 ORDER BY id LIMIT 1`,
-        [seed.otherCompanyId]
-      );
-      const [otherVoucher] = await w.q<{ id: number }>(
-        `SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number = $2`,
-        [seed.otherCompanyId, `${w.tag}-TT3`]
-      );
-      const transfer = {
-        id: 2147480000,
-        transferType: "Cash",
-        transferDate: "2026-05-10",
-        amount: "1",
-        fromVoucherId: null,
-        toVoucherId: null,
-        description: "forged",
-        sourcePaymentId: null,
-      };
-      // Each snapshot is valid for the active company except for one row.
-      const ownLedger = { id: seed.driftLedgerId, oldPaid: 7, newPaid: 60 };
-      const snapshots: Array<[string, Record<string, unknown>]> = [
-        ["ledger row", { ledgerSnapshots: [ownLedger, { id: seed.otherLedgerId, oldPaid: 1.5, newPaid: 90 }] }],
-        [
-          "contract",
-          {
-            ledgerSnapshots: [ownLedger],
-            depositSnapshots: [
-              {
-                contractId: seed.otherContractId,
-                oldFlag: false,
-                newFlag: true,
-                oldPostedAmount: 0,
-                newPostedAmount: 0,
-              },
-            ],
-          },
-        ],
-        ["voucher line", { ledgerSnapshots: [ownLedger], voucherEntriesAdded: [otherEntry.id] }],
-        ["voucher", { ledgerSnapshots: [ownLedger], vouchersUndeleted: [{ id: otherVoucher.id }] }],
-        [
-          "transfer between two other companies",
-          {
-            ledgerSnapshots: [ownLedger],
-            transfersDeleted: [
-              {
-                ...transfer,
-                fromCompanyId: seed.otherCompanyId,
-                toCompanyId: seed.otherCompanyId,
-                fromLedgerAccountId: otherAccount.id,
-                toLedgerAccountId: otherAccount.id,
-              },
-            ],
-          },
-        ],
-        [
-          "transfer naming a voucher of the wrong side",
-          {
-            ledgerSnapshots: [ownLedger],
-            transfersDeleted: [
-              {
-                ...transfer,
-                fromCompanyId: w.companyId,
-                toCompanyId: seed.otherCompanyId,
-                fromLedgerAccountId: seed.cashId,
-                toLedgerAccountId: otherAccount.id,
-                fromVoucherId: otherVoucher.id,
-              },
-            ],
-          },
-        ],
-        [
-          "orphaned voucher of another company without its transfer",
-          {
-            ledgerSnapshots: [ownLedger],
-            orphanedVouchersDeleted: [{ id: otherVoucher.id, voucherNumber: `${w.tag}-TT3` }],
-          },
-        ],
-      ];
-      const before = await balanceRepairState(w, seed);
-      for (const [label, snapshot] of snapshots) {
-        const res = await w.agent.post(UNDO).send({ snapshot });
-        expect(res.status, label).toBe(404);
-        expect(res.body.code, label).toBe("REPAIR_SNAPSHOT_OUTSIDE_COMPANY");
-        expect(await balanceRepairState(w, seed), label).toEqual(before);
-        expect(await w.q(`SELECT id FROM inter_company_transfers WHERE id = $1`, [transfer.id]), label).toEqual([]);
-      }
+      const repeat = await w.agent.post(UNDO).send({ repairRunId, snapshot });
+      expect(repeat.status).toBe(409);
+      expect(repeat.body.code).toBe("REPAIR_RUN_ALREADY_UNDONE");
+      expect(await balanceRepairState(w, seed)).toEqual(after);
+      expect(await balanceRepairTransferRows(w, seed)).toEqual(transfersBefore);
+      expect(await restoreAudit()).toHaveLength(1);
     }));
 
   it("apply into a closed accounting period is refused with 409 and writes nothing", () =>

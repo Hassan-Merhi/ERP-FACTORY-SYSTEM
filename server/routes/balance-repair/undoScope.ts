@@ -1,19 +1,37 @@
 /**
  * Company scope for POST /api/admin/repair-balances/undo.
  *
- * The undo snapshot comes from the request body, so every row it names is
+ * Undo rebuilds what it reverts from the stored record of the apply run
+ * (./repairRun.ts). As defence in depth every row that record names is still
  * checked against the active company before the undo writes anything. A row
  * that exists in another company refuses the whole undo; a row that no longer
- * exists is skipped (a repeated undo stays harmless).
+ * exists is skipped.
  */
 import { sql } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
-import type { ApplySnapshot } from "./_helpers";
 
 /** The retirement reason apply records for an orphaned transfer voucher. */
 export const ORPHAN_RETIREMENT_REASON = "balance-repair-orphaned-transfer-voucher";
+
+/** The rows an undo would touch, as named by the stored run. */
+export interface UndoTargets {
+  ledgerSnapshots?: { id: unknown }[];
+  depositSnapshots?: { contractId: unknown }[];
+  voucherEntriesAdded?: unknown[];
+  vouchersUndeleted?: { id: unknown }[];
+  transfersDeleted?: {
+    id: unknown;
+    fromCompanyId: unknown;
+    toCompanyId: unknown;
+    fromLedgerAccountId: unknown;
+    toLedgerAccountId: unknown;
+    fromVoucherId: unknown;
+    toVoucherId: unknown;
+  }[];
+  orphanedVouchersDeleted?: { id: unknown; voucherNumber: unknown }[];
+}
 
 export class UndoOutsideCompanyError extends Error {
   constructor(what: string) {
@@ -49,7 +67,7 @@ async function rowsOwnedBy(
 export async function assertUndoInCompany(
   exec: DatabaseOrTransaction,
   companyId: number,
-  snapshot: ApplySnapshot
+  snapshot: UndoTargets
 ): Promise<void> {
   const ledgerIds = ids(
     (snapshot.ledgerSnapshots ?? []).map((s) => s?.id),

@@ -223,3 +223,14 @@ export async function balanceRepairState(w: FactoryWorld, seed: BalanceRepairSee
     accounts: await w.q(`SELECT id FROM ledger_accounts WHERE company_id = ANY($1::int[]) ORDER BY id`, [companies]),
   };
 }
+
+/** Every column of the transfers of both companies, for exact before/after comparisons. */
+export async function balanceRepairTransferRows(w: FactoryWorld, seed: BalanceRepairSeed) {
+  return w.q(
+    `SELECT id, transfer_type, from_company_id, to_company_id, transfer_date::text AS transfer_date,
+            amount::text AS amount, from_ledger_account_id, to_ledger_account_id, from_voucher_id,
+            to_voucher_id, description, source_payment_id, created_at::text AS created_at
+       FROM inter_company_transfers WHERE from_company_id = ANY($1::int[]) ORDER BY id`,
+    [[w.companyId, seed.otherCompanyId]]
+  );
+}

@@ -25,6 +25,7 @@ import { resultRows } from "../../lib/queryResult";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
 import { ORPHAN_RETIREMENT_REASON } from "./undoScope";
 import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
+import { loadTransferRow, recordRepairRun, RepairRunNotRecordableError, type StoredTransferRow } from "./repairRun";
 
 export function registerBalanceRepairApplyRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/apply ────────────────────────────────
@@ -50,6 +51,9 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
         // the closed-period guard refusing a voucher line) leaves nothing half
         // applied, and the snapshot only describes writes that committed.
         let voucherEntriesFixed = 0;
+        let repairRunId = 0;
+        // Full rows of the transfers deleted below, for the stored run record.
+        const deletedTransferRows: StoredTransferRow[] = [];
         await db.transaction(async (tx) => {
           // Re-run scan to get current state
           // ── 1. Fix ledger drift ───────────────────────────────────────────────
@@ -297,6 +301,7 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
               });
             }
             snapshot.transfersDeleted.push(transferSnap);
+            deletedTransferRows.push(await loadTransferRow(tx, Number(row.id)));
 
             // Transfer row first, then the orphaned voucher. Wave 16 (A): the
             // voucher is retired (soft delete with its lines, audited, number
@@ -378,6 +383,10 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
             }
           }
           voucherEntriesFixed = seenVouchers.size;
+
+          // One stored record per run, in the same transaction: undo rebuilds
+          // from it and only accepts the snapshot below if it matches.
+          repairRunId = await recordRepairRun(tx, req, companyId, snapshot, deletedTransferRows);
         });
 
         res.json({
@@ -385,9 +394,13 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           voucherEntriesFixed,
           orphansFixed: snapshot.transfersDeleted.length,
           depositsFixed: snapshot.depositSnapshots.length,
+          repairRunId,
           snapshot,
         });
       } catch (err: unknown) {
+        if (err instanceof RepairRunNotRecordableError) {
+          return res.status(422).json({ code: "REPAIR_RUN_NOT_RECORDABLE", message: err.message });
+        }
         const closed = closedPeriodErrorResponse(err);
         if (closed) return res.status(closed.status).json(closed.body);
         logger.error("[BalanceRepair] apply error:", { error: err });

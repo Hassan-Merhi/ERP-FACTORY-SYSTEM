@@ -12,7 +12,8 @@ import { requireAuth, requireRole } from "../../auth";
 import { propertyMonthlyLedger, propertyContracts, propertyPayments } from "../../../shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 
-import { ApplySnapshot, parseNum } from "./_helpers";
+import { parseNum } from "./_helpers";
+import { loadRunForUndo, markRunUndone, RepairRunRefusal } from "./repairRun";
 import { retiredVoucherNumber } from "../../services/accounting/voucherRetirement";
 import { writeAuditEvent } from "../../services/audit";
 import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
@@ -28,18 +29,40 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
       try {
         const companyId: number | undefined = req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const { snapshot } = req.body as { snapshot: ApplySnapshot };
-        if (!snapshot) return res.status(400).json({ message: "No snapshot provided" });
+        const { snapshot, repairRunId } = (req.body ?? {}) as { snapshot?: unknown; repairRunId?: unknown };
+        if (!snapshot || typeof snapshot !== "object") {
+          return res.status(409).json({ code: "REPAIR_SNAPSHOT_MISSING", message: "No snapshot provided" });
+        }
 
-        // Every row the snapshot names is checked against the active company
-        // before anything is written, and the whole undo runs in one
-        // transaction: a snapshot naming another company's rows is refused
-        // and changes nothing.
+        // The client only says which run to undo (repairRunId) and shows the
+        // snapshot apply gave it. Everything written below comes from the
+        // stored record of that run in the active company (./repairRun.ts): a
+        // snapshot that does not match it, or a run that is missing, another
+        // company's or already undone, is refused with 409 and changes nothing.
+        // The whole undo runs in one transaction.
+        let counts = { ledgerRestored: 0, entriesRemoved: 0, orphansRestored: 0, depositsRestored: 0 };
         await db.transaction(async (tx) => {
-          await assertUndoInCompany(tx, companyId, snapshot);
+          const run = await loadRunForUndo(tx, companyId, repairRunId, snapshot);
+          // Defence in depth: the stored rows are still checked against the company.
+          await assertUndoInCompany(tx, companyId, {
+            ledgerSnapshots: run.ledger,
+            depositSnapshots: run.deposits,
+            voucherEntriesAdded: run.entriesAdded,
+            vouchersUndeleted: run.vouchersUndeleted.map((id) => ({ id })),
+            transfersDeleted: run.transfers.map((t) => ({
+              id: t.id,
+              fromCompanyId: t.from_company_id,
+              toCompanyId: t.to_company_id,
+              fromLedgerAccountId: t.from_ledger_account_id,
+              toLedgerAccountId: t.to_ledger_account_id,
+              fromVoucherId: t.from_voucher_id,
+              toVoucherId: t.to_voucher_id,
+            })),
+            orphanedVouchersDeleted: run.orphanedVouchers,
+          });
 
           // 1. Revert ledger drift
-          for (const s of snapshot.ledgerSnapshots ?? []) {
+          for (const s of run.ledger) {
             await tx
               .update(propertyMonthlyLedger)
               .set({ paidAmount: s.oldPaid.toFixed(2) })
@@ -47,7 +70,7 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
           }
 
           // 2. Remove inserted voucher entries
-          for (const entryId of snapshot.voucherEntriesAdded ?? []) {
+          for (const entryId of run.entriesAdded) {
             await tx.execute(sql`
               DELETE FROM voucher_entries
                WHERE id = ${entryId}
@@ -56,20 +79,18 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
           }
 
           // 3. Re-soft-delete vouchers that were un-deleted
-          for (const v of snapshot.vouchersUndeleted ?? []) {
+          for (const id of run.vouchersUndeleted) {
             await tx.execute(
-              sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${v.id} AND company_id = ${companyId}`
+              sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${id} AND company_id = ${companyId}`
             );
           }
 
           // 4. Restore the orphaned vouchers the apply retired. Wave 16 (A): the
           // apply soft-deletes them with their lines, so the undo clears the
           // delete and gives the number back, only for a voucher still retired
-          // under the number the snapshot names and retired by a balance
-          // repair. It used to insert vouchers and lines from the request body.
-          for (const ov of snapshot.orphanedVouchersDeleted ?? []) {
-            const voucherId = Number(ov.id);
-            if (!Number.isInteger(voucherId) || voucherId <= 0 || typeof ov.voucherNumber !== "string") continue;
+          // under the recorded number and retired by a balance repair.
+          for (const ov of run.orphanedVouchers) {
+            const voucherId = ov.id;
             const voucherNumber = ov.voucherNumber;
             const restored = await tx.execute(sql`
               UPDATE vouchers SET deleted_at = NULL, voucher_number = ${voucherNumber}
@@ -103,23 +124,24 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
             );
           }
 
-          // 5. Re-insert deleted inter_company_transfers rows
-          for (const t of snapshot.transfersDeleted ?? []) {
+          // 5. Re-insert the deleted inter_company_transfers rows exactly as
+          // apply recorded them.
+          for (const t of run.transfers) {
             await tx.execute(sql`
               INSERT INTO inter_company_transfers
                 (id, transfer_type, from_company_id, to_company_id, transfer_date, amount,
                  from_ledger_account_id, to_ledger_account_id, from_voucher_id, to_voucher_id,
-                 description, source_payment_id)
+                 description, source_payment_id, created_at)
               VALUES
-                (${t.id}, ${t.transferType}, ${t.fromCompanyId}, ${t.toCompanyId}, ${t.transferDate}::date, ${t.amount},
-                 ${t.fromLedgerAccountId}, ${t.toLedgerAccountId}, ${t.fromVoucherId}, ${t.toVoucherId},
-                 ${t.description}, ${t.sourcePaymentId})
+                (${t.id}, ${t.transfer_type}, ${t.from_company_id}, ${t.to_company_id}, ${t.transfer_date}::date,
+                 ${t.amount}::numeric, ${t.from_ledger_account_id}, ${t.to_ledger_account_id}, ${t.from_voucher_id},
+                 ${t.to_voucher_id}, ${t.description}, ${t.source_payment_id}, ${t.created_at}::timestamp)
               ON CONFLICT (id) DO NOTHING
             `);
           }
 
           // 6. Revert deposit flags
-          for (const s of snapshot.depositSnapshots ?? []) {
+          for (const s of run.deposits) {
             await tx
               .update(propertyContracts)
               .set({
@@ -128,15 +150,21 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
               })
               .where(and(eq(propertyContracts.id, s.contractId), eq(propertyContracts.companyId, companyId)));
           }
+
+          await markRunUndone(tx, req, companyId, Number(repairRunId));
+          counts = {
+            ledgerRestored: run.ledger.length,
+            entriesRemoved: run.entriesAdded.length,
+            orphansRestored: run.transfers.length,
+            depositsRestored: run.deposits.length,
+          };
         });
 
-        res.json({
-          ledgerRestored: (snapshot.ledgerSnapshots ?? []).length,
-          entriesRemoved: (snapshot.voucherEntriesAdded ?? []).length,
-          orphansRestored: (snapshot.transfersDeleted ?? []).length,
-          depositsRestored: (snapshot.depositSnapshots ?? []).length,
-        });
+        res.json(counts);
       } catch (err: unknown) {
+        if (err instanceof RepairRunRefusal) {
+          return res.status(409).json({ code: err.code, message: err.message });
+        }
         if (err instanceof UndoOutsideCompanyError) {
           return res.status(404).json({ code: "REPAIR_SNAPSHOT_OUTSIDE_COMPANY", message: err.message });
         }

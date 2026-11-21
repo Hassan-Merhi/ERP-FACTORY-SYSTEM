@@ -81,11 +81,11 @@ describe("balance repair refusals", () => {
       expect(await balanceRepairState(w, seed)).toEqual(before);
     }));
 
-  it("rejects an undo without a snapshot", () =>
+  it("refuses an undo without a snapshot", () =>
     withFactoryWorld(async (w) => {
       const res = await w.agent.post(UNDO).send({});
-      expect(res.status).toBe(400);
-      expect(res.body.message).toBe("No snapshot provided");
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ code: "REPAIR_SNAPSHOT_MISSING", message: "No snapshot provided" });
     }));
 
   it("scan reports every discrepancy of the active company only and writes nothing", () =>

@@ -22,19 +22,22 @@ import { IssueBadge, MONTHS, ModuleBadge, fmt, useBalanceRepairState } from "./u
 
 // ── Main ───────────────────────────────────────────────────────────────────
 export default function BalanceRepair() {
-  const { applied, applyFixes, phase, runScan, scan, setApplied, setPhase, setScan, setSnapshot, snapshot, toast } =
+  const { applied, applyFixes, phase, runScan, scan, setApplied, setPhase, setScan, setUndoRun, undoRun, toast } =
     useBalanceRepairState();
 
   async function undoFixes() {
-    if (!snapshot) return;
+    if (!undoRun) return;
     setPhase("undoing");
     try {
-      const res = await apiRequest("POST", "/api/admin/repair-balances/undo", { snapshot });
+      const res = await apiRequest("POST", "/api/admin/repair-balances/undo", {
+        repairRunId: undoRun.repairRunId,
+        snapshot: undoRun.snapshot,
+      });
       if (!res.ok) {
         const e = await res.json();
         throw new Error(e.message);
       }
-      setSnapshot(null);
+      setUndoRun(null);
       setApplied(null);
       setScan(null);
       setPhase("idle");
@@ -88,7 +91,7 @@ export default function BalanceRepair() {
               Apply {total} Fix{total !== 1 ? "es" : ""}
             </Button>
           )}
-          {phase === "applied" && snapshot && (
+          {phase === "applied" && undoRun && (
             <Button variant="outline" onClick={undoFixes} disabled={busy} data-testid="button-undo-repair">
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Undo2 className="mr-2 h-4 w-4" />}
               Undo Repair

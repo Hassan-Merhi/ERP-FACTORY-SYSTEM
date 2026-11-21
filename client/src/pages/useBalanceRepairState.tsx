@@ -95,7 +95,8 @@ export function useBalanceRepairState() {
   const { toast } = useToast();
   const [phase, setPhase] = useState<Phase>("idle");
   const [scan, setScan] = useState<ScanResult | null>(null);
-  const [snapshot, setSnapshot] = useState(null);
+  // The run apply recorded (its id identifies it to undo) and the snapshot it returned.
+  const [undoRun, setUndoRun] = useState<{ repairRunId: number; snapshot: unknown } | null>(null);
   const [applied, setApplied] = useState<{
     ledger: number;
     vouchers: number;
@@ -106,7 +107,7 @@ export function useBalanceRepairState() {
   async function runScan() {
     setPhase("scanning");
     setScan(null);
-    setSnapshot(null);
+    setUndoRun(null);
     setApplied(null);
     try {
       const res = await apiRequest("GET", "/api/admin/repair-balances/scan");
@@ -139,7 +140,7 @@ export function useBalanceRepairState() {
         throw new Error(e.message);
       }
       const data = await res.json();
-      setSnapshot(data.snapshot);
+      setUndoRun({ repairRunId: data.repairRunId, snapshot: data.snapshot });
       setApplied({
         ledger: data.ledgerFixed,
         vouchers: data.voucherEntriesFixed,
@@ -157,5 +158,5 @@ export function useBalanceRepairState() {
       setPhase("scanned");
     }
   }
-  return { applied, applyFixes, phase, runScan, scan, setApplied, setPhase, setScan, setSnapshot, snapshot, toast };
+  return { applied, applyFixes, phase, runScan, scan, setApplied, setPhase, setScan, setUndoRun, undoRun, toast };
 }
