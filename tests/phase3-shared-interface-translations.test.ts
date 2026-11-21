@@ -32,9 +32,10 @@ describe("Phase 3 shared interface translations", () => {
     // 607 -> 665 when the training guides, Daybook and attendance messages
     // were translated (ca91d6511, 81eba8eea) ahead of the 2026-11-03 merges;
     // 665 -> 667 for the training video playback fallback (2026-11-05);
-    // 667 -> 669 for the Help & Training tab list and Quick access group (2026-11-06).
-    expect(reviewedPhase3SharedUiTranslations).toHaveLength(669);
-    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(669);
+    // 667 -> 669 for the Help & Training tab list and Quick access group (2026-11-06);
+    // 669 -> 696 for the Admin FX revaluation correction dialog (#3380, #3381, 2026-11-21).
+    expect(reviewedPhase3SharedUiTranslations).toHaveLength(696);
+    expect(new Set(reviewedPhase3SharedUiTranslations.map((entry) => entry.en)).size).toBe(696);
 
     for (const entry of reviewedPhase3SharedUiTranslations) {
       expect(entry.en.trim()).not.toBe("");
